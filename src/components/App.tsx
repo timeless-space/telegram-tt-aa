@@ -26,7 +26,7 @@ import LockScreen from './main/LockScreen.async';
 import AppInactive from './main/AppInactive';
 import Transition from './ui/Transition';
 import UiLoader from './common/UiLoader';
-// import Test from './components/test/TestNoRedundancy';
+// import Test from './test/TestSvg';
 
 import styles from './App.module.scss';
 import { setupBeforeInstallPrompt } from '../util/installPrompt';
@@ -210,9 +210,12 @@ const App: FC<StateProps> = ({
   }, []);
 
   useLayoutEffect(() => {
+    if ((window as any).tlPrimaryColor) {
+      document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor);
+    }
     document.body.style.setProperty(
       '--theme-background-color',
-      theme === 'dark' ? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
+      theme === 'dark' ? window?.tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
     );
     sessionStorage.clear();
   }, [theme]);

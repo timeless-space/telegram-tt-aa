@@ -8,13 +8,14 @@ import type { ApiAttachMenuPeerType } from '../../../api/types';
 import type { ISettings } from '../../../types';
 
 import {
-  CONTENT_TYPES_WITH_PREVIEW, SUPPORTED_AUDIO_CONTENT_TYPES,
+  CONTENT_TYPES_WITH_PREVIEW, DEBUG_LOG_FILENAME, SUPPORTED_AUDIO_CONTENT_TYPES,
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
 import { validateFiles } from '../../../util/files';
+import { getDebugLogs } from '../../../util/debugConsole';
 
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMouseInside from '../../../hooks/useMouseInside';
@@ -42,9 +43,11 @@ export type OwnProps = {
   attachBots: GlobalState['attachMenu']['bots'];
   isChatWithBot: boolean;
   peerType?: ApiAttachMenuPeerType;
+  shouldCollectDebugLogs?: boolean;
   onFileSelect: (files: File[], shouldSuggestCompression?: boolean) => void;
   onPollCreate: () => void;
   handleSendCrypto: () => void;
+  handleCreatePOAP: () => void;
   theme: ISettings['theme'];
 };
 
@@ -65,7 +68,9 @@ const AttachMenu: FC<OwnProps> = ({
   onFileSelect,
   onPollCreate,
   handleSendCrypto,
+  handleCreatePOAP,
   theme,
+  shouldCollectDebugLogs,
 }) => {
   const [isAttachMenuOpen, openAttachMenu, closeAttachMenu] = useFlag();
   const [handleMouseEnter, handleMouseLeave, markMouseInside] = useMouseInside(isAttachMenuOpen, closeAttachMenu);
@@ -74,6 +79,7 @@ const AttachMenu: FC<OwnProps> = ({
   const canSendVideoOrPhoto = canSendPhotos || canSendVideos;
 
   const [isAttachmentBotMenuOpen, markAttachmentBotMenuOpen, unmarkAttachmentBotMenuOpen] = useFlag();
+
   useEffect(() => {
     if (isAttachMenuOpen) {
       markMouseInside();
@@ -113,6 +119,11 @@ const AttachMenu: FC<OwnProps> = ({
       ), (e) => handleFileSelect(e, false));
   });
 
+  const handleSendLogs = useLastCallback(() => {
+    const file = new File([getDebugLogs()], DEBUG_LOG_FILENAME, { type: 'text/plain' });
+    onFileSelect([file]);
+  });
+
   const bots = useMemo(() => {
     return Object.values(attachBots).filter((bot) => {
       if (!peerType) return false;
@@ -150,7 +161,7 @@ const AttachMenu: FC<OwnProps> = ({
         positionX="right"
         positionY="bottom"
         onClose={closeAttachMenu}
-        className="AttachMenu--menu fluid"
+        className={isAttachMenuOpen || isAttachmentBotMenuOpen ? 'AttachMenu--menu fluid' : 'AttachMenuHidden'}
         onCloseAnimationEnd={closeAttachMenu}
         onMouseEnter={!IS_TOUCH_ENV ? handleMouseEnter : undefined}
         onMouseLeave={!IS_TOUCH_ENV ? handleMouseLeave : undefined}
@@ -178,17 +189,20 @@ const AttachMenu: FC<OwnProps> = ({
                   {lang(!canSendDocuments && canSendAudios ? 'InputAttach.Popover.Music' : 'AttachDocument')}
                 </MenuItem>
               )} */}
+            {canSendDocuments && shouldCollectDebugLogs && (
+              <MenuItem icon="bug" onClick={handleSendLogs}>
+                {lang('DebugSendLogs')}
+              </MenuItem>
+            )}
           </>
         )}
         {canAttachPolls && (
           <MenuItem icon="poll" onClick={onPollCreate}>{lang('Poll')}</MenuItem>
         )}
-        {
-          /**
+        {/**
            * TL - Add send crypto button to attachments
            * Description: Only chat 1-1 (except with bot and self) or group has this button
-           */
-        }
+           */}
         {!isChatWithBot && Number(chatId) >= 0 && (
           <MenuItem
             icon="lock"
@@ -199,6 +213,21 @@ const AttachMenu: FC<OwnProps> = ({
             onClick={handleSendCrypto}
           >
             {lang('Send Crypto')}
+          </MenuItem>
+        )}
+        {/**
+         * TL - Add create POAP button to attachments
+         */}
+        {!isChatWithBot && Number(chatId) >= 0 && (
+          <MenuItem
+            icon="lock"
+            className="margin-left-1px"
+            customIcon={(
+              <img className="icon" src="./camera_macro.svg" alt="" />
+            )}
+            onClick={handleCreatePOAP}
+          >
+            {lang('Create POAP')}
           </MenuItem>
         )}
 

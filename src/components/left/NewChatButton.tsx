@@ -1,6 +1,6 @@
 import type { FC } from '../../lib/teact/teact';
 import React, {
-  useState, useEffect, memo, useCallback, useMemo,
+  useState, useEffect, useCallback, useMemo,
 } from '../../lib/teact/teact';
 
 import buildClassName from '../../util/buildClassName';
@@ -72,6 +72,7 @@ const NewChatButton: FC<OwnProps> = ({
       </Button>
       <Menu
         isOpen={isMenuOpen}
+        className={!isMenuOpen ? 'custom-translate-self' : ''}
         positionX={lang.isRtl ? 'left' : 'right'}
         positionY="bottom"
         autoClose
@@ -83,4 +84,4 @@ const NewChatButton: FC<OwnProps> = ({
   );
 };
 
-export default memo(NewChatButton);
+export default NewChatButton;
