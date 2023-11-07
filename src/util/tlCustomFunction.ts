@@ -59,3 +59,78 @@ export function sendPushNotification(message: string) {
 export function handleSendLink(message: string) {
   (window as any).openLink?.postMessage(JSON.stringify({ message }));
 }
+
+/**
+ * TL - Custom function to get current user data
+ */
+export function handleGetUserInfo() {
+  const userById = getGlobal().users.byId;
+  for (const key of Object.keys(userById)) {
+    if (userById[key].hasOwnProperty('isSelf')) {
+      (window as any).getUserInfo?.postMessage(JSON.stringify(userById[key]));
+      return;
+    }
+  }
+  (window as any).getUserInfo?.postMessage('No Data');
+}
+
+/**
+ * TL - Custom function to get base64 encode image data from blob url
+ */
+const getBlobData = (url: string) => {
+  return new Promise((resolve, reject) => {
+    Axios({
+      method: 'GET',
+      url,
+      responseType: 'blob',
+    }).then((response) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(response.data);
+      reader.onloadend = () => {
+        resolve(reader.result);
+      };
+    }).catch((error) => reject(error));
+  });
+};
+
+/**
+ * TL - This function which send contact list of this account to Native App
+ */
+export async function handleGetContacts() {
+  const users = getGlobal().contactList?.userIds.reduce((acc: ApiUser[], id: string) => {
+    const user = getGlobal().users.byId[id];
+    if (user) {
+      acc.push(user);
+    }
+    return acc;
+  }, []);
+
+  // First send contact without avatar
+  (window as any).onContactsReceived?.postMessage(JSON.stringify(users));
+
+  const imageList = JSON.parse(window.sessionStorage.getItem('imageList') ?? '[]');
+  getGlobal().contactList?.userIds.forEach((id) => {
+    const isExist = imageList.some((contact: { id: string; imgBlobUrl: string }) => contact.id === id);
+    if (!isExist) {
+      imageList.push({
+        id,
+        imgBlobUrl: '',
+      });
+    }
+  });
+  for (const contact of imageList) {
+    const { id, imgBlobUrl } = contact;
+    const user = getGlobal().users.byId[id];
+    if (user && !user?.isSelf) {
+      if (imgBlobUrl) {
+        await getBlobData(imgBlobUrl).then((data) => {
+          // Send the image after calling generate image API
+          (window as any).onAvatarReceived?.postMessage(JSON.stringify({
+            id,
+            photoBase64: data,
+          }));
+        });
+      }
+    }
+  }
+}
