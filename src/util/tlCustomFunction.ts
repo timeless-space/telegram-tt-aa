@@ -25,7 +25,7 @@ export function handleSendMessage({ chatId, threadId = 0, text }: Message) {
  * TL - Set session screen name
  */
 export function sendScreenName(name: string) {
-  (window as any).webkit?.messageHandlers.onScreenChanged.postMessage({ screenName: name });
+  (window as any).onScreenChanged?.postMessage({ screenName: name });
 }
 
 /**
@@ -48,12 +48,12 @@ export function handleScrollUnactiveTab() {
  * TL - Send push notification
  */
 export function sendPushNotification(message: string) {
-  (window as any).webkit?.messageHandlers.onShowSnackBar.postMessage({ message });
+  (window as any).onShowSnackBar?.postMessage({ message });
 }
 
 /**
  * TL - Send link to iOS Native App
  */
 export function handleSendLink(message: string) {
-  (window as any).webkit?.messageHandlers.openLink.postMessage({ message });
+  (window as any).openLink?.postMessage({ message });
 }

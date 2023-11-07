@@ -208,10 +208,12 @@ const ChatList: FC<OwnProps> = ({
           leftMainHeaderEl.style.paddingTop = `${(window as any).tlPaddingTop}px`;
         }
         setTimeout(() => {
-          containerRef.current.scrollTo({ top: HEIGHT_HEADER_FIXED });
-          setTimeout(() => {
-            firstScroll.current = false;
-          }, 200);
+          if (containerRef.current) {
+            containerRef.current.scrollTo({ top: HEIGHT_HEADER_FIXED });
+            setTimeout(() => {
+              firstScroll.current = false;
+            }, 200);
+          }
         }, 0);
       }
     }, 0);

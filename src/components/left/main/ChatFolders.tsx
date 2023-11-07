@@ -206,17 +206,17 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
 
     return captureEvents(transitionRef.current!, {
       selectorToPreventScroll: '.chat-list',
-      onSwipe: ((e, direction) => {
-        if (direction === SwipeDirection.Left) {
-          setActiveChatFolder(
-            { activeChatFolder: Math.min(activeChatFolder + 1, folderTabs.length - 1) },
-            { forceOnHeavyAnimation: true },
-          );
-          return true;
-        } else if (direction === SwipeDirection.Right) {
-          setActiveChatFolder({ activeChatFolder: Math.max(0, activeChatFolder - 1) }, { forceOnHeavyAnimation: true });
-          return true;
-        }
+      onSwipe: (() => {
+        // if (direction === SwipeDirection.Left) {
+        //   setActiveChatFolder(
+        //     { activeChatFolder: Math.min(activeChatFolder + 1, folderTabs.length - 1) },
+        //     { forceOnHeavyAnimation: true },
+        //   );
+        //   return true;
+        // } else if (direction === SwipeDirection.Right) {
+        //   setActiveChatFolder({ activeChatFolder: Math.max(0, activeChatFolder - 1) }, { forceOnHeavyAnimation: true });
+        //   return true;
+        // }
 
         return false;
       }),

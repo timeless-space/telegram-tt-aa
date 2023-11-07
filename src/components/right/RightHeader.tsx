@@ -219,10 +219,10 @@ const RightHeader: FC<OwnProps & StateProps> = ({
    * Description: The data is an object with 2 properties: chatId and threadId
    */
   const handleSendCrypto = () => {
-    (window as any).webkit?.messageHandlers?.sendCrypto.postMessage({
+    (window as any).sendCrypto?.postMessage(JSON.stringify({
       chatId,
       threadId,
-    });
+    }));
   };
 
   useEffect(() => {
