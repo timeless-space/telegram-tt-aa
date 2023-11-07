@@ -1278,7 +1278,7 @@ const Composer: FC<OwnProps & StateProps> = ({
    * Description: The data is an object with 2 properties: chatId and threadId
    */
   const handleSendCrypto = useCallback(() => {
-    (window as any).webkit?.messageHandlers?.sendCrypto.postMessage({
+    (window as any).sendCrypto?.postMessage({
       chatId,
     });
   }, [chatId]);
@@ -1291,7 +1291,7 @@ const Composer: FC<OwnProps & StateProps> = ({
    * TL - Create POAP function
    */
   const handleCreatePOAP = () => {
-    (window as any).webkit?.messageHandlers?.createPOAP.postMessage({
+    (window as any).createPOAP.postMessage({
       chatId,
     });
 
