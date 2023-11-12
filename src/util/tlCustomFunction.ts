@@ -27,7 +27,7 @@ export function handleSendMessage({ chatId, threadId = 0, text }: Message) {
  * TL - Set session screen name
  */
 export function sendScreenName(name: string) {
-  (window as any).webkit?.messageHandlers.onScreenChanged.postMessage(JSON.stringify({ screenName: name }));
+  (window as any).onScreenChanged?.postMessage(JSON.stringify({ screenName: name }));
 }
 
 /**
@@ -50,14 +50,14 @@ export function handleScrollUnactiveTab() {
  * TL - Send push notification
  */
 export function sendPushNotification(message: string) {
-  (window as any).webkit?.messageHandlers.onShowSnackBar.postMessage(JSON.stringify({ message }));
+  (window as any).onShowSnackBar?.postMessage(JSON.stringify({ message }));
 }
 
 /**
  * TL - Send link to iOS Native App
  */
 export function handleSendLink(message: string) {
-  (window as any).webkit?.messageHandlers.openLink.postMessage(JSON.stringify({ message }));
+  (window as any).openLink?.postMessage(JSON.stringify({ message }));
 }
 
 /**
@@ -86,11 +86,13 @@ export function handleGetUserInfo() {
   const userById = getGlobal().users.byId;
   for (const key of Object.keys(userById)) {
     if (userById[key].hasOwnProperty('isSelf')) {
-      (window as any).webkit?.messageHandlers?.getUserInfo?.postMessage(JSON.stringify(userById[key]));
+      (window as any).getUserInfo?.postMessage(JSON.stringify(userById[key]));
       return;
     }
   }
-  (window as any).webkit?.messageHandlers?.getUserInfo?.postMessage('No Data');
+  (window as any).getUserInfo?.postMessage(JSON.stringify({
+    message: 'No Data',
+  }));
 }
 
 /**
@@ -106,7 +108,7 @@ export async function handleGetContacts() {
   }, []);
 
   // First send contact without avatar
-  (window as any).webkit?.messageHandlers?.onContactsReceived?.postMessage(JSON.stringify(users));
+  (window as any).onContactsReceived?.postMessage(JSON.stringify(users));
 
   const imageList = JSON.parse(window.sessionStorage.getItem('imageList') ?? '[]');
   getGlobal().contactList?.userIds.forEach((id) => {
@@ -125,7 +127,7 @@ export async function handleGetContacts() {
       if (imgBlobUrl) {
         await getBlobData(imgBlobUrl).then((data) => {
           // Send the image after calling generate image API
-          (window as any).webkit?.messageHandlers?.onAvatarReceived?.postMessage(JSON.stringify({
+          (window as any).onAvatarReceived?.postMessage(JSON.stringify({
             id,
             photoBase64: data,
           }));

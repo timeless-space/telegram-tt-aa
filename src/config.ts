@@ -288,7 +288,7 @@ export const LIGHT_THEME_BG_COLOR = '#99BA92';
 /**
  * TL - Change background color for dark theme
  */
-export const DARK_THEME_BG_COLOR = '#131314';
+export const DARK_THEME_BG_COLOR = '#5a769d';
 export const DEFAULT_PATTERN_COLOR = '#4A8E3A8C';
 export const DARK_THEME_PATTERN_COLOR = '#0A0A0A8C';
 export const MAX_UPLOAD_FILEPART_SIZE = 524288;
