@@ -120,14 +120,6 @@ function LeftColumn({
       break;
   }
 
-  useEffect(() => {
-    if (settingsScreen === SettingsScreens.Main && contentType === ContentType.Main) {
-      sendScreenName('tl_navigation_mainScreen');
-    } else {
-      sendScreenName('tl_navigation_otherScreen');
-    }
-  }, [settingsScreen, contentType]);
-
   const handleReset = useLastCallback((forceReturnToChatList?: true | Event) => {
     function fullReset() {
       setContent(LeftColumnContent.ChatList);
@@ -341,6 +333,15 @@ function LeftColumn({
 
     fullReset();
   });
+
+  useEffect(() => {
+    if (settingsScreen === SettingsScreens.Main && contentType === ContentType.Main
+      && !isChatOpen && !isForumPanelOpen) {
+      sendScreenName('tl_navigation_mainScreen');
+    } else {
+      sendScreenName('tl_navigation_otherScreen');
+    }
+  }, [settingsScreen, contentType, isChatOpen, isForumPanelOpen]);
 
   const handleSearchQuery = useLastCallback((query: string) => {
     if (content === LeftColumnContent.Contacts) {
