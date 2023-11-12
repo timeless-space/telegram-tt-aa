@@ -61,20 +61,6 @@ export function handleSendLink(message: string) {
 }
 
 /**
- * TL - Custom function to get current user data
- */
-export function handleGetUserInfo() {
-  const userById = getGlobal().users.byId;
-  for (const key of Object.keys(userById)) {
-    if (userById[key].hasOwnProperty('isSelf')) {
-      (window as any).getUserInfo?.postMessage(JSON.stringify(userById[key]));
-      return;
-    }
-  }
-  (window as any).getUserInfo?.postMessage('No Data');
-}
-
-/**
  * TL - Custom function to get base64 encode image data from blob url
  */
 const getBlobData = (url: string) => {
@@ -92,6 +78,22 @@ const getBlobData = (url: string) => {
     }).catch((error) => reject(error));
   });
 };
+
+/**
+ * TL - Custom function to get current user data
+ */
+export function handleGetUserInfo() {
+  const userById = getGlobal().users.byId;
+  for (const key of Object.keys(userById)) {
+    if (userById[key].hasOwnProperty('isSelf')) {
+      (window as any).getUserInfo?.postMessage(JSON.stringify(userById[key]));
+      return;
+    }
+  }
+  (window as any).getUserInfo?.postMessage(JSON.stringify({
+    message: 'No Data',
+  }));
+}
 
 /**
  * TL - This function which send contact list of this account to Native App

@@ -213,7 +213,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
 
     return captureEvents(transitionRef.current!, {
       selectorToPreventScroll: '.chat-list',
-      onSwipe: (() => {
+      onSwipe: ((e, direction) => {
         // if (direction === SwipeDirection.Left) {
         //   setActiveChatFolder(
         //     { activeChatFolder: Math.min(activeChatFolder + 1, folderTabs.length - 1) },

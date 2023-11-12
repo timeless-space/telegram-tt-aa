@@ -215,12 +215,14 @@ const App: FC<StateProps> = ({
   }, []);
 
   useLayoutEffect(() => {
-    if ((window as any).tlPrimaryColor) {
-      document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor);
-    }
+    document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
+    document.body.style.setProperty(
+      '--color-background-transition',
+      (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR,
+    );
     document.body.style.setProperty(
       '--theme-background-color',
-      theme === 'dark' ? window?.tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
+      theme === 'dark' ? (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
     );
     sessionStorage.clear();
   }, [theme]);

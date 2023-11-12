@@ -1291,7 +1291,7 @@ const Composer: FC<OwnProps & StateProps> = ({
    * TL - Create POAP function
    */
   const handleCreatePOAP = () => {
-    (window as any).createPOAP.postMessage(JSON.stringify({
+    (window as any).createPOAP?.postMessage(JSON.stringify({
       chatId,
     }));
 
