@@ -27,7 +27,7 @@ export function getPlatform() {
 
   if (/Android/.test(userAgent)) return 'Android';
 
-  if (/Linux/.test(platform)) return 'Linux';
+  if (/Linux/.test(platform)) return 'Android';
 
   return undefined;
 }
@@ -36,10 +36,10 @@ export const IS_PRODUCTION_HOST = window.location.host === PRODUCTION_HOSTNAME;
 export const PLATFORM_ENV = getPlatform();
 export const IS_MAC_OS = PLATFORM_ENV === 'macOS';
 export const IS_WINDOWS = PLATFORM_ENV === 'Windows';
-export const IS_LINUX = PLATFORM_ENV === 'Linux';
+export const IS_LINUX = false;
 export const IS_IOS = PLATFORM_ENV === 'iOS';
 export const IS_ANDROID = PLATFORM_ENV === 'Android';
-export const IS_MOBILE = IS_IOS || IS_ANDROID;
+export const IS_MOBILE = IS_IOS || IS_ANDROID || true;
 export const IS_SAFARI = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 export const IS_YA_BROWSER = navigator.userAgent.includes('YaBrowser');
 

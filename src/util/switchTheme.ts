@@ -6,6 +6,7 @@ import { animate } from './animation';
 import { lerp } from './math';
 
 import themeColors from '../styles/themes.json';
+import { DARK_THEME_BG_COLOR } from '../config';
 
 type RGBAColor = {
   r: number;
@@ -32,10 +33,18 @@ const DISABLE_ANIMATION_CSS = `
   transition: none !important;
 }`;
 
-const colors = (Object.keys(themeColors) as Array<keyof typeof themeColors>).map((property) => ({
-  property,
-  colors: [hexToRgb(themeColors[property][0]), hexToRgb(themeColors[property][1])],
-}));
+const colors = (Object.keys(themeColors) as Array<keyof typeof themeColors>).map((property) => {
+  if (property === '--color-background') {
+    return {
+      property,
+      colors: [hexToRgb(themeColors[property][0]), hexToRgb((window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR)],
+    };
+  }
+  return {
+    property,
+    colors: [hexToRgb(themeColors[property][0]), hexToRgb(themeColors[property][1])],
+  };
+});
 
 const injectCss = (css: string) => {
   const style = document.createElement('style');

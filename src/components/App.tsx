@@ -212,10 +212,6 @@ const App: FC<StateProps> = ({
   useLayoutEffect(() => {
     document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
     document.body.style.setProperty(
-      '--color-background-transition',
-      (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR,
-    );
-    document.body.style.setProperty(
       '--theme-background-color',
       theme === 'dark' ? (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
     );

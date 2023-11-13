@@ -73,10 +73,10 @@ export default function useAppLayout() {
   useEffect(() => callbacks.addCallback(forceUpdate), [forceUpdate]);
 
   return {
-    isMobile,
+    isMobile: true,
     isTablet,
     isLandscape,
-    isDesktop: !isMobile && !isTablet,
+    isDesktop: false,
     isTouchScreen,
   };
 }

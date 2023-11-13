@@ -268,7 +268,7 @@ async function downloadFile2(
                     isDone2 = true;
                     if (progressCallback) {
                         if (progressCallback.isCanceled) {
-                            throw new Error('USER_CANCELED');
+                            // throw new Error('USER_CANCELED');
                         }
 
                         progress += (1 / partsCount);
