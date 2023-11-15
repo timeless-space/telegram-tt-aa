@@ -81,14 +81,6 @@ const Archive: FC<OwnProps> = ({
       },
     } satisfies MenuItemContextAction;
 
-    const actionHide = {
-      title: lang('lng_context_archive_to_menu'),
-      icon: 'archive-to-main',
-      handler: () => {
-        updateArchiveSettings({ isHidden: true });
-      },
-    } satisfies MenuItemContextAction;
-
     return compact([actionMinimize, actionExpand]);
   }, [archiveSettings.isMinimized, lang, updateArchiveSettings]);
 

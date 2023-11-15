@@ -16,8 +16,9 @@ import { selectCanShareFolder, selectTabState } from '../../../global/selectors'
 import { selectCurrentLimit } from '../../../global/selectors/limits';
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
-import { captureEvents, SwipeDirection } from '../../../util/captureEvents';
+import { captureEvents } from '../../../util/captureEvents';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
+import { handleScrollUnactiveTab } from '../../../util/tlCustomFunction';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 
 import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManager';
@@ -30,7 +31,6 @@ import StoryRibbon from '../../story/StoryRibbon';
 import TabList from '../../ui/TabList';
 import Transition from '../../ui/Transition';
 import ChatList from './ChatList';
-import { handleScrollUnactiveTab } from '../../../util/tlCustomFunction';
 
 type OwnProps = {
   onSettingsScreenSelect: (screen: SettingsScreens) => void;
@@ -227,20 +227,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
 
     return captureEvents(transitionRef.current!, {
       selectorToPreventScroll: '.chat-list',
-      onSwipe: ((e, direction) => {
-        // if (direction === SwipeDirection.Left) {
-        //   setActiveChatFolder(
-        //     { activeChatFolder: Math.min(activeChatFolder + 1, folderTabs.length - 1) },
-        //     { forceOnHeavyAnimation: true },
-        //   );
-        //   return true;
-        // } else if (direction === SwipeDirection.Right) {
-        //   setActiveChatFolder({ activeChatFolder: Math.max(0, activeChatFolder - 1) }, { forceOnHeavyAnimation: true });
-        //   return true;
-        // }
-
-        return false;
-      }),
+      onSwipe: (() => false),
     });
   }, [activeChatFolder, folderTabs, isForumPanelOpen, setActiveChatFolder]);
 

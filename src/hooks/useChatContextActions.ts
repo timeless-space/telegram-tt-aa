@@ -10,7 +10,6 @@ import {
   isUserId,
 } from '../global/helpers';
 import { compact } from '../util/iteratees';
-import { IS_ELECTRON, IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../util/windowEnvironment';
 import useLang from './useLang';
 
 const useChatContextActions = ({
@@ -51,7 +50,6 @@ const useChatContextActions = ({
       updateChatMutedState,
       toggleChatArchived,
       toggleChatUnread,
-      openChatInNewTab,
     } = getActions();
 
     // const actionOpenInNewTab = IS_OPEN_IN_NEW_TAB_SUPPORTED && {
@@ -89,7 +87,7 @@ const useChatContextActions = ({
       };
 
     if (isInSearch) {
-      return compact([actionOpenInNewTab, actionPin, actionAddToFolder, actionMute]) as MenuItemContextAction[];
+      return compact([actionPin, actionAddToFolder, actionMute]) as MenuItemContextAction[];
     }
 
     const actionMaskAsRead = (chat.unreadCount || chat.hasUnreadMark)

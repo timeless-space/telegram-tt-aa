@@ -23,6 +23,7 @@ import {
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { formatDateToString } from '../../../util/dateFormat';
+import { sendScreenName } from '../../../util/tlCustomFunction';
 import { IS_APP, IS_ELECTRON, IS_MAC_OS } from '../../../util/windowEnvironment';
 
 import useAppLayout from '../../../hooks/useAppLayout';
@@ -42,11 +43,9 @@ import DropdownMenu from '../../ui/DropdownMenu';
 import SearchInput from '../../ui/SearchInput';
 import ShowTransition from '../../ui/ShowTransition';
 import ConnectionStatusOverlay from '../ConnectionStatusOverlay';
-import LeftSideMenuItems from './LeftSideMenuItems';
 import StatusButton from './StatusButton';
 
 import './LeftMainHeader.scss';
-import { sendScreenName } from '../../../util/tlCustomFunction';
 
 type OwnProps = {
   shouldHideSearch?: boolean;
@@ -88,7 +87,6 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   searchQuery,
   isLoading,
   isCurrentUserPremium,
-  shouldSkipTransition,
   globalSearchChatId,
   searchDate,
   theme,
@@ -101,9 +99,6 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   hasPasscode,
   canSetPasscode,
   onSearchQuery,
-  onSelectSettings,
-  onSelectContacts,
-  onSelectArchived,
   onReset,
 }) => {
   const {
@@ -117,7 +112,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   const lang = useLang();
   const { isMobile } = useAppLayout();
 
-  const [isBotMenuOpen, markBotMenuOpen, unmarkBotMenuOpen] = useFlag();
+  const [isBotMenuOpen] = useFlag();
 
   const hasMenu = content === LeftColumnContent.ChatList;
   const selectedSearchDate = useMemo(() => {
