@@ -1,15 +1,14 @@
-import { DEBUG, ELECTRON_HOST_URL, IS_ELECTRON } from '../config';
-import { respondForProgressive } from './progressive';
-import { respondForDownload } from './download';
-import { respondWithCache, clearAssetCache, respondWithCacheNetworkFirst } from './assetCache';
-import {
-  handlePush,
-  handleNotificationClick,
-  handleClientMessage as handleNotificationMessage,
-} from './pushNotification';
-import { respondForShare, handleClientMessage as handleShareMessage } from './share';
-
+import { DEBUG, ELECTRON_HOST_URL, IS_ELECTRON_BUILD } from '../config';
 import { pause } from '../util/schedulers';
+import { clearAssetCache, respondWithCache, respondWithCacheNetworkFirst } from './assetCache';
+import { respondForDownload } from './download';
+import { respondForProgressive } from './progressive';
+import {
+  handleClientMessage as handleNotificationMessage,
+  handleNotificationClick,
+  handlePush,
+} from './pushNotification';
+import { handleClientMessage as handleShareMessage, respondForShare } from './share';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -48,7 +47,7 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e: FetchEvent) => {
   const { url } = e.request;
-  const scope = IS_ELECTRON ? ELECTRON_HOST_URL : self.registration.scope;
+  const scope = IS_ELECTRON_BUILD ? ELECTRON_HOST_URL : self.registration.scope;
   if (!url.startsWith(scope)) {
     return false;
   }

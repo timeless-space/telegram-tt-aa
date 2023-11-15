@@ -7,7 +7,7 @@ import { IS_SAFARI } from './windowEnvironment';
 
 type DeepLinkMethod = 'resolve' | 'login' | 'passport' | 'settings' | 'join' | 'addstickers' | 'addemoji' |
 'setlanguage' | 'addtheme' | 'confirmphone' | 'socks' | 'proxy' | 'privatepost' | 'bg' | 'share' | 'msg' | 'msg_url' |
-'invoice' | 'addlist';
+'invoice' | 'addlist' | 'boost' | 'giftcode';
 
 export const processDeepLink = (url: string) => {
   const {
@@ -27,6 +27,9 @@ export const processDeepLink = (url: string) => {
     processAttachBotParameters,
     openChatWithDraft,
     checkChatlistInvite,
+    openStoryViewerByUsername,
+    processBoostParameters,
+    checkGiftCode,
   } = getActions();
 
   // Safari thinks the path in tg://path links is hostname for some reason
@@ -37,10 +40,12 @@ export const processDeepLink = (url: string) => {
     case 'resolve': {
       const {
         domain, phone, post, comment, voicechat, livestream, start, startattach, attach, thread, topic,
-        appname, startapp,
+        appname, startapp, story,
       } = params;
 
-      const startAttach = params.hasOwnProperty('startattach') && !startattach ? true : startattach;
+      const hasStartAttach = params.hasOwnProperty('startattach');
+      const hasStartApp = params.hasOwnProperty('startapp');
+      const hasBoost = params.hasOwnProperty('boost');
       const choose = parseChooseParameter(params.choose);
       const threadId = Number(thread) || Number(topic) || undefined;
 
@@ -51,26 +56,30 @@ export const processDeepLink = (url: string) => {
             startApp: startapp,
             originalParts: [domain, appname],
           });
-        } else if (startAttach && choose) {
+        } else if ((hasStartAttach && choose) || (!appname && hasStartApp)) {
           processAttachBotParameters({
             username: domain,
             filter: choose,
-            ...(typeof startAttach === 'string' && { startParam: startAttach }),
+            startParam: startattach || startapp,
           });
         } else if (params.hasOwnProperty('voicechat') || params.hasOwnProperty('livestream')) {
           joinVoiceChatByLink({
             username: domain,
             inviteHash: voicechat || livestream,
           });
+        } else if (hasBoost) {
+          processBoostParameters({ usernameOrId: domain });
         } else if (phone) {
-          openChatByPhoneNumber({ phoneNumber: phone, startAttach, attach });
+          openChatByPhoneNumber({ phoneNumber: phone, startAttach: startattach, attach });
+        } else if (story) {
+          openStoryViewerByUsername({ username: domain, storyId: Number(story) });
         } else {
           openChatByUsername({
             username: domain,
             messageId: post ? Number(post) : undefined,
             commentId: comment ? Number(comment) : undefined,
             startParam: start,
-            startAttach,
+            startAttach: startattach,
             attach,
             threadId,
           });
@@ -82,6 +91,13 @@ export const processDeepLink = (url: string) => {
       const {
         post, channel,
       } = params;
+
+      const hasBoost = params.hasOwnProperty('boost');
+
+      if (hasBoost) {
+        processBoostParameters({ usernameOrId: channel, isPrivate: true });
+        return;
+      }
 
       focusMessage({
         chatId: `-${channel}`,
@@ -132,6 +148,20 @@ export const processDeepLink = (url: string) => {
     case 'invoice': {
       const { slug } = params;
       openInvoice({ slug });
+      break;
+    }
+
+    case 'boost': {
+      const { channel, domain } = params;
+      const isPrivate = Boolean(channel);
+
+      processBoostParameters({ usernameOrId: channel || domain, isPrivate });
+      break;
+    }
+
+    case 'giftcode': {
+      const { slug } = params;
+      checkGiftCode({ slug });
       break;
     }
     default:

@@ -1,67 +1,68 @@
-import type { RequiredGlobalActions } from '../../index';
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
-
 import type {
   ApiChat, ApiMessage, ApiPollResult, ApiReactions, ApiThreadInfo,
 } from '../../../api/types';
+import type { RequiredGlobalActions } from '../../index';
 import type {
-  ActiveEmojiInteraction, ActionReturnType, GlobalState, RequiredGlobalState,
+  ActionReturnType, ActiveEmojiInteraction, GlobalState, RequiredGlobalState,
 } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
-import { omit, pickTruthy, unique } from '../../../util/iteratees';
 import { areDeepEqual } from '../../../util/areDeepEqual';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { omit, pickTruthy, unique } from '../../../util/iteratees';
 import { notifyAboutMessage } from '../../../util/notifications';
+import { onTickEnd } from '../../../util/schedulers';
 import {
-  updateChat,
+  checkIfHasUnreadReactions, getMessageContent, getMessageText, isActionMessage,
+  isMessageLocal, isUserId,
+} from '../../helpers';
+import { getMessageReplyInfo, getStoryReplyInfo } from '../../helpers/replies';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import {
+  addViewportId,
+  clearMessageTranslation,
   deleteChatMessages,
+  deleteChatScheduledMessages,
+  deleteTopic,
+  removeChatFromChatLists,
+  replaceThreadParam,
+  updateChat,
   updateChatMessage,
   updateListedIds,
-  addViewportId,
-  updateThreadInfo,
-  replaceThreadParam,
+  updateMessageTranslations,
   updateScheduledMessage,
-  deleteChatScheduledMessages,
+  updateThreadInfo,
   updateThreadUnreadFromForwardedMessage,
   updateTopic,
-  deleteTopic,
-  updateMessageTranslations,
-  clearMessageTranslation,
-  removeChatFromChatLists,
 } from '../../reducers';
-import {
-  selectChatMessage,
-  selectChatMessages,
-  selectIsViewportNewest,
-  selectListedIds,
-  selectChatMessageByPollId,
-  selectCommonBoxChatId,
-  selectIsChatListed,
-  selectThreadInfo,
-  selectThreadByMessage,
-  selectPinnedIds,
-  selectScheduledMessage,
-  selectChatScheduledMessages,
-  selectIsMessageInCurrentMessageList,
-  selectScheduledIds,
-  selectCurrentMessageList,
-  selectViewportIds,
-  selectFirstUnreadId,
-  selectChat,
-  selectIsServiceChatReady,
-  selectThreadIdFromMessage,
-  selectTopicFromMessage,
-  selectTabState,
-  selectSendAs,
-} from '../../selectors';
-import {
-  getMessageContent, isUserId, isMessageLocal, getMessageText, checkIfHasUnreadReactions, isActionMessage,
-} from '../../helpers';
-import { onTickEnd } from '../../../util/schedulers';
 import { updateUnreadReactions } from '../../reducers/reactions';
 import { updateTabState } from '../../reducers/tabs';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import {
+  selectChat,
+  selectChatMessage,
+  selectChatMessageByPollId,
+  selectChatMessages,
+  selectChatScheduledMessages,
+  selectCommonBoxChatId,
+  selectCurrentMessageList,
+  selectFirstUnreadId,
+  selectIsChatListed,
+  selectIsMessageInCurrentMessageList,
+  selectIsServiceChatReady,
+  selectIsViewportNewest,
+  selectListedIds,
+  selectPinnedIds,
+  selectScheduledIds,
+  selectScheduledMessage,
+  selectSendAs,
+  selectTabState,
+  selectThreadByMessage,
+  selectThreadIdFromMessage,
+  selectThreadInfo,
+  selectTopicFromMessage,
+  selectViewportIds,
+} from '../../selectors';
 
 const ANIMATION_DELAY = 350;
 
@@ -84,18 +85,21 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       const newMessage = selectChatMessage(global, chatId, id)!;
+      const replyInfo = getMessageReplyInfo(newMessage);
+      const storyReplyInfo = getStoryReplyInfo(newMessage);
       const chat = selectChat(global, chatId);
       if (chat?.isForum
-        && newMessage.isTopicReply
+        && replyInfo?.isForumTopic
         && !selectTopicFromMessage(global, newMessage)
-        && newMessage.replyToMessageId) {
-        actions.loadTopicById({ chatId, topicId: newMessage.replyToMessageId });
+        && replyInfo.replyToMsgId) {
+        actions.loadTopicById({ chatId, topicId: replyInfo.replyToMsgId });
       }
 
       Object.values(global.byTabId).forEach(({ id: tabId }) => {
         const isLocal = isMessageLocal(message as ApiMessage);
         if (selectIsMessageInCurrentMessageList(global, chatId, message as ApiMessage, tabId)) {
-          if (isLocal && message.isOutgoing && !(message.content?.action)) {
+          if (isLocal && message.isOutgoing && !(message.content?.action) && !storyReplyInfo?.storyId
+            && !message.content?.storyData) {
             const currentMessageList = selectCurrentMessageList(global, tabId);
             if (currentMessageList) {
               // We do not use `actions.focusLastMessage` as it may be set with a delay (see below)
@@ -121,7 +125,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
             setTimeout(() => {
               global = getGlobal();
               if (shouldForceReply) {
-                global = replaceThreadParam(global, chatId, MAIN_THREAD_ID, 'replyingToId', id);
+                actions.updateDraftReplyInfo({
+                  replyToMsgId: id,
+                  tabId,
+                });
               }
               global = updateChatLastMessage(global, chatId, newMessage);
               setGlobal(global);
@@ -157,7 +164,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         const tabState = selectTabState(global, tabId);
         global = updateTabState(global, {
           activeEmojiInteractions: [...(tabState.activeEmojiInteractions || []), {
-            id: tabState.activeEmojiInteractions?.length || 0,
+            id: Math.random(),
             animatedEffect: update.emoji,
             messageId: update.messageId,
           } as ActiveEmojiInteraction],
@@ -772,16 +779,18 @@ function updateThreadUnread<T extends GlobalState>(
 ) {
   const { chatId } = message;
 
+  const replyInfo = getMessageReplyInfo(message);
+
   const { threadInfo } = selectThreadByMessage(global, message) || {};
 
-  if (!threadInfo && message.replyToMessageId) {
-    const originMessage = selectChatMessage(global, chatId, message.replyToMessageId);
+  if (!threadInfo && replyInfo?.replyToMsgId) {
+    const originMessage = selectChatMessage(global, chatId, replyInfo.replyToMsgId);
     if (originMessage) {
       global = updateThreadUnreadFromForwardedMessage(global, originMessage, chatId, message.id, isDeleting);
     } else {
       actions.loadMessage({
         chatId,
-        messageId: message.replyToMessageId,
+        messageId: replyInfo.replyToMsgId,
         threadUpdate: {
           isDeleting,
           lastMessageId: message.id,

@@ -1,12 +1,12 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
 import { getActions, getGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
 import type { ApiAvailableReaction, ApiReaction, ApiSticker } from '../../api/types';
-import type { StickerSetOrReactionsSetOrRecent } from '../../types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
+import type { StickerSetOrReactionsSetOrRecent } from '../../types';
 
 import {
   DEFAULT_STATUS_ICON_ID,
@@ -17,23 +17,23 @@ import {
   RECENT_SYMBOL_SET_ID,
   STICKER_SIZE_PICKER,
 } from '../../config';
-import buildClassName from '../../util/buildClassName';
-import { selectIsAlwaysHighPriorityEmoji, selectIsSetPremium } from '../../global/selectors';
 import { getReactionUniqueKey } from '../../global/helpers';
+import { selectIsAlwaysHighPriorityEmoji, selectIsSetPremium } from '../../global/selectors';
+import buildClassName from '../../util/buildClassName';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useLang from '../../hooks/useLang';
+import useAppLayout from '../../hooks/useAppLayout';
 import useFlag from '../../hooks/useFlag';
+import { useIsIntersecting } from '../../hooks/useIntersectionObserver';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 import useMediaTransition from '../../hooks/useMediaTransition';
 import useResizeObserver from '../../hooks/useResizeObserver';
-import { useIsIntersecting } from '../../hooks/useIntersectionObserver';
-import useAppLayout from '../../hooks/useAppLayout';
 import useWindowSize from '../../hooks/useWindowSize';
 
-import StickerButton from './StickerButton';
-import ConfirmDialog from '../ui/ConfirmDialog';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import ReactionEmoji from './ReactionEmoji';
+import StickerButton from './StickerButton';
 
 import grey from '../../assets/icons/forumTopic/grey.svg';
 
@@ -41,7 +41,7 @@ type OwnProps = {
   stickerSet: StickerSetOrReactionsSetOrRecent;
   loadAndPlay: boolean;
   index: number;
-  idPrefix?: string;
+  idPrefix: string;
   isNearActive: boolean;
   favoriteStickers?: ApiSticker[];
   isSavedMessages?: boolean;
@@ -53,6 +53,8 @@ type OwnProps = {
   withDefaultTopicIcon?: boolean;
   withDefaultStatusIcon?: boolean;
   isTranslucent?: boolean;
+  noContextMenus?: boolean;
+  forcePlayback?: boolean;
   observeIntersection?: ObserveFn;
   observeIntersectionForPlayingItems: ObserveFn;
   observeIntersectionForShowingItems: ObserveFn;
@@ -90,6 +92,8 @@ const StickerSet: FC<OwnProps> = ({
   selectedReactionIds,
   withDefaultStatusIcon,
   isTranslucent,
+  noContextMenus,
+  forcePlayback,
   observeIntersection,
   observeIntersectionForPlayingItems,
   observeIntersectionForShowingItems,
@@ -220,8 +224,7 @@ const StickerSet: FC<OwnProps> = ({
     }
   }, [shouldRender, loadStickers, stickerSet]);
 
-  const isLocked = !isSavedMessages && !isRecent && isEmoji && !isCurrentUserPremium
-    && stickerSet.stickers?.some(({ isFree }) => !isFree);
+  const isLocked = !isSavedMessages && !isCurrentUserPremium && isPremiumSet;
 
   const isInstalled = stickerSet.installedDate && !stickerSet.isArchived;
   const canCut = !isInstalled && stickerSet.id !== RECENT_SYMBOL_SET_ID && stickerSet.id !== POPULAR_SYMBOL_SET_ID;
@@ -237,13 +240,22 @@ const StickerSet: FC<OwnProps> = ({
   const favoriteStickerIdsSet = useMemo(() => (
     favoriteStickers ? new Set(favoriteStickers.map(({ id }) => id)) : undefined
   ), [favoriteStickers]);
-  const withAddSetButton = !shouldHideHeader && !isRecent && isEmoji && !isInstalled && !isPopular;
+  const withAddSetButton = !shouldHideHeader && !isRecent && isEmoji && !isPopular
+    && (!isInstalled || (!isCurrentUserPremium && !isSavedMessages));
+  const addSetButtonText = useMemo(() => {
+    if (isLocked) {
+      if (isInstalled) return lang('lng_emoji_premium_restore');
+      return lang('Unlock');
+    }
+
+    return lang('Add');
+  }, [isLocked, lang, isInstalled]);
 
   return (
     <div
       ref={ref}
       key={stickerSet.id}
-      id={`${idPrefix || 'sticker-set'}-${index}`}
+      id={`${idPrefix}-${index}`}
       className={
         buildClassName('symbol-set', isLocked && 'symbol-set-locked')
       }
@@ -254,7 +266,9 @@ const StickerSet: FC<OwnProps> = ({
             {isLocked && <i className="symbol-set-locked-icon icon icon-lock-badge" />}
             {stickerSet.title}
             {withAddSetButton && Boolean(stickerSet.stickers) && (
-              <span className="symbol-set-amount">{lang('Stickers', stickerSet.stickers.length, 'i')}</span>
+              <span className="symbol-set-amount">
+                {lang(isEmoji ? 'EmojiCount' : 'Stickers', stickerSet.stickers.length, 'i')}
+              </span>
             )}
           </p>
           {isRecent && (
@@ -269,7 +283,7 @@ const StickerSet: FC<OwnProps> = ({
               size="tiny"
               fluid
             >
-              {isPremiumSet && isLocked ? lang('Unlock') : lang('Add')}
+              {addSetButtonText}
             </Button>
           )}
         </div>
@@ -291,7 +305,7 @@ const StickerSet: FC<OwnProps> = ({
             onClick={handleDefaultTopicIconClick}
             key="default-topic-icon"
           >
-            <img src={grey} alt="Reset" className="sticker-media" />
+            <img src={grey} alt="Reset" className="sticker-media" draggable={false} />
           </Button>
         )}
         {withDefaultStatusIcon && (
@@ -319,6 +333,7 @@ const StickerSet: FC<OwnProps> = ({
               onClick={onReactionSelect!}
               sharedCanvasRef={sharedCanvasRef}
               sharedCanvasHqRef={sharedCanvasHqRef}
+              forcePlayback={forcePlayback}
             />
           );
         })}
@@ -343,6 +358,7 @@ const StickerSet: FC<OwnProps> = ({
                 isSavedMessages={isSavedMessages}
                 isStatusPicker={isStatusPicker}
                 canViewSet
+                noContextMenu={noContextMenus}
                 isCurrentUserPremium={isCurrentUserPremium}
                 sharedCanvasRef={canvasRef}
                 withTranslucentThumb={isTranslucent}
@@ -355,6 +371,7 @@ const StickerSet: FC<OwnProps> = ({
                 onContextMenuOpen={onContextMenuOpen}
                 onContextMenuClose={onContextMenuClose}
                 onContextMenuClick={onContextMenuClick}
+                forcePlayback={forcePlayback}
               />
             );
           })}

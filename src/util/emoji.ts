@@ -1,6 +1,5 @@
 import { requestMutation } from '../lib/fasterdom/fasterdom';
 import EMOJI_REGEX, { removeVS16s } from '../lib/twemojiRegex';
-
 import withCache from './withCache';
 
 // Due to the fact that emoji from Apple do not contain some characters, it is necessary to remove them from emoji-data
@@ -116,6 +115,11 @@ export function uncompressEmoji(data: EmojiRawData): EmojiData {
 }
 
 export function isoToEmoji(iso: string) {
+  // Special case for Fragment numbers
+  if (iso === 'FT') {
+    return '\uD83C\uDFF4\u200D\u2620\uFE0F';
+  }
+
   const code = iso.toUpperCase();
 
   if (!/^[A-Z]{2}$/.test(code)) return iso;

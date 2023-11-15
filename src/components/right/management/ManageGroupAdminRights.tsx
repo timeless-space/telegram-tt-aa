@@ -9,28 +9,29 @@ import type {
 } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
-import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 import { getUserFullName, isChatBasicGroup, isChatChannel } from '../../../global/helpers';
-import useLang from '../../../hooks/useLang';
+import { selectChat, selectChatFullInfo } from '../../../global/selectors';
+
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
+import useLang from '../../../hooks/useLang';
 
 import PrivateChatInfo from '../../common/PrivateChatInfo';
-import ListItem from '../../ui/ListItem';
 import Checkbox from '../../ui/Checkbox';
-import FloatingActionButton from '../../ui/FloatingActionButton';
-import Spinner from '../../ui/Spinner';
 import ConfirmDialog from '../../ui/ConfirmDialog';
+import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
+import ListItem from '../../ui/ListItem';
+import Spinner from '../../ui/Spinner';
 
 type OwnProps = {
   chatId: string;
   selectedUserId?: string;
   isPromotedByCurrentUser?: boolean;
   isNewAdmin?: boolean;
+  isActive: boolean;
   onScreenSelect: (screen: ManagementScreens) => void;
   onClose: NoneToVoidFunction;
-  isActive: boolean;
 };
 
 type StateProps = {
@@ -48,10 +49,10 @@ type StateProps = {
 const CUSTOM_TITLE_MAX_LENGTH = 16;
 
 const ManageGroupAdminRights: FC<OwnProps & StateProps> = ({
+  isActive,
   isNewAdmin,
   selectedUserId,
   defaultRights,
-  onScreenSelect,
   chat,
   usersById,
   currentUserId,
@@ -61,7 +62,7 @@ const ManageGroupAdminRights: FC<OwnProps & StateProps> = ({
   isForum,
   isFormFullyDisabled,
   onClose,
-  isActive,
+  onScreenSelect,
 }) => {
   const { updateChatAdmin } = getActions();
 
@@ -259,6 +260,42 @@ const ManageGroupAdminRights: FC<OwnProps & StateProps> = ({
               onChange={handlePermissionChange}
             />
           </div>
+          {isChannel && (
+            <div className="ListItem">
+              <Checkbox
+                name="postStories"
+                checked={Boolean(permissions.postStories)}
+                label={lang('EditAdminPostStories')}
+                blocking
+                disabled={getControlIsDisabled('postStories')}
+                onChange={handlePermissionChange}
+              />
+            </div>
+          )}
+          {isChannel && (
+            <div className="ListItem">
+              <Checkbox
+                name="editStories"
+                checked={Boolean(permissions.editStories)}
+                label={lang('EditAdminEditStories')}
+                blocking
+                disabled={getControlIsDisabled('editStories')}
+                onChange={handlePermissionChange}
+              />
+            </div>
+          )}
+          {isChannel && (
+            <div className="ListItem">
+              <Checkbox
+                name="deleteStories"
+                checked={Boolean(permissions.deleteStories)}
+                label={lang('EditAdminDeleteStories')}
+                blocking
+                disabled={getControlIsDisabled('deleteStories')}
+                onChange={handlePermissionChange}
+              />
+            </div>
+          )}
           {!isChannel && (
             <div className="ListItem">
               <Checkbox

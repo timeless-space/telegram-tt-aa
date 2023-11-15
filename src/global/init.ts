@@ -1,22 +1,25 @@
+import './intervals';
+
+import type { ActionReturnType, GlobalState } from './types';
+
+import { IS_MOCKED_CLIENT } from '../config';
+import { isCacheApiSupported } from '../util/cacheApi';
+import { getCurrentTabId, reestablishMasterToSelf } from '../util/establishMultitabRole';
+import { cloneDeep } from '../util/iteratees';
+import { Bundles, loadBundle } from '../util/moduleLoader';
+import { parseLocationHash } from '../util/routing';
+import { clearStoredSession } from '../util/sessions';
+import { updatePeerColors } from '../util/theme';
+import { IS_MULTITAB_SUPPORTED } from '../util/windowEnvironment';
+import { updateTabState } from './reducers/tabs';
+import { initCache, loadCache } from './cache';
+import { isLocalMessageId } from './helpers';
 import {
   addActionHandler, getGlobal, setGlobal,
 } from './index';
-
 import { INITIAL_GLOBAL_STATE, INITIAL_TAB_STATE } from './initialState';
-import { IS_MULTITAB_SUPPORTED } from '../util/windowEnvironment';
-import { IS_MOCKED_CLIENT } from '../config';
-import { initCache, loadCache } from './cache';
-import { cloneDeep } from '../util/iteratees';
 import { replaceTabThreadParam, replaceThreadParam, updatePasscodeSettings } from './reducers';
-import { clearStoredSession } from '../util/sessions';
-import { parseLocationHash } from '../util/routing';
 import { selectTabState, selectThreadParam } from './selectors';
-import { Bundles, loadBundle } from '../util/moduleLoader';
-import { getCurrentTabId, reestablishMasterToSelf } from '../util/establishMultitabRole';
-import { updateTabState } from './reducers/tabs';
-import type { ActionReturnType, GlobalState } from './types';
-import { isLocalMessageId } from './helpers';
-import { isCacheApiSupported } from '../util/cacheApi';
 
 initCache();
 
@@ -39,6 +42,10 @@ addActionHandler('initShared', (prevGlobal, actions, payload): ActionReturnType 
 
   if (force) {
     global.byTabId = prevGlobal.byTabId;
+  }
+
+  if (global.appConfig?.peerColors) {
+    updatePeerColors(global.appConfig.peerColors, global.appConfig.darkPeerColors);
   }
 
   return global;

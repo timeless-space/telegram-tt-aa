@@ -6,14 +6,14 @@ import { getActions } from '../../../global';
 
 import { SettingsScreens } from '../../../types';
 
+import useAppLayout from '../../../hooks/useAppLayout';
 import useLang from '../../../hooks/useLang';
 import useMultiClick from '../../../hooks/useMultiClick';
-import useAppLayout from '../../../hooks/useAppLayout';
 
-import DropdownMenu from '../../ui/DropdownMenu';
-import MenuItem from '../../ui/MenuItem';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
+import DropdownMenu from '../../ui/DropdownMenu';
+import MenuItem from '../../ui/MenuItem';
 
 type OwnProps = {
   currentScreen: SettingsScreens;
@@ -113,20 +113,21 @@ const SettingsHeader: FC<OwnProps> = ({
         return <h3>{lang('PrivacyLastSeen')}</h3>;
       case SettingsScreens.PrivacyProfilePhoto:
         return <h3>{lang('Privacy.ProfilePhoto')}</h3>;
+      case SettingsScreens.PrivacyBio:
+        return <h3>{lang('PrivacyBio')}</h3>;
       case SettingsScreens.PrivacyForwarding:
         return <h3>{lang('PrivacyForwards')}</h3>;
       case SettingsScreens.PrivacyVoiceMessages:
         return <h3>{lang('PrivacyVoiceMessages')}</h3>;
       case SettingsScreens.PrivacyGroupChats:
         return <h3>{lang('AutodownloadGroupChats')}</h3>;
-      case SettingsScreens.PrivacyPhoneP2P:
-        return <h3>{lang('PrivacyP2P')}</h3>;
       case SettingsScreens.PrivacyPhoneCall:
         return <h3>{lang('Calls')}</h3>;
 
       case SettingsScreens.PrivacyPhoneNumberAllowedContacts:
       case SettingsScreens.PrivacyLastSeenAllowedContacts:
       case SettingsScreens.PrivacyProfilePhotoAllowedContacts:
+      case SettingsScreens.PrivacyBioAllowedContacts:
       case SettingsScreens.PrivacyForwardingAllowedContacts:
       case SettingsScreens.PrivacyVoiceMessagesAllowedContacts:
       case SettingsScreens.PrivacyGroupChatsAllowedContacts:
@@ -136,6 +137,7 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.PrivacyPhoneNumberDeniedContacts:
       case SettingsScreens.PrivacyLastSeenDeniedContacts:
       case SettingsScreens.PrivacyProfilePhotoDeniedContacts:
+      case SettingsScreens.PrivacyBioDeniedContacts:
       case SettingsScreens.PrivacyForwardingDeniedContacts:
       case SettingsScreens.PrivacyVoiceMessagesDeniedContacts:
       case SettingsScreens.PrivacyGroupChatsDeniedContacts:

@@ -1,3 +1,6 @@
+@use "sass:map";
+@use "../../../styles/icons";
+
 .message-content {
   position: relative;
   max-width: var(--max-width);
@@ -276,22 +279,8 @@
       }
     }
 
-    @for $i from 1 through 8 {
-      & > .color-#{$i} {
-        color: var(--color-user-#{$i});
-
-        .custom-emoji {
-          color: var(--color-user-#{$i});
-        }
-
-        .PremiumIcon {
-          --color-fill: var(--color-user-#{$i});
-        }
-      }
-    }
-
-    .theme-dark .Message.own & > .color-1 {
-      color: var(--accent-color);
+    .sender-hidden {
+      font-weight: normal;
     }
 
     & + .File {
@@ -309,9 +298,11 @@
 
     .custom-emoji {
       margin-left: 0.25rem;
+      color: var(--accent-color);
     }
 
     .PremiumIcon {
+      --color-fill: var(--accent-color);
       vertical-align: middle;
       opacity: 0.5;
       margin-left: 0.25rem;
@@ -655,6 +646,8 @@
     border-radius: 0.75rem;
     line-height: 1.125rem;
     user-select: none;
+    display: flex;
+    align-items: center;
   }
 
   .message-media-duration .icon-muted {
@@ -662,6 +655,15 @@
     margin-left: 0.375rem;
     font-size: 1.0625rem;
   }
+
+  .message-media-duration .playback-failed {
+    margin-inline-start: 0.125rem;
+    font-size: 0.875rem;
+  }
+}
+
+.message-content.story {
+  max-width: 13.625rem;
 }
 
 .message-content.custom-shape {
@@ -694,8 +696,6 @@
     }
 
     .EmbeddedMessage {
-      border-radius: var(--border-radius-messages);
-
       @media (max-width: 600px) {
         max-width: calc(90vw - 13rem);
       }
@@ -715,10 +715,6 @@
 
   .message-media-duration {
     background: var(--pattern-color);
-  }
-
-  .text-content {
-    margin-bottom: 1rem;
   }
 
   .media-inner {
@@ -765,9 +761,9 @@
     }
 
     .text-content {
+      text-align: center;
       word-break: normal;
       line-height: var(--emoji-only-size);
-      font-size: var(--emoji-only-size);
 
       .emoji {
         width: var(--emoji-only-size);
@@ -785,14 +781,20 @@
 
   @for $i from 1 through 7 {
     &.emoji-only-#{$i} {
-      $size: min(7.5 - ($i * 0.75), 5.625) + rem;
+      $size: null;
+      @if $i == 1 {
+        $size: 7rem;
+      } @else {
+        $size: min(7.5 - ($i * 0.75), 5.625) + rem;
+      }
 
       --emoji-only-size: #{$size};
-    }
-  }
 
-  &.emoji-only-1 {
-    --emoji-only-size: 7rem;
+      .text-content {
+        width: #{calc($size * $i)};
+        font-size: calc($size * 0.9);
+      }
+    }
   }
 
   .Message:not(.own) & {
@@ -823,7 +825,8 @@
 .forwarded-message {
   .message-content.contact &,
   .message-content.voice &,
-  .message-content.poll & {
+  .message-content.poll &,
+  .message-content.giveaway & {
     // MessageOutgoingStatus's icon needs more space
     margin-bottom: 0.5rem;
   }
@@ -931,6 +934,45 @@
   --color-scrollbar: var(--color-scrollbar-code);
   font-family: var(--font-family-monospace);
   font-size: 0.875rem;
+}
+
+blockquote, .blockquote {
+  display: inline-block;
+  position: relative;
+  padding-inline: 0.5rem 1rem;
+  margin-block: 0.125rem;
+  border-radius: 0.25rem;
+  overflow: hidden;
+  background-color: var(--accent-background-color);
+  white-space: pre-wrap;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    inset-inline-start: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--bar-gradient, var(--accent-color));
+  }
+
+  &::after {
+    @include icons.icon;
+    content: map.get(icons.$icons-map, "quote");
+
+    color: var(--accent-color);
+    position: absolute;
+    top: 0.25rem;
+    inset-inline-end: 0.25rem;
+
+    font-size: 0.625rem;
+  }
+}
+
+// Input specific styles
+.blockquote {
+  display: block;
+  width: fit-content;
 }
 
 @keyframes text-loading {

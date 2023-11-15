@@ -82,7 +82,8 @@
 
     > .icon {
       font-size: 1.5rem;
-      margin-right: 2rem;
+      margin-inline-start: 0.125rem;
+      margin-inline-end: 1.25rem;
       color: var(--color-text-secondary);
     }
 
@@ -120,7 +121,6 @@
   &.multiline {
     .ListItem-button > .icon {
       position: relative;
-      top: 0.25rem;
     }
   }
 
@@ -217,6 +217,16 @@
       padding: 0.5625rem;
     }
 
+    &.contact-list-item {
+      .ListItem-button {
+        padding: 0.5rem;
+      }
+
+      .ChatInfo {
+        padding: 0.0625rem;
+      }
+    }
+
     .Avatar {
       margin-right: 0.5rem;
     }
@@ -251,10 +261,15 @@
     .typing-status {
       font-size: 1rem;
       margin: 0;
-      overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
       text-align: initial;
+    }
+
+    h3,
+    .last-message,
+    .typing-status {
+      overflow: hidden;
     }
 
     .title {
@@ -473,13 +488,6 @@
       &.black {
         color: var(--color-text);
       }
-    }
-  }
-
-  &[dir="rtl"] {
-    .ListItem-button > .icon {
-      margin-left: 2rem;
-      margin-right: 0;
     }
   }
 }

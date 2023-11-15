@@ -1,22 +1,22 @@
 import type { FC } from '../../lib/teact/teact';
 import React, { memo, useState } from '../../lib/teact/teact';
-import { withGlobal, getActions } from '../../global';
+import { getActions, withGlobal } from '../../global';
 
 import type { ApiChat, ApiChatSettings, ApiUser } from '../../api/types';
 
-import { selectChat, selectUser } from '../../global/selectors';
 import {
-  getChatTitle, getUserFirstOrLastName, getUserFullName, isChatBasicGroup, isUserId,
+  getChatTitle, getUserFirstOrLastName, getUserFullName, isChatBasicGroup,
 } from '../../global/helpers';
+import { selectChat, selectUser } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useLang from '../../hooks/useLang';
 import useFlag from '../../hooks/useFlag';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
 import Button from '../ui/Button';
-import ConfirmDialog from '../ui/ConfirmDialog';
 import Checkbox from '../ui/Checkbox';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 import './ChatReportPanel.scss';
 
@@ -37,7 +37,7 @@ const ChatReportPanel: FC<OwnProps & StateProps> = ({
 }) => {
   const {
     openAddContactDialog,
-    blockContact,
+    blockUser,
     reportSpam,
     deleteChat,
     leaveChannel,
@@ -51,7 +51,6 @@ const ChatReportPanel: FC<OwnProps & StateProps> = ({
   const [isBlockUserModalOpen, openBlockUserModal, closeBlockUserModal] = useFlag();
   const [shouldReportSpam, setShouldReportSpam] = useState<boolean>(true);
   const [shouldDeleteChat, setShouldDeleteChat] = useState<boolean>(true);
-  const { accessHash } = chat || {};
   const {
     isAutoArchived, canReportSpam, canAddContact, canBlockContact,
   } = settings || {};
@@ -66,7 +65,7 @@ const ChatReportPanel: FC<OwnProps & StateProps> = ({
 
   const handleConfirmBlock = useLastCallback(() => {
     closeBlockUserModal();
-    blockContact({ contactId: chatId, accessHash: accessHash! });
+    blockUser({ userId: chatId });
     if (canReportSpam && shouldReportSpam) {
       reportSpam({ chatId });
     }
@@ -175,6 +174,6 @@ export default memo(withGlobal<OwnProps>(
   (global, { chatId }): StateProps => ({
     currentUserId: global.currentUserId,
     chat: selectChat(global, chatId),
-    user: isUserId(chatId) ? selectUser(global, chatId) : undefined,
+    user: selectUser(global, chatId),
   }),
 )(ChatReportPanel));

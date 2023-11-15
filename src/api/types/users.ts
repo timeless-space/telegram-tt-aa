@@ -1,6 +1,6 @@
-import type { ApiDocument, ApiPhoto } from './messages';
-import type { ApiBotInfo } from './bots';
 import type { API_CHAT_TYPES } from '../../config';
+import type { ApiBotInfo } from './bots';
+import type { ApiDocument, ApiPhoto } from './messages';
 
 export interface ApiUser {
   id: string;
@@ -8,7 +8,9 @@ export interface ApiUser {
   isSelf?: true;
   isVerified?: true;
   isPremium?: boolean;
+  isCloseFriend?: boolean;
   isContact?: true;
+  isSupport?: true;
   type: ApiUserType;
   firstName?: string;
   lastName?: string;
@@ -29,6 +31,12 @@ export interface ApiUser {
   fakeType?: ApiFakeType;
   isAttachBot?: boolean;
   emojiStatus?: ApiEmojiStatus;
+  areStoriesHidden?: boolean;
+  hasStories?: boolean;
+  hasUnreadStories?: boolean;
+  maxStoryId?: number;
+  color?: number;
+  backgroundEmojiId?: string;
 }
 
 export interface ApiUserFullInfo {
@@ -43,6 +51,7 @@ export interface ApiUserFullInfo {
   noVoiceMessages?: boolean;
   premiumGifts?: ApiPremiumGiftOption[];
   isTranslationDisabled?: true;
+  hasPinnedStories?: boolean;
 }
 
 export type ApiFakeType = 'fake' | 'scam';
@@ -67,14 +76,22 @@ export interface ApiUsername {
 export type ApiChatType = typeof API_CHAT_TYPES[number];
 export type ApiAttachMenuPeerType = 'self' | ApiChatType;
 
-export interface ApiAttachBot {
+type ApiAttachBotForMenu = {
+  isForAttachMenu: true;
+  attachMenuPeerTypes: ApiAttachMenuPeerType[];
+};
+
+type ApiAttachBotBase = {
   id: string;
-  hasSettings?: boolean;
   shouldRequestWriteAccess?: boolean;
   shortName: string;
-  peerTypes: ApiAttachMenuPeerType[];
+  isForSideMenu?: true;
+  isDisclaimerNeeded?: boolean;
   icons: ApiAttachBotIcon[];
-}
+  isInactive?: boolean;
+};
+
+export type ApiAttachBot = OptionalCombine<ApiAttachBotBase, ApiAttachBotForMenu>;
 
 export interface ApiAttachBotIcon {
   name: string;

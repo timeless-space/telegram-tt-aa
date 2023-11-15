@@ -1,28 +1,31 @@
 import type { RefObject } from 'react';
-import React, {
-  memo, useEffect, useState,
-} from '../../lib/teact/teact';
-import { getActions, getGlobal, withGlobal } from '../../global';
+import React, { memo, useEffect, useState } from '../../lib/teact/teact';
+import { getActions, withGlobal } from '../../global';
 
 import type { GlobalState } from '../../global/types';
-import { LeftColumnContent, SettingsScreens } from '../../types';
-import type { ReducerAction } from '../../hooks/useReducer';
 import type { FoldersActions } from '../../hooks/reducers/useFoldersReducer';
+import type { ReducerAction } from '../../hooks/useReducer';
+import { LeftColumnContent, SettingsScreens } from '../../types';
 
-import { IS_MAC_OS, IS_APP, LAYERS_ANIMATION_NAME } from '../../util/windowEnvironment';
-import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { selectCurrentChat, selectIsForumPanelOpen, selectTabState } from '../../global/selectors';
+import captureEscKeyListener from '../../util/captureEscKeyListener';
+import { captureControlledSwipe } from '../../util/swipeController';
+import {
+  IS_APP, IS_MAC_OS, IS_TOUCH_ENV, LAYERS_ANIMATION_NAME,
+} from '../../util/windowEnvironment';
 
-import useLastCallback from '../../hooks/useLastCallback';
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import useLastCallback from '../../hooks/useLastCallback';
+import usePrevious2 from '../../hooks/usePrevious2';
+import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
 
 import Transition from '../ui/Transition';
-import LeftMain from './main/LeftMain';
-import Settings from './settings/Settings.async';
-import NewChat from './newChat/NewChat.async';
 import ArchivedChats from './ArchivedChats.async';
+import LeftMain from './main/LeftMain';
+import NewChat from './newChat/NewChat.async';
+import Settings from './settings/Settings.async';
 
 import './LeftColumn.scss';
 import { sendScreenName } from '../../util/tlCustomFunction';
@@ -41,11 +44,13 @@ type StateProps = {
   nextSettingsScreen?: SettingsScreens;
   nextFoldersAction?: ReducerAction<FoldersActions>;
   isChatOpen: boolean;
-  isUpdateAvailable?: boolean;
+  isAppUpdateAvailable?: boolean;
+  isElectronUpdateAvailable?: boolean;
   isForumPanelOpen?: boolean;
   forumPanelChatId?: string;
   isClosingSearch?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
+  isArchivedStoryRibbonShown?: boolean;
 };
 
 enum ContentType {
@@ -73,11 +78,13 @@ function LeftColumn({
   nextSettingsScreen,
   nextFoldersAction,
   isChatOpen,
-  isUpdateAvailable,
+  isAppUpdateAvailable,
+  isElectronUpdateAvailable,
   isForumPanelOpen,
   forumPanelChatId,
   isClosingSearch,
   archiveSettings,
+  isArchivedStoryRibbonShown,
 }: OwnProps & StateProps) {
   const {
     setGlobalSearchQuery,
@@ -185,8 +192,10 @@ function LeftColumn({
           return;
 
         case SettingsScreens.PrivacyPhoneNumber:
+        case SettingsScreens.PrivacyAddByPhone:
         case SettingsScreens.PrivacyLastSeen:
         case SettingsScreens.PrivacyProfilePhoto:
+        case SettingsScreens.PrivacyBio:
         case SettingsScreens.PrivacyPhoneCall:
         case SettingsScreens.PrivacyPhoneP2P:
         case SettingsScreens.PrivacyForwarding:
@@ -235,6 +244,10 @@ function LeftColumn({
         case SettingsScreens.PrivacyProfilePhotoAllowedContacts:
         case SettingsScreens.PrivacyProfilePhotoDeniedContacts:
           setSettingsScreen(SettingsScreens.PrivacyProfilePhoto);
+          return;
+        case SettingsScreens.PrivacyBioAllowedContacts:
+        case SettingsScreens.PrivacyBioDeniedContacts:
+          setSettingsScreen(SettingsScreens.PrivacyBio);
           return;
         case SettingsScreens.PrivacyPhoneCallAllowedContacts:
         case SettingsScreens.PrivacyPhoneCallDeniedContacts:
@@ -442,6 +455,24 @@ function LeftColumn({
     setSettingsScreen(screen);
   });
 
+  const prevSettingsScreenRef = useStateRef(usePrevious2(contentType === ContentType.Settings ? settingsScreen : -1));
+
+  useEffect(() => {
+    if (!IS_TOUCH_ENV) {
+      return undefined;
+    }
+
+    return captureControlledSwipe(ref.current!, {
+      excludedClosestSelector: '.ProfileInfo, .color-picker, .hue-picker',
+      selectorToPreventScroll: '#Settings .custom-scroll',
+      onSwipeRightStart: handleReset,
+      onCancel: () => {
+        setContent(LeftColumnContent.Settings);
+        handleSettingsScreenSelect(prevSettingsScreenRef.current!);
+      },
+    });
+  }, [prevSettingsScreenRef, ref]);
+
   function renderContent(isActive: boolean) {
     switch (contentType) {
       case ContentType.Archived:
@@ -455,6 +486,7 @@ function LeftColumn({
             onLeftColumnContentChange={setContent}
             isForumPanelOpen={isForumPanelOpen}
             archiveSettings={archiveSettings}
+            isStoryRibbonShown={isArchivedStoryRibbonShown}
           />
         );
       case ContentType.Settings:
@@ -464,9 +496,9 @@ function LeftColumn({
             currentScreen={settingsScreen}
             foldersState={foldersState}
             foldersDispatch={foldersDispatch}
+            shouldSkipTransition={shouldSkipHistoryAnimations}
             onScreenSelect={handleSettingsScreenSelect}
             onReset={handleReset}
-            shouldSkipTransition={shouldSkipHistoryAnimations}
           />
         );
       case ContentType.NewChannel:
@@ -504,7 +536,8 @@ function LeftColumn({
             onSettingsScreenSelect={handleSettingsScreenSelect}
             onReset={handleReset}
             shouldSkipTransition={shouldSkipHistoryAnimations}
-            isUpdateAvailable={isUpdateAvailable}
+            isAppUpdateAvailable={isAppUpdateAvailable}
+            isElectronUpdateAvailable={isElectronUpdateAvailable}
             isForumPanelOpen={isForumPanelOpen}
             onTopicSearch={handleTopicSearch}
           />
@@ -524,6 +557,7 @@ function LeftColumn({
       wrapExceptionKey={ContentType.Main}
       id="LeftColumn"
       className="tl-custom-padding"
+      withSwipeControl
     >
       {renderContent}
     </Transition>
@@ -542,13 +576,17 @@ export default memo(withGlobal<OwnProps>(
       activeChatFolder,
       nextSettingsScreen,
       nextFoldersAction,
+      storyViewer: {
+        isArchivedRibbonShown,
+      },
     } = tabState;
     const {
       currentUserId,
       passcode: {
         hasPasscode,
       },
-      isUpdateAvailable,
+      isAppUpdateAvailable,
+      isElectronUpdateAvailable,
       archiveSettings,
     } = global;
 
@@ -567,11 +605,13 @@ export default memo(withGlobal<OwnProps>(
       nextSettingsScreen,
       nextFoldersAction,
       isChatOpen,
-      isUpdateAvailable,
+      isAppUpdateAvailable,
+      isElectronUpdateAvailable,
       isForumPanelOpen,
       forumPanelChatId,
       isClosingSearch: tabState.globalSearch.isClosing,
       archiveSettings,
+      isArchivedStoryRibbonShown: isArchivedRibbonShown,
     };
   },
 )(LeftColumn));

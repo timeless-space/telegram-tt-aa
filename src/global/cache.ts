@@ -1,46 +1,45 @@
 /* eslint-disable eslint-multitab-tt/no-immediate-global */
 import { addCallback, removeCallback } from '../lib/teact/teactn';
 
-import { addActionHandler, getGlobal } from './index';
-
 import type { ActionReturnType, GlobalState, MessageList } from './types';
-import type {
-  ApiChat, ApiChatFullInfo, ApiUser, ApiUserFullInfo,
-} from '../api/types';
 import { MAIN_THREAD_ID } from '../api/types';
 
-import { onBeforeUnload, onIdle, throttle } from '../util/schedulers';
 import {
+  ALL_FOLDER_ID,
+  ANIMATION_LEVEL_MED,
+  ANIMATION_LEVEL_MIN,
+  ARCHIVED_FOLDER_ID,
   DEBUG,
-  GLOBAL_STATE_CACHE_DISABLED,
-  GLOBAL_STATE_CACHE_KEY,
-  GLOBAL_STATE_CACHE_USER_LIST_LIMIT,
+  DEFAULT_LIMITS,
   GLOBAL_STATE_CACHE_CHAT_LIST_LIMIT,
   GLOBAL_STATE_CACHE_CHATS_WITH_MESSAGES_LIMIT,
   GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT,
-  ALL_FOLDER_ID,
-  ARCHIVED_FOLDER_ID,
-  DEFAULT_PATTERN_COLOR,
-  DEFAULT_LIMITS,
-  ANIMATION_LEVEL_MIN,
-  ANIMATION_LEVEL_MED,
+  GLOBAL_STATE_CACHE_DISABLED,
+  GLOBAL_STATE_CACHE_KEY,
+  GLOBAL_STATE_CACHE_USER_LIST_LIMIT,
 } from '../config';
-import { isHeavyAnimating } from '../hooks/useHeavyAnimationCheck';
+import { getOrderedIds } from '../util/folderManager';
 import {
   compact, pick, pickTruthy, unique,
 } from '../util/iteratees';
+import { encryptSession } from '../util/passcode';
+import { onBeforeUnload, onIdle, throttle } from '../util/schedulers';
+import { hasStoredSession } from '../util/sessions';
+import { isUserId } from './helpers';
+import { addActionHandler, getGlobal } from './index';
+import { INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MID, INITIAL_PERFORMANCE_STATE_MIN } from './initialState';
+import { clearGlobalForLockScreen } from './reducers';
 import {
   selectChat,
-  selectCurrentMessageList, selectThreadOriginChat,
+  selectChatMessages,
+  selectCurrentMessageList,
+  selectThreadOriginChat,
+  selectViewportIds,
   selectVisibleUsers,
 } from './selectors';
-import { hasStoredSession } from '../util/sessions';
-import { INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MID, INITIAL_PERFORMANCE_STATE_MIN } from './initialState';
-import { isUserId } from './helpers';
-import { getOrderedIds } from '../util/folderManager';
-import { clearGlobalForLockScreen } from './reducers';
-import { encryptSession } from '../util/passcode';
+
 import { getIsMobile } from '../hooks/useAppLayout';
+import { isHeavyAnimating } from '../hooks/useHeavyAnimationCheck';
 
 const UPDATE_THROTTLE = 5000;
 
@@ -171,186 +170,19 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     }
   }
 
-  if ('canAutoPlayVideos' in cached.settings.byKey) {
-    cached.settings.performance.autoplayVideos = cached.settings.byKey.canAutoPlayVideos;
-    delete cached.settings.byKey.canAutoPlayVideos;
-  }
-
-  if ('canAutoPlayGifs' in cached.settings.byKey) {
-    cached.settings.performance.autoplayGifs = cached.settings.byKey.canAutoPlayGifs;
-    delete cached.settings.byKey.canAutoPlayGifs;
-  }
-
   cached.settings.performance = {
     ...initialState.settings.performance,
     ...cached.settings.performance,
   };
 
-  if (!cached.stickers.premium) {
-    cached.stickers.premium = initialState.stickers.premium;
-  }
-
-  if (!cached.attachMenu) {
-    cached.attachMenu = {
-      bots: {},
-    };
-  }
-
-  if (!cached.trustedBotIds) {
-    cached.trustedBotIds = [];
-  }
-
-  if (!cached.passcode) {
-    cached.passcode = {};
-  }
-
-  if (cached.activeSessions?.byHash === undefined) {
-    cached.activeSessions = {
-      byHash: {},
-      orderedHashes: [],
-    };
-  }
-
-  if (!cached.activeWebSessions) {
-    cached.activeWebSessions = {
-      byHash: {},
-      orderedHashes: [],
-    };
-  }
-
-  if (!cached.transcriptions) {
-    cached.transcriptions = {};
-  }
-
   if (cached.appConfig && !cached.appConfig.limits) {
     cached.appConfig.limits = DEFAULT_LIMITS;
   }
 
-  if (!cached.customEmojis) {
-    cached.customEmojis = {
-      added: {},
-      byId: {},
-      lastRendered: [],
-      forEmoji: {},
-      statusRecent: {},
-    };
-  }
-
-  if (!cached.customEmojis.statusRecent) {
-    cached.customEmojis.statusRecent = {};
-  }
-
-  if (!cached.recentCustomEmojis) {
-    cached.recentCustomEmojis = [];
-  }
-
-  if (!cached.stickers.premiumSet) {
-    cached.stickers.premiumSet = {
-      stickers: [],
-    };
-  }
-
-  if (!cached.customEmojis.forEmoji) {
-    cached.customEmojis.forEmoji = {};
-  }
-
-  if (!cached.users.fullInfoById) {
-    const result = Object.entries(cached.users.byId).reduce((acc, [id, user]) => {
-      if ('fullInfo' in user) {
-        if (user.fullInfo !== undefined) {
-          acc.fullInfo[id] = user.fullInfo as ApiUserFullInfo;
-        }
-        delete user.fullInfo;
-      }
-      acc.users[id] = user;
-
-      return acc;
-    }, {
-      users: {} as Record<string, ApiUser>,
-      fullInfo: {} as Record<string, ApiUserFullInfo>,
-    });
-
-    cached.users.fullInfoById = result.fullInfo;
-    cached.users.byId = result.users;
-  }
-
-  if (!cached.chats.fullInfoById) {
-    const result = Object.entries(cached.chats.byId).reduce((acc, [id, chat]) => {
-      if ('fullInfo' in chat) {
-        if (chat.fullInfo !== undefined) {
-          acc.fullInfo[id] = chat.fullInfo as ApiChatFullInfo;
-        }
-        delete chat.fullInfo;
-      }
-      acc.chats[id] = chat;
-
-      return acc;
-    }, {
-      chats: {} as Record<string, ApiChat>,
-      fullInfo: {} as Record<string, ApiChatFullInfo>,
-    });
-
-    cached.chats.fullInfoById = result.fullInfo;
-    cached.chats.byId = result.chats;
-  }
-
-  // TODO Remove in Jan 2023 (this was re-designed but can be hardcoded in cache)
-  const { light: lightTheme } = cached.settings.themes;
-  if (lightTheme?.patternColor === 'rgba(90, 110, 70, 0.6)' || !lightTheme?.patternColor) {
-    cached.settings.themes.light = {
-      ...lightTheme,
-      patternColor: DEFAULT_PATTERN_COLOR,
-    };
-  }
-
-  cached.serviceNotifications.forEach((notification) => {
-    const { isHidden } = notification as any;
-    if (isHidden) {
-      notification.isDeleted = isHidden;
-    }
-  });
-
-  // TODO Remove in Mar 2023 (this was re-designed but can be hardcoded in cache)
-  if (cached.users.byId && Object.values(cached.users.byId).some((u) => 'username' in u)) {
-    cached.users.byId = Object.entries(cached.users.byId).reduce((acc, [id, user]) => {
-      if ('username' in user) {
-        delete user.username;
-      }
-      acc[id] = user;
-
-      return acc;
-    }, {} as Record<string, ApiUser>);
-  }
-
-  // TODO Remove in Mar 2023 (this was re-designed but can be hardcoded in cache)
-  if (cached.chats.byId && Object.values(cached.chats.byId).some((c) => 'username' in c)) {
-    cached.chats.byId = Object.entries(cached.chats.byId).reduce((acc, [id, user]) => {
-      if ('username' in user) {
-        delete user.username;
-      }
-      acc[id] = user;
-
-      return acc;
-    }, {} as Record<string, ApiChat>);
-  }
-
-  // TODO Remove in Apr 2023 (this was re-designed but can be hardcoded in cache)
-  if (cached.messages.byChatId) {
-    const wasUpdated = Object.values(cached.messages.byChatId)
-      .some((messages) => Object.values(messages.byId).some(({ reactions }) => {
-        return reactions?.results[0]?.reaction && typeof reactions.results[0].reaction !== 'string';
-      }));
-    if (!wasUpdated) {
-      for (const messages of Object.values(cached.messages.byChatId)) {
-        for (const message of Object.values(messages.byId)) {
-          delete message.reactions;
-        }
-      }
-    }
-  }
   if (typeof cached.config?.defaultReaction === 'string') {
     cached.config.defaultReaction = { emoticon: cached.config.defaultReaction };
   }
+
   if (typeof cached.availableReactions?.[0].reaction === 'string') {
     cached.availableReactions = cached.availableReactions
       .map((r) => ({ ...r, reaction: { emoticon: r.reaction as unknown as string } }));
@@ -358,6 +190,19 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
 
   if (!cached.archiveSettings) {
     cached.archiveSettings = initialState.archiveSettings;
+  }
+
+  if (!cached.stories) {
+    cached.stories = initialState.stories;
+  }
+
+  if (!cached.stories.stealthMode) {
+    cached.stories.stealthMode = initialState.stories.stealthMode;
+  }
+
+  if (!cached.stories.byPeerId) {
+    cached.stories.byPeerId = initialState.stories.byPeerId;
+    cached.stories.orderedPeerIds = initialState.stories.orderedPeerIds;
   }
 }
 
@@ -461,9 +306,15 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
   const visibleUserIds = unique(compact(Object.values(global.byTabId)
     .flatMap(({ id: tabId }) => selectVisibleUsers(global, tabId)?.map((u) => u.id) || [])));
 
+  const chatStoriesUserIds = currentChatIds
+    .flatMap((chatId) => Object.values(selectChatMessages(global, chatId) || {}))
+    .map((message) => message.content.storyData?.peerId || message.content.webPage?.story?.peerId)
+    .filter((id): id is string => Boolean(id) && isUserId(id));
+
   const idsToSave = unique([
     ...currentUserId ? [currentUserId] : [],
     ...currentChatIds,
+    ...chatStoriesUserIds,
     ...visibleUserIds || [],
     ...global.topPeers.userIds || [],
     ...getOrderedIds(ALL_FOLDER_ID)?.filter(isUserId) || [],
@@ -498,9 +349,24 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
       }),
   ).map(({ chatId }) => chatId);
 
+  const messagesChatIds = compact(Object.values(global.byTabId).flatMap(({ id: tabId }) => {
+    const messageList = selectCurrentMessageList(global, tabId);
+    if (!messageList) return undefined;
+
+    const messages = selectChatMessages(global, messageList.chatId);
+    const viewportIds = selectViewportIds(global, messageList.chatId, messageList.threadId, tabId);
+    return viewportIds?.map((id) => {
+      const message = messages[id];
+      const content = message?.content;
+      const replyPeer = message.replyInfo?.type === 'message' && message.replyInfo.replyToPeerId;
+      return content.storyData?.peerId || content.webPage?.story?.peerId || replyPeer;
+    });
+  }));
+
   const idsToSave = unique([
     ...currentUserId ? [currentUserId] : [],
     ...currentChatIds,
+    ...messagesChatIds,
     ...getOrderedIds(ALL_FOLDER_ID) || [],
     ...getOrderedIds(ARCHIVED_FOLDER_ID) || [],
     ...global.recentlyFoundChatIds || [],

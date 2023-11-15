@@ -1,26 +1,27 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { useCallback, memo } from '../../lib/teact/teact';
+import React, { memo, useCallback } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { ApiChat } from '../../api/types';
 
-import { selectIsChatWithSelf, selectUser } from '../../global/selectors';
 import {
-  isUserId,
-  isUserBot,
-  getUserFirstOrLastName,
-  getPrivateChatUserId,
-  isChatBasicGroup,
-  isChatSuperGroup,
-  isChatChannel,
   getChatTitle,
+  getPrivateChatUserId,
+  getUserFirstOrLastName,
+  isChatBasicGroup,
+  isChatChannel,
+  isChatSuperGroup,
+  isUserBot,
+  isUserId,
 } from '../../global/helpers';
-import useLang from '../../hooks/useLang';
+import { selectIsChatWithSelf, selectUser } from '../../global/selectors';
 import renderText from './helpers/renderText';
 
-import Avatar from './Avatar';
-import Modal from '../ui/Modal';
+import useLang from '../../hooks/useLang';
+
 import Button from '../ui/Button';
+import Modal from '../ui/Modal';
+import Avatar from './Avatar';
 
 import './DeleteChatModal.scss';
 
@@ -63,7 +64,7 @@ const DeleteChatModal: FC<OwnProps & StateProps> = ({
     deleteHistory,
     deleteChannel,
     deleteChatUser,
-    blockContact,
+    blockUser,
   } = getActions();
 
   const lang = useLang();
@@ -77,10 +78,10 @@ const DeleteChatModal: FC<OwnProps & StateProps> = ({
 
   const handleDeleteAndStop = useCallback(() => {
     deleteHistory({ chatId: chat.id, shouldDeleteForAll: true });
-    blockContact({ contactId: chat.id, accessHash: chat.accessHash! });
+    blockUser({ userId: chat.id });
 
     onClose();
-  }, [deleteHistory, chat.id, chat.accessHash, blockContact, onClose]);
+  }, [chat.id, onClose]);
 
   const handleDeleteChat = useCallback(() => {
     if (isPrivateChat) {

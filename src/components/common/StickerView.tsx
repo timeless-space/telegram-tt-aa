@@ -1,28 +1,28 @@
+import type { FC } from '../../lib/teact/teact';
 import React, { memo } from '../../lib/teact/teact';
 import { getGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
-import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { ApiSticker } from '../../api/types';
+import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 
-import { IS_ANDROID, IS_WEBM_SUPPORTED } from '../../util/windowEnvironment';
-import * as mediaLoader from '../../util/mediaLoader';
-import buildClassName from '../../util/buildClassName';
 import { getStickerPreviewHash } from '../../global/helpers';
 import { selectIsAlwaysHighPriorityEmoji } from '../../global/selectors';
+import buildClassName from '../../util/buildClassName';
+import * as mediaLoader from '../../util/mediaLoader';
+import { IS_ANDROID, IS_WEBM_SUPPORTED } from '../../util/windowEnvironment';
 
-import useMedia from '../../hooks/useMedia';
-import { useIsIntersecting } from '../../hooks/useIntersectionObserver';
-import useThumbnail from '../../hooks/useThumbnail';
-import useMediaTransition from '../../hooks/useMediaTransition';
-import useFlag from '../../hooks/useFlag';
-import useCoordsInSharedCanvas from '../../hooks/useCoordsInSharedCanvas';
-import useHeavyAnimationCheck, { isHeavyAnimating } from '../../hooks/useHeavyAnimationCheck';
 import useColorFilter from '../../hooks/stickers/useColorFilter';
+import useCoordsInSharedCanvas from '../../hooks/useCoordsInSharedCanvas';
+import useFlag from '../../hooks/useFlag';
+import useHeavyAnimationCheck, { isHeavyAnimating } from '../../hooks/useHeavyAnimationCheck';
+import { useIsIntersecting } from '../../hooks/useIntersectionObserver';
+import useMedia from '../../hooks/useMedia';
+import useMediaTransition from '../../hooks/useMediaTransition';
+import useThumbnail from '../../hooks/useThumbnail';
 import useUniqueId from '../../hooks/useUniqueId';
 
-import AnimatedSticker from './AnimatedSticker';
 import OptimizedVideo from '../ui/OptimizedVideo';
+import AnimatedSticker from './AnimatedSticker';
 
 import styles from './StickerView.module.scss';
 
@@ -38,6 +38,7 @@ type OwnProps = {
   loopLimit?: number;
   shouldLoop?: boolean;
   shouldPreloadPreview?: boolean;
+  forceAlways?: boolean;
   forceOnHeavyAnimation?: boolean;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
@@ -65,6 +66,7 @@ const StickerView: FC<OwnProps> = ({
   loopLimit,
   shouldLoop = false,
   shouldPreloadPreview,
+  forceAlways,
   forceOnHeavyAnimation,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
@@ -79,7 +81,8 @@ const StickerView: FC<OwnProps> = ({
   const {
     id, isLottie, stickerSetInfo, emoji,
   } = sticker;
-  const isUnsupportedVideo = sticker.isVideo && !IS_WEBM_SUPPORTED;
+  const [isVideoBroken, markVideoBroken] = useFlag();
+  const isUnsupportedVideo = sticker.isVideo && (!IS_WEBM_SUPPORTED || isVideoBroken);
   const isVideo = sticker.isVideo && !isUnsupportedVideo;
   const isStatic = !isLottie && !isVideo;
   const previewMediaHash = getStickerPreviewHash(sticker.id);
@@ -161,7 +164,8 @@ const StickerView: FC<OwnProps> = ({
           tgsUrl={fullMediaData}
           play={shouldPlay}
           noLoop={!shouldLoop}
-          forceOnHeavyAnimation={forceOnHeavyAnimation}
+          forceOnHeavyAnimation={forceAlways || forceOnHeavyAnimation}
+          forceAlways={forceAlways}
           isLowPriority={isSmall && !selectIsAlwaysHighPriorityEmoji(getGlobal(), stickerSetInfo)}
           sharedCanvas={sharedCanvasRef?.current || undefined}
           sharedCanvasCoords={coords}
@@ -178,8 +182,10 @@ const StickerView: FC<OwnProps> = ({
           playsInline
           muted
           loop={!loopLimit}
+          isPriority={forceAlways}
           disablePictureInPicture
           onReady={markPlayerReady}
+          onBroken={markVideoBroken}
           onEnded={onVideoEnded}
           style={filterStyle}
         />

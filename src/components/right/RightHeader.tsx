@@ -7,8 +7,9 @@ import { MAIN_THREAD_ID } from '../../api/types';
 import { ManagementScreens, ProfileState } from '../../types';
 
 import { ANIMATION_END_DELAY } from '../../config';
-import { debounce } from '../../util/schedulers';
-import buildClassName from '../../util/buildClassName';
+import {
+  getCanAddContact, getCanManageTopic, isChatChannel, isUserBot, isUserId,
+} from '../../global/helpers';
 import {
   selectCanManage,
   selectChat,
@@ -19,22 +20,21 @@ import {
   selectTabState,
   selectUser,
 } from '../../global/selectors';
-import {
-  getCanAddContact, getCanManageTopic, isChatChannel, isUserBot, isUserId,
-} from '../../global/helpers';
+import buildClassName from '../../util/buildClassName';
 import { getDayStartAt } from '../../util/dateFormat';
+import { debounce } from '../../util/schedulers';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
-import useLang from '../../hooks/useLang';
-import useFlag from '../../hooks/useFlag';
-import useElectronDrag from '../../hooks/useElectronDrag';
 import useAppLayout from '../../hooks/useAppLayout';
+import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
+import useElectronDrag from '../../hooks/useElectronDrag';
+import useFlag from '../../hooks/useFlag';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
-import SearchInput from '../ui/SearchInput';
 import Button from '../ui/Button';
-import Transition from '../ui/Transition';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import SearchInput from '../ui/SearchInput';
+import Transition from '../ui/Transition';
 
 import './RightHeader.scss';
 
@@ -46,6 +46,7 @@ type OwnProps = {
   isSearch?: boolean;
   isManagement?: boolean;
   isStatistics?: boolean;
+  isBoostStatistics?: boolean;
   isMessageStatistics?: boolean;
   isStickerSearch?: boolean;
   isGifSearch?: boolean;
@@ -65,6 +66,7 @@ type StateProps = {
   canViewStatistics?: boolean;
   isChannel?: boolean;
   userId?: string;
+  isSelf?: boolean;
   messageSearchQuery?: string;
   stickerSearchQuery?: string;
   gifSearchQuery?: string;
@@ -83,9 +85,11 @@ enum HeaderContent {
   Profile,
   MemberList,
   SharedMedia,
+  StoryList,
   Search,
   Statistics,
   MessageStatistics,
+  BoostStatistics,
   Management,
   ManageInitial,
   ManageChannelSubscribers,
@@ -124,6 +128,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   isManagement,
   isStatistics,
   isMessageStatistics,
+  isBoostStatistics,
   isStickerSearch,
   isGifSearch,
   isPollResults,
@@ -134,10 +139,9 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   managementScreen,
   canAddContact,
   userId,
+  isSelf,
   canManage,
   isChannel,
-  onClose,
-  onScreenSelect,
   messageSearchQuery,
   stickerSearchQuery,
   gifSearchQuery,
@@ -148,6 +152,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   isBot,
   isInsideTopic,
   canEditTopic,
+  onClose,
+  onScreenSelect,
 }) => {
   const {
     setLocalTextSearchQuery,
@@ -237,6 +243,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
       HeaderContent.SharedMedia
     ) : profileState === ProfileState.MemberList ? (
       HeaderContent.MemberList
+    ) : profileState === ProfileState.StoryList ? (
+      HeaderContent.StoryList
     ) : -1 // Never reached
   ) : isSearch ? (
     HeaderContent.Search
@@ -294,6 +302,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     HeaderContent.Statistics
   ) : isMessageStatistics ? (
     HeaderContent.MessageStatistics
+  ) : isBoostStatistics ? (
+    HeaderContent.BoostStatistics
   ) : isCreatingTopic ? (
     HeaderContent.CreateTopic
   ) : isEditingTopic ? (
@@ -443,6 +453,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
         return <h3>{lang(isChannel ? 'ChannelStats.Title' : 'GroupStats.Title')}</h3>;
       case HeaderContent.MessageStatistics:
         return <h3>{lang('Stats.MessageTitle')}</h3>;
+      case HeaderContent.BoostStatistics:
+        return <h3>{lang('Boosts')}</h3>;
       case HeaderContent.SharedMedia:
         return <h3>{lang('SharedMedia')}</h3>;
       case HeaderContent.ManageChannelSubscribers:
@@ -450,6 +462,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
       case HeaderContent.MemberList:
       case HeaderContent.ManageGroupMembers:
         return <h3>{lang('GroupMembers')}</h3>;
+      case HeaderContent.StoryList:
+        return <h3>{lang(isSelf ? 'Settings.MyStories' : 'PeerInfo.PaneStories')}</h3>;
       case HeaderContent.ManageReactions:
         return <h3>{lang('Reactions')}</h3>;
       case HeaderContent.CreateTopic:
@@ -486,7 +500,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
                   ariaLabel={lang('AddContact')}
                   onClick={handleAddContact}
                 >
-                  <i className="icon icon-add-user" />
+                  <i className="icon icon-add-user" aria-hidden />
                 </Button>
               )}
               {canManage && !isInsideTopic && (
@@ -532,6 +546,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     isMobile
     || contentKey === HeaderContent.SharedMedia
     || contentKey === HeaderContent.MemberList
+    || contentKey === HeaderContent.StoryList
     || contentKey === HeaderContent.AddingMembers
     || contentKey === HeaderContent.MessageStatistics
     || isManagement
@@ -604,6 +619,7 @@ export default withGlobal<OwnProps>(
       isInsideTopic,
       canEditTopic,
       userId: user?.id,
+      isSelf: user?.isSelf,
       messageSearchQuery,
       stickerSearchQuery,
       gifSearchQuery,

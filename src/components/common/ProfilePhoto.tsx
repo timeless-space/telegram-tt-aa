@@ -1,30 +1,32 @@
+import type { FC, TeactNode } from '../../lib/teact/teact';
 import React, { memo, useEffect, useRef } from '../../lib/teact/teact';
 
-import type { FC, TeactNode } from '../../lib/teact/teact';
 import type { ApiChat, ApiPhoto, ApiUser } from '../../api/types';
 
-import { IS_CANVAS_FILTER_SUPPORTED } from '../../util/windowEnvironment';
 import {
   getChatAvatarHash,
   getChatTitle,
-  getUserColorKey,
   getUserFullName,
-  isUserId,
+  getVideoAvatarMediaHash,
   isChatWithRepliesBot,
-  isDeletedUser, getVideoAvatarMediaHash,
+  isDeletedUser,
+  isUserId,
 } from '../../global/helpers';
-import renderText from './helpers/renderText';
 import buildClassName from '../../util/buildClassName';
 import { getFirstLetters } from '../../util/textFormat';
-import useMedia from '../../hooks/useMedia';
-import useLang from '../../hooks/useLang';
-import useFlag from '../../hooks/useFlag';
-import useMediaTransition from '../../hooks/useMediaTransition';
-import useCanvasBlur from '../../hooks/useCanvasBlur';
-import useAppLayout from '../../hooks/useAppLayout';
+import { IS_CANVAS_FILTER_SUPPORTED } from '../../util/windowEnvironment';
+import { getPeerColorClass } from './helpers/peerColor';
+import renderText from './helpers/renderText';
 
-import Spinner from '../ui/Spinner';
+import useAppLayout from '../../hooks/useAppLayout';
+import useCanvasBlur from '../../hooks/useCanvasBlur';
+import useFlag from '../../hooks/useFlag';
+import useLang from '../../hooks/useLang';
+import useMedia from '../../hooks/useMedia';
+import useMediaTransition from '../../hooks/useMediaTransition';
+
 import OptimizedVideo from '../ui/OptimizedVideo';
+import Spinner from '../ui/Spinner';
 
 import './ProfilePhoto.scss';
 
@@ -53,11 +55,11 @@ const ProfilePhoto: FC<OwnProps> = ({
 
   const isDeleted = user && isDeletedUser(user);
   const isRepliesChat = chat && isChatWithRepliesBot(chat.id);
-  const userOrChat = user || chat;
-  const canHaveMedia = userOrChat && !isSavedMessages && !isDeleted && !isRepliesChat;
+  const peer = user || chat;
+  const canHaveMedia = peer && !isSavedMessages && !isDeleted && !isRepliesChat;
   const { isVideo } = photo || {};
 
-  const avatarHash = canHaveMedia && getChatAvatarHash(userOrChat, 'normal');
+  const avatarHash = canHaveMedia && getChatAvatarHash(peer, 'normal');
   const avatarBlobUrl = useMedia(avatarHash);
 
   const photoHash = canHaveMedia && photo && !isVideo && `photo${photo.id}?size=c`;
@@ -96,7 +98,7 @@ const ProfilePhoto: FC<OwnProps> = ({
         {isBlurredThumb ? (
           <canvas ref={blurredThumbCanvasRef} className="thumb" />
         ) : (
-          <img src={avatarBlobUrl} className="thumb" alt="" />
+          <img src={avatarBlobUrl} draggable={false} className="thumb" alt="" />
         )}
         {photo && (
           isVideo ? (
@@ -137,7 +139,7 @@ const ProfilePhoto: FC<OwnProps> = ({
 
   const fullClassName = buildClassName(
     'ProfilePhoto',
-    `color-bg-${getUserColorKey(user || chat)}`,
+    getPeerColorClass(peer),
     isSavedMessages && 'saved-messages',
     isDeleted && 'deleted-account',
     isRepliesChat && 'replies-bot-account',

@@ -6,23 +6,10 @@ import { getActions, withGlobal } from '../../global';
 
 import type { ApiBotCommand, ApiChat } from '../../api/types';
 import type { IAnchorPosition } from '../../types';
+import type { IconName } from '../../types/icons';
 import { MAIN_THREAD_ID } from '../../api/types';
 
 import { REPLIES_USER_ID } from '../../config';
-import { disableScrolling, enableScrolling } from '../../util/scrollLock';
-import {
-  selectChat,
-  selectBot,
-  selectChatFullInfo,
-  selectCurrentMessageList,
-  selectIsPremiumPurchaseBlocked,
-  selectNotifyExceptions,
-  selectNotifySettings,
-  selectTabState,
-  selectUser,
-  selectUserFullInfo,
-  selectCanManage, selectIsRightColumnShown, selectCanTranslateChat,
-} from '../../global/selectors';
 import {
   getCanAddContact,
   getCanDeleteChat,
@@ -34,25 +21,39 @@ import {
   isUserRightBanned,
   selectIsChatMuted,
 } from '../../global/helpers';
+import {
+  selectBot,
+  selectCanManage, selectCanTranslateChat,
+  selectChat,
+  selectChatFullInfo,
+  selectCurrentMessageList,
+  selectIsPremiumPurchaseBlocked,
+  selectIsRightColumnShown, selectNotifyExceptions,
+  selectNotifySettings,
+  selectTabState,
+  selectUser,
+  selectUserFullInfo,
+} from '../../global/selectors';
+import { disableScrolling, enableScrolling } from '../../util/scrollLock';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useShowTransition from '../../hooks/useShowTransition';
-import usePrevDuringAnimation from '../../hooks/usePrevDuringAnimation';
-import useLang from '../../hooks/useLang';
-import useFlag from '../../hooks/useFlag';
 import useAppLayout from '../../hooks/useAppLayout';
+import useFlag from '../../hooks/useFlag';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
+import usePrevDuringAnimation from '../../hooks/usePrevDuringAnimation';
+import useShowTransition from '../../hooks/useShowTransition';
 
-import Portal from '../ui/Portal';
+import DeleteChatModal from '../common/DeleteChatModal';
+import ReportModal from '../common/ReportModal';
+import MuteChatModal from '../left/MuteChatModal.async';
 import Menu from '../ui/Menu';
 import MenuItem from '../ui/MenuItem';
 import MenuSeparator from '../ui/MenuSeparator';
-import DeleteChatModal from '../common/DeleteChatModal';
-import MuteChatModal from '../left/MuteChatModal.async';
-import ReportModal from '../common/ReportModal';
+import Portal from '../ui/Portal';
 
 import './HeaderMenuContainer.scss';
 
-const BOT_BUTTONS: Record<string, { icon: string; label: string }> = {
+const BOT_BUTTONS: Record<string, { icon: IconName; label: string }> = {
   settings: {
     icon: 'bots',
     label: 'BotSettings',
@@ -75,12 +76,12 @@ export type OwnProps = {
   anchor: IAnchorPosition;
   isChannel?: boolean;
   canStartBot?: boolean;
-  canRestartBot?: boolean;
   canSubscribe?: boolean;
   canSearch?: boolean;
   canCall?: boolean;
   canMute?: boolean;
   canViewStatistics?: boolean;
+  canViewBoosts?: boolean;
   withForumActions?: boolean;
   canLeave?: boolean;
   canEnterVoiceChat?: boolean;
@@ -113,6 +114,8 @@ type StateProps = {
   isRightColumnShown?: boolean;
   canManage?: boolean;
   canTranslate?: boolean;
+  isBlocked?: boolean;
+  isBot?: boolean;
 };
 
 const CLOSE_MENU_ANIMATION_DURATION = 200;
@@ -130,12 +133,12 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   isForum,
   isChatInfoShown,
   canStartBot,
-  canRestartBot,
   canSubscribe,
   canSearch,
   canCall,
   canMute,
   canViewStatistics,
+  canViewBoosts,
   pendingJoinRequests,
   canLeave,
   canEnterVoiceChat,
@@ -153,6 +156,8 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   canManage,
   isRightColumnShown,
   canTranslate,
+  isBlocked,
+  isBot,
   onJoinRequestsClick,
   onSubscribeChannel,
   onSearchClick,
@@ -171,6 +176,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     openAddContactDialog,
     requestMasterAndRequestCall,
     toggleStatistics,
+    openBoostStatistics,
     openGiftPremiumModal,
     openChatWithInfo,
     openCreateTopicPanel,
@@ -178,6 +184,8 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     openChat,
     toggleManagement,
     togglePeerTranslations,
+    blockUser,
+    unblockUser,
   } = getActions();
 
   const { isMobile } = useAppLayout();
@@ -327,6 +335,12 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     closeMenu();
   });
 
+  const handleBoostClick = useLastCallback(() => {
+    openBoostStatistics({ chatId });
+    setShouldCloseFast(!isRightColumnShown);
+    closeMenu();
+  });
+
   const handleEnableTranslations = useLastCallback(() => {
     togglePeerTranslations({ chatId, isEnabled: true });
     closeMenu();
@@ -339,6 +353,16 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
 
   const handleOpenAsMessages = useLastCallback(() => {
     onAsMessagesClick();
+    closeMenu();
+  });
+
+  const handleBlock = useLastCallback(() => {
+    blockUser({ userId: chatId });
+    closeMenu();
+  });
+
+  const handleUnblock = useLastCallback(() => {
+    unblockUser({ userId: chatId });
     closeMenu();
   });
 
@@ -458,14 +482,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               {lang('BotStart')}
             </MenuItem>
           )}
-          {withExtraActions && canRestartBot && (
-            <MenuItem
-              icon="bots"
-              onClick={handleRestartBot}
-            >
-              {lang('BotRestart')}
-            </MenuItem>
-          )}
           {withExtraActions && canSubscribe && (
             <MenuItem
               icon={isChannel ? 'channel' : 'group'}
@@ -539,6 +555,14 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               {lang('ReportSelectMessages')}
             </MenuItem>
           )}
+          {canViewBoosts && (
+            <MenuItem
+              icon="boost"
+              onClick={handleBoostClick}
+            >
+              {lang('Boosts')}
+            </MenuItem>
+          )}
           {canViewStatistics && (
             <MenuItem
               icon="stats"
@@ -570,6 +594,22 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               onClick={handleGiftPremiumClick}
             >
               {lang('GiftPremium')}
+            </MenuItem>
+          )}
+          {isBot && (
+            <MenuItem
+              icon={isBlocked ? 'bots' : 'hand-stop'}
+              onClick={isBlocked ? handleRestartBot : handleBlock}
+            >
+              {isBlocked ? lang('BotRestart') : lang('Bot.Stop')}
+            </MenuItem>
+          )}
+          {isPrivate && !isBot && (
+            <MenuItem
+              icon={isBlocked ? 'user' : 'hand-stop'}
+              onClick={isBlocked ? handleUnblock : handleBlock}
+            >
+              {isBlocked ? lang('Unblock') : lang('BlockUser')}
             </MenuItem>
           )}
           {canLeave && (
@@ -607,7 +647,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
             isOpen={isReportModalOpen}
             onClose={closeReportModal}
             subject="peer"
-            chatId={chat.id}
+            peerId={chat.id}
           />
         )}
       </div>
@@ -665,6 +705,8 @@ export default memo(withGlobal<OwnProps>(
       canManage,
       isRightColumnShown: selectIsRightColumnShown(global),
       canTranslate,
+      isBlocked: userFullInfo?.isBlocked,
+      isBot: Boolean(chatBot),
     };
   },
 )(HeaderMenuContainer));

@@ -1,6 +1,4 @@
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
-
-import type { ApiUpdateChat } from '../../../api/types';
+import type { ApiMessage, ApiUpdateChat } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
@@ -8,26 +6,31 @@ import { ARCHIVED_FOLDER_ID, MAX_ACTIVE_PINNED_CHATS } from '../../../config';
 import { buildCollectionByKey, omit } from '../../../util/iteratees';
 import { closeMessageNotifications, notifyAboutMessage } from '../../../util/notifications';
 import {
+  addActionHandler, getGlobal, setGlobal,
+} from '../../index';
+import {
   leaveChat,
   replaceThreadParam,
   updateChat,
   updateChatFullInfo,
   updateChatListIds,
   updateChatListType,
+  updatePeerStoriesHidden,
   updateTopic,
 } from '../../reducers';
-import {
-  selectChat,
-  selectCommonBoxChatId,
-  selectIsChatListed,
-  selectChatListType,
-  selectCurrentMessageList,
-  selectThreadParam,
-  selectChatFullInfo,
-  selectTabState,
-} from '../../selectors';
 import { updateUnreadReactions } from '../../reducers/reactions';
 import { updateTabState } from '../../reducers/tabs';
+import {
+  selectChat,
+  selectChatFullInfo,
+  selectChatListType,
+  selectCommonBoxChatId,
+  selectCurrentMessageList,
+  selectIsChatListed,
+  selectTabState,
+  selectThreadParam,
+  selectTopicFromMessage,
+} from '../../selectors';
 
 const TYPING_STATUS_CLEAR_DELAY = 6000; // 6 seconds
 
@@ -44,7 +47,14 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         };
       }
 
+      const localChat = selectChat(global, update.id);
+
       global = updateChat(global, update.id, update.chat, update.newProfilePhoto);
+
+      if (localChat?.areStoriesHidden !== update.chat.areStoriesHidden) {
+        global = updatePeerStoriesHidden(global, update.id, update.chat.areStoriesHidden || false);
+      }
+
       setGlobal(global);
 
       if (!update.noTopChatsRequest && !selectIsChatListed(global, update.id)) {
@@ -140,6 +150,13 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (hasMention) {
         global = updateChat(global, update.chatId, {
           unreadMentions: [...(chat.unreadMentions || []), update.message.id!],
+        });
+      }
+
+      const topic = chat.isForum ? selectTopicFromMessage(global, message as ApiMessage) : undefined;
+      if (topic) {
+        global = updateTopic(global, update.chatId, topic.id, {
+          unreadCount: topic.unreadCount ? topic.unreadCount + 1 : 1,
         });
       }
 
@@ -362,16 +379,15 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'draftMessage': {
       const {
-        chatId, formattedText, date, replyingToId, threadId,
+        chatId, threadId, draft,
       } = update;
       const chat = global.chats.byId[chatId];
       if (!chat) {
         return undefined;
       }
 
-      global = replaceThreadParam(global, chatId, threadId || MAIN_THREAD_ID, 'draft', formattedText);
-      global = replaceThreadParam(global, chatId, threadId || MAIN_THREAD_ID, 'replyingToId', replyingToId);
-      global = updateChat(global, chatId, { draftDate: date });
+      global = replaceThreadParam(global, chatId, threadId || MAIN_THREAD_ID, 'draft', draft);
+      global = updateChat(global, chatId, { draftDate: draft?.date });
       return global;
     }
 

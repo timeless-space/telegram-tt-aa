@@ -1,14 +1,15 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef,
 } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import type {
   ApiAvailableReaction,
   ApiChat,
   ApiChatReactions,
   ApiMessage,
+  ApiPeer,
   ApiReaction,
   ApiSponsoredMessage,
   ApiStickerSet,
@@ -17,25 +18,25 @@ import type {
 } from '../../../api/types';
 import type { IAnchorPosition } from '../../../types';
 
-import { REM } from '../../common/helpers/mediaDimensions';
-import { getMessageCopyOptions } from './helpers/copyOptions';
-import { disableScrolling, enableScrolling } from '../../../util/scrollLock';
-import buildClassName from '../../../util/buildClassName';
-import renderText from '../../common/helpers/renderText';
 import { getUserFullName, isUserId } from '../../../global/helpers';
+import buildClassName from '../../../util/buildClassName';
+import { disableScrolling, enableScrolling } from '../../../util/scrollLock';
+import { REM } from '../../common/helpers/mediaDimensions';
+import renderText from '../../common/helpers/renderText';
+import { getMessageCopyOptions } from './helpers/copyOptions';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import useFlag from '../../../hooks/useFlag';
-import useMenuPosition from '../../../hooks/useMenuPosition';
-import useLang from '../../../hooks/useLang';
 import useAppLayout from '../../../hooks/useAppLayout';
+import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
+import useMenuPosition from '../../../hooks/useMenuPosition';
 
+import AvatarList from '../../common/AvatarList';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
 import MenuSeparator from '../../ui/MenuSeparator';
-import Skeleton from '../../ui/Skeleton';
+import Skeleton from '../../ui/placeholder/Skeleton';
 import ReactionSelector from './ReactionSelector';
-import AvatarList from '../../common/AvatarList';
 
 import './MessageContextMenu.scss';
 
@@ -78,7 +79,7 @@ type OwnProps = {
   canClosePoll?: boolean;
   isDownloading?: boolean;
   canShowSeenBy?: boolean;
-  seenByRecentPeers?: (ApiChat | ApiUser)[];
+  seenByRecentPeers?: ApiPeer[];
   noReplies?: boolean;
   hasCustomEmoji?: boolean;
   customEmojiSets?: ApiStickerSet[];
@@ -250,7 +251,13 @@ const MessageContextMenu: FC<OwnProps> = ({
   const copyOptions = isSponsoredMessage
     ? []
     : getMessageCopyOptions(
-      message, targetHref, handleAfterCopy, canCopyLink ? onCopyLink : undefined, onCopyMessages, onCopyNumber,
+      message,
+      targetHref,
+      canCopy,
+      handleAfterCopy,
+      canCopyLink ? onCopyLink : undefined,
+      onCopyMessages,
+      onCopyNumber,
     );
 
   const getTriggerElement = useLastCallback(() => {
@@ -302,7 +309,7 @@ const MessageContextMenu: FC<OwnProps> = ({
     return enableScrolling;
   }, [withScroll]);
 
-  const handleOpenReactionPicker = useLastCallback((position: IAnchorPosition) => {
+  const handleOpenMessageReactionPicker = useLastCallback((position: IAnchorPosition) => {
     onReactionPickerOpen!(position);
     hideItems();
   });
@@ -337,7 +344,7 @@ const MessageContextMenu: FC<OwnProps> = ({
           canBuyPremium={canBuyPremium}
           isCurrentUserPremium={isCurrentUserPremium}
           canPlayAnimatedEmojis={canPlayAnimatedEmojis}
-          onShowMore={handleOpenReactionPicker}
+          onShowMore={handleOpenMessageReactionPicker}
           className={buildClassName(areItemsHidden && 'ReactionSelector-hidden')}
         />
       )}
@@ -372,7 +379,7 @@ const MessageContextMenu: FC<OwnProps> = ({
         {canSelectLanguage && (
           <MenuItem icon="web" onClick={onSelectLanguage}>{lang('lng_settings_change_lang')}</MenuItem>
         )}
-        {canCopy && copyOptions.map((option) => (
+        {copyOptions.map((option) => (
           <MenuItem key={option.label} icon={option.icon} onClick={option.handler}>{lang(option.label)}</MenuItem>
         ))}
         {canPin && <MenuItem icon="pin" onClick={onPin}>{lang('DialogPin')}</MenuItem>}

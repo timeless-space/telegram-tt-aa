@@ -2,6 +2,11 @@
   --background-color: var(--color-background);
   --thumbs-background: var(--background-color);
 
+  --z-forum-indicator: 2;
+  --z-badge: 4;
+  --z-ripple: 6;
+  --z-status: 8; // Avatar stories require a higher z-index than the ripple to work
+
   body.is-ios &,
   body.is-macos & {
     --color-text-meta: var(--color-text-meta-apple);
@@ -98,7 +103,7 @@
         --color-text-meta: var(--color-white);
         --color-text-secondary: var(--color-white);
         --color-error: var(--color-white);
-        --color-pinned: var(--color-white);
+        --color-list-icon: var(--color-white);
         --color-chat-username: var(--color-white);
       }
 
@@ -168,7 +173,7 @@
       }
 
       background: var(--color-primary);
-      z-index: 1;
+      z-index: var(--z-forum-indicator);
 
       border-start-end-radius: var(--border-radius-default);
       border-end-end-radius: var(--border-radius-default);
@@ -188,10 +193,14 @@
     .title {
       line-height: 1.375rem;
     }
+
+    .status {
+      background-color: var(--background-color);
+    }
   }
 
   .ripple-container {
-    z-index: 2;
+    z-index: var(--z-ripple);
   }
 
   .status {
@@ -199,15 +208,14 @@
     align-self: stretch;
     display: flex;
     align-items: center;
-    z-index: 1;
-    background: var(--background-color);
+    z-index: var(--z-status);
   }
 
   .avatar-badge-wrapper {
     position: absolute;
     bottom: 0;
     right: 0.5rem;
-    z-index: 2;
+    z-index: var(--z-badge);
 
     --outline-color: var(--color-background);
 
@@ -257,10 +265,9 @@
     }
 
     .icon-muted {
-      font-size: 1.25rem;
-      margin-top: -0.0625rem;
+      font-size: 1.125rem;
       margin-left: 0.25rem;
-      color: #c6c8ca;
+      color: var(--color-list-icon);
 
       body.is-ios & {
         margin-top: 0;
@@ -312,8 +319,15 @@
         }
       }
 
-      .colon {
-        margin-inline-end: 0.25rem;
+      .colon, .chat-prefix-icon {
+        margin-inline-end: 0.1875rem;
+      }
+
+      .chat-prefix-icon {
+        display: inline-block;
+        color: var(--color-list-icon);
+        font-size: 0.875rem;
+        transform: translateY(1px);
       }
 
       .media-preview-spoiler {

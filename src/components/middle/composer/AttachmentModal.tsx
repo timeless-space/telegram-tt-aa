@@ -1,10 +1,9 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
-import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { getActions, withGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import type {
   ApiAttachment, ApiChatMember, ApiSticker,
 } from '../../../api/types';
@@ -19,40 +18,41 @@ import {
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
+import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { isUserId } from '../../../global/helpers';
-import captureEscKeyListener from '../../../util/captureEscKeyListener';
-import getFilesFromDataTransferItems from './helpers/getFilesFromDataTransferItems';
-import { getHtmlTextLength } from './helpers/getHtmlTextLength';
 import { selectChatFullInfo, selectIsChatWithSelf } from '../../../global/selectors';
 import { selectCurrentLimit } from '../../../global/selectors/limits';
-import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
 import buildClassName from '../../../util/buildClassName';
+import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { validateFiles } from '../../../util/files';
 import { removeAllSelections } from '../../../util/selection';
+import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
+import getFilesFromDataTransferItems from './helpers/getFilesFromDataTransferItems';
+import { getHtmlTextLength } from './helpers/getHtmlTextLength';
 
+import useAppLayout from '../../../hooks/useAppLayout';
+import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
+import useDerivedState from '../../../hooks/useDerivedState';
+import useFlag from '../../../hooks/useFlag';
+import useGetSelectionRange from '../../../hooks/useGetSelectionRange';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import usePrevious from '../../../hooks/usePrevious';
-import useMentionTooltip from './hooks/useMentionTooltip';
-import useEmojiTooltip from './hooks/useEmojiTooltip';
-import useLang from '../../../hooks/useLang';
-import useFlag from '../../../hooks/useFlag';
-import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
-import useCustomEmojiTooltip from './hooks/useCustomEmojiTooltip';
-import useAppLayout from '../../../hooks/useAppLayout';
 import useScrolledState from '../../../hooks/useScrolledState';
-import useGetSelectionRange from '../../../hooks/useGetSelectionRange';
-import useDerivedState from '../../../hooks/useDerivedState';
+import useCustomEmojiTooltip from './hooks/useCustomEmojiTooltip';
+import useEmojiTooltip from './hooks/useEmojiTooltip';
+import useMentionTooltip from './hooks/useMentionTooltip';
 
 import Button from '../../ui/Button';
-import Modal from '../../ui/Modal';
-import MessageInput from './MessageInput';
-import MentionTooltip from './MentionTooltip';
-import EmojiTooltip from './EmojiTooltip.async';
-import CustomSendMenu from './CustomSendMenu.async';
-import CustomEmojiTooltip from './CustomEmojiTooltip.async';
-import AttachmentModalItem from './AttachmentModalItem';
 import DropdownMenu from '../../ui/DropdownMenu';
 import MenuItem from '../../ui/MenuItem';
+import Modal from '../../ui/Modal';
+import AttachmentModalItem from './AttachmentModalItem';
+import CustomEmojiTooltip from './CustomEmojiTooltip.async';
+import CustomSendMenu from './CustomSendMenu.async';
+import EmojiTooltip from './EmojiTooltip.async';
+import MentionTooltip from './MentionTooltip';
+import MessageInput from './MessageInput';
 import SymbolMenuButton from './SymbolMenuButton';
 
 import styles from './AttachmentModal.module.scss';
@@ -64,11 +64,13 @@ export type OwnProps = {
   getHtml: Signal<string>;
   canShowCustomSendMenu?: boolean;
   isReady: boolean;
+  isForMessage?: boolean;
   shouldSchedule?: boolean;
   shouldSuggestCompression?: boolean;
   shouldForceCompression?: boolean;
   shouldForceAsFile?: boolean;
   isForCurrentMessageList?: boolean;
+  forceDarkTheme?: boolean;
   onCaptionUpdate: (html: string) => void;
   onSend: (sendCompressed: boolean, sendGrouped: boolean) => void;
   onFileAppend: (files: File[], isSpoiler?: boolean) => void;
@@ -112,6 +114,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
   recentEmojis,
   baseEmojiKeywords,
   emojiKeywords,
+  isForMessage,
   shouldSchedule,
   shouldSuggestCustomEmoji,
   customEmojiForEmoji,
@@ -120,6 +123,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
   shouldForceCompression,
   shouldForceAsFile,
   isForCurrentMessageList,
+  forceDarkTheme,
   onAttachmentsUpdate,
   onCaptionUpdate,
   onSend,
@@ -194,7 +198,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
     insertEmoji,
     closeEmojiTooltip,
   } = useEmojiTooltip(
-    Boolean(isReady && isForCurrentMessageList && renderingIsOpen),
+    Boolean(isReady && (isForCurrentMessageList || !isForMessage) && renderingIsOpen),
     getHtml,
     onCaptionUpdate,
     EDITABLE_INPUT_MODAL_ID,
@@ -208,7 +212,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
     insertCustomEmoji,
     closeCustomEmojiTooltip,
   } = useCustomEmojiTooltip(
-    Boolean(isReady && isForCurrentMessageList && renderingIsOpen && shouldSuggestCustomEmoji),
+    Boolean(isReady && (isForCurrentMessageList || !isForMessage) && renderingIsOpen && shouldSuggestCustomEmoji),
     getHtml,
     onCaptionUpdate,
     getSelectionRange,
@@ -256,11 +260,11 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
 
   const sendAttachments = useLastCallback((isSilent?: boolean, shouldSendScheduled?: boolean) => {
     if (isOpen) {
-      const send = (shouldSchedule || shouldSendScheduled) ? onSendScheduled
+      const send = ((shouldSchedule || shouldSendScheduled) && isForMessage) ? onSendScheduled
         : isSilent ? onSendSilent : onSend;
       send(isSendingCompressed, shouldSendGrouped);
       updateAttachmentSettings({
-        shouldCompress: isSendingCompressed,
+        shouldCompress: shouldSuggestCompression === undefined ? isSendingCompressed : undefined,
         shouldSendGrouped,
       });
     }
@@ -508,6 +512,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
         !areAttachmentsNotScrolled && styles.headerBorder,
         isMobile && styles.mobile,
         isSymbolMenuOpen && styles.symbolMenuOpen,
+        forceDarkTheme && 'component-theme-dark',
       )}
       noBackdropClose
     >
@@ -586,6 +591,8 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
               isAttachmentModal
               canSendPlainText
               className="attachment-modal-symbol-menu with-menu-transitions"
+              idPrefix="attachment"
+              forceDarkTheme={forceDarkTheme}
             />
             <MessageInput
               ref={inputRef}
@@ -593,6 +600,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
               chatId={chatId}
               threadId={threadId}
               isAttachmentModalInput
+              customEmojiPrefix="attachment"
               isReady={isReady}
               isActive={isOpen}
               getHtml={getHtml}
@@ -618,6 +626,7 @@ const AttachmentModal: FC<OwnProps & StateProps> = ({
               {canShowCustomSendMenu && (
                 <CustomSendMenu
                   isOpen={isCustomSendMenuOpen}
+                  canSchedule={isForMessage}
                   onSendSilent={!isChatWithSelf ? handleSendSilent : undefined}
                   onSendSchedule={handleScheduleClick}
                   onClose={handleContextMenuClose}

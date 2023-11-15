@@ -1,10 +1,11 @@
 import {
-  sessions, Api as GramJs, connection,
+  Api as GramJs,
+  sessions,
 } from '../../../lib/gramjs';
-import TelegramClient from '../../../lib/gramjs/client/TelegramClient';
-
-import { Logger as GramJsLogger } from '../../../lib/gramjs/extensions/index';
 import type { TwoFaParams } from '../../../lib/gramjs/client/2fa';
+import TelegramClient from '../../../lib/gramjs/client/TelegramClient';
+import { Logger as GramJsLogger } from '../../../lib/gramjs/extensions/index';
+
 import type {
   ApiInitialArgs,
   ApiMediaFormat,
@@ -14,34 +15,37 @@ import type {
 } from '../../types';
 
 import {
-  DEBUG, DEBUG_GRAMJS, UPLOAD_WORKERS, IS_TEST, SUPPORTED_VIDEO_CONTENT_TYPES, VIDEO_MOV_TYPE,
+  APP_CODE_NAME,
+  DEBUG, DEBUG_GRAMJS, IS_TEST, UPLOAD_WORKERS,
 } from '../../../config';
-import {
-  onRequestPhoneNumber, onRequestCode, onRequestPassword, onRequestRegistration,
-  onAuthError, onAuthReady, onCurrentUserUpdate, onRequestQrCode, onWebAuthTokenFailed,
-} from './auth';
+import { pause } from '../../../util/schedulers';
 import { setMessageBuilderCurrentUserId } from '../apiBuilders/messages';
-import downloadMediaWithClient, { parseMediaUrl } from './media';
-import { buildApiUser, buildApiUserFullInfo } from '../apiBuilders/users';
-import localDb, { clearLocalDb } from '../localDb';
 import { buildApiPeerId } from '../apiBuilders/peers';
+import { buildApiUser, buildApiUserFullInfo } from '../apiBuilders/users';
+import { buildInputPeerFromLocalDb } from '../gramjsBuilders';
 import {
-  addMessageToLocalDb, addUserToLocalDb, isResponseUpdate, log,
+  addEntitiesToLocalDb,
+  addMessageToLocalDb, addStoryToLocalDb, addUserToLocalDb, isResponseUpdate, log,
 } from '../helpers';
-import { ChatAbortController } from '../ChatAbortController';
+import localDb, { clearLocalDb } from '../localDb';
 import {
-  updateChannelState,
   getDifference,
   init as initUpdatesManager,
   processUpdate,
   reset as resetUpdatesManager,
   scheduleGetChannelDifference,
+  updateChannelState,
 } from '../updateManager';
-import { pause } from '../../../util/schedulers';
+import {
+  onAuthError, onAuthReady, onCurrentUserUpdate, onRequestCode, onRequestPassword, onRequestPhoneNumber,
+  onRequestQrCode, onRequestRegistration, onWebAuthTokenFailed,
+} from './auth';
+import downloadMediaWithClient, { parseMediaUrl } from './media';
+
+import { ChatAbortController } from '../ChatAbortController';
 
 const DEFAULT_USER_AGENT = 'Unknown UserAgent';
 const DEFAULT_PLATFORM = 'Unknown platform';
-const APP_CODE_NAME = 'Z';
 
 GramJsLogger.setLevel(DEBUG_GRAMJS ? 'debug' : 'warn');
 
@@ -52,7 +56,6 @@ const ABORT_CONTROLLERS = new Map<string, AbortController>();
 
 let onUpdate: OnApiUpdate;
 let client: TelegramClient;
-let isConnected = false;
 let currentUserId: string | undefined;
 
 export async function init(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
@@ -64,16 +67,12 @@ export async function init(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) 
   onUpdate = _onUpdate;
 
   const {
-    userAgent, platform, sessionData, isTest, isMovSupported, isWebmSupported, maxBufferSize, webAuthToken, dcId,
+    userAgent, platform, sessionData, isTest, isWebmSupported, maxBufferSize, webAuthToken, dcId,
     mockScenario, shouldForceHttpTransport, shouldAllowHttpTransport,
     shouldDebugExportedSenders,
   } = initialArgs;
   const session = new sessions.CallbackSession(sessionData, onSessionUpdate);
 
-  // eslint-disable-next-line no-restricted-globals
-  (self as any).isMovSupported = isMovSupported;
-  // Hacky way to update this set inside GramJS worker
-  if (isMovSupported) SUPPORTED_VIDEO_CONTENT_TYPES.add(VIDEO_MOV_TYPE);
   // eslint-disable-next-line no-restricted-globals
   (self as any).isWebmSupported = isWebmSupported;
   // eslint-disable-next-line no-restricted-globals
@@ -201,9 +200,7 @@ type UpdateConfig = GramJs.UpdateConfig & { _entities?: (GramJs.TypeUser | GramJ
 export function handleGramJsUpdate(update: any) {
   processUpdate(update);
 
-  if (update instanceof connection.UpdateConnectionState) {
-    isConnected = update.state === connection.UpdateConnectionState.connected;
-  } else if (update instanceof GramJs.UpdatesTooLong) {
+  if (update instanceof GramJs.UpdatesTooLong) {
     void handleTerminatedSession();
   } else {
     const updates = 'updates' in update ? update.updates : [update];
@@ -318,16 +315,18 @@ export function invokeRequestBeacon<T extends GramJs.AnyRequest>(
 }
 
 export async function downloadMedia(
-  args: { url: string; mediaFormat: ApiMediaFormat; start?: number; end?: number; isHtmlAllowed?: boolean },
+  args: {
+    url: string; mediaFormat: ApiMediaFormat; start?: number; end?: number; isHtmlAllowed?: boolean;
+  },
   onProgress?: ApiOnProgress,
 ) {
   try {
-    return (await downloadMediaWithClient(args, client, isConnected, onProgress));
+    return (await downloadMediaWithClient(args, client, onProgress));
   } catch (err: any) {
     if (err.message.startsWith('FILE_REFERENCE')) {
       const isFileReferenceRepaired = await repairFileReference({ url: args.url });
       if (isFileReferenceRepaired) {
-        return downloadMediaWithClient(args, client, isConnected, onProgress);
+        return downloadMediaWithClient(args, client, onProgress);
       }
 
       if (DEBUG) {
@@ -443,8 +442,21 @@ export async function repairFileReference({
     entityType, entityId, mediaMatchType,
   } = parsed;
 
-  if (mediaMatchType === 'file') {
-    return false;
+  if (mediaMatchType === 'document' || mediaMatchType === 'photo') {
+    const entity = mediaMatchType === 'document' ? localDb.documents[entityId] : localDb.photos[entityId];
+    if (!entity.storyData) return false;
+    const peer = buildInputPeerFromLocalDb(entity.storyData.peerId);
+    if (!peer) return false;
+
+    const result = await invokeRequest(new GramJs.stories.GetStoriesByID({
+      peer,
+      id: [entity.storyData.id],
+    }));
+    if (!result) return false;
+
+    addEntitiesToLocalDb(result.users);
+    result.stories.forEach((story) => addStoryToLocalDb(story, entity.storyData!.peerId));
+    return true;
   }
 
   if (entityType === 'msg') {
@@ -469,11 +481,13 @@ export async function repairFileReference({
     if (!result || result instanceof GramJs.messages.MessagesNotModified) return false;
 
     if (peer && 'pts' in result) {
-      updateChannelState(peer.channelId.toString(), result.pts);
+      updateChannelState(buildApiPeerId(peer.channelId, 'channel'), result.pts);
     }
 
     const message = result.messages[0];
     if (message instanceof GramJs.MessageEmpty) return false;
+    addEntitiesToLocalDb(result.users);
+    addEntitiesToLocalDb(result.chats);
     addMessageToLocalDb(message);
     return true;
   }

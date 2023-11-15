@@ -1,30 +1,32 @@
 import type BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
+
 import type {
+  ApiBotCommand,
   ApiChat,
   ApiChatAdminRights,
   ApiChatBannedRights,
-  ApiBotCommand,
   ApiChatFolder,
-  ApiChatMember,
-  ApiRestrictionReason,
-  ApiExportedInvite,
   ApiChatInviteImporter,
-  ApiChatSettings,
-  ApiTopic,
-  ApiSendAsPeerId,
-  ApiChatReactions,
-  ApiChatlistInvite,
   ApiChatlistExportedInvite,
+  ApiChatlistInvite,
+  ApiChatMember,
+  ApiChatReactions,
+  ApiChatSettings,
+  ApiExportedInvite,
+  ApiRestrictionReason,
+  ApiSendAsPeerId,
+  ApiTopic,
 } from '../../types';
+
 import { pick, pickTruthy } from '../../../util/iteratees';
+import { getServerTime, getServerTimeOffset } from '../../../util/serverTime';
+import { buildApiUsernames } from './common';
+import { omitVirtualClassFields } from './helpers';
 import {
   buildApiPeerId, getApiChatIdFromMtpPeer, isPeerChat, isPeerUser,
 } from './peers';
-import { omitVirtualClassFields } from './helpers';
-import { getServerTime, getServerTimeOffset } from '../../../util/serverTime';
-import { buildApiReaction } from './messages';
-import { buildApiUsernames } from './common';
+import { buildApiReaction } from './reactions';
 
 type PeerEntityApiChatFields = Omit<ApiChat, (
   'id' | 'type' | 'title' |
@@ -49,6 +51,11 @@ function buildApiChatFieldsFromPeerEntity(
   const isJoinRequest = Boolean('joinRequest' in peerEntity && peerEntity.joinRequest);
   const usernames = buildApiUsernames(peerEntity);
   const isForum = Boolean('forum' in peerEntity && peerEntity.forum);
+  const areStoriesHidden = Boolean('storiesHidden' in peerEntity && peerEntity.storiesHidden);
+  const maxStoryId = 'storiesMaxId' in peerEntity ? peerEntity.storiesMaxId : undefined;
+  const storiesUnavailable = Boolean('storiesUnavailable' in peerEntity && peerEntity.storiesUnavailable);
+  const color = 'color' in peerEntity ? peerEntity.color : undefined;
+  const backgroundEmojiId = 'backgroundEmojiId' in peerEntity ? peerEntity.backgroundEmojiId?.toString() : undefined;
 
   return {
     isMin,
@@ -61,7 +68,7 @@ function buildApiChatFieldsFromPeerEntity(
     ...('verified' in peerEntity && { isVerified: peerEntity.verified }),
     ...('callActive' in peerEntity && { isCallActive: peerEntity.callActive }),
     ...('callNotEmpty' in peerEntity && { isCallNotEmpty: peerEntity.callNotEmpty }),
-    ...('date' in peerEntity && { joinDate: peerEntity.date }),
+    ...('date' in peerEntity && { creationDate: peerEntity.date }),
     ...('participantsCount' in peerEntity && peerEntity.participantsCount !== undefined && {
       membersCount: peerEntity.participantsCount,
     }),
@@ -72,9 +79,14 @@ function buildApiChatFieldsFromPeerEntity(
     ...buildApiChatRestrictions(peerEntity),
     ...buildApiChatMigrationInfo(peerEntity),
     fakeType: isScam ? 'scam' : (isFake ? 'fake' : undefined),
+    color,
+    backgroundEmojiId,
     isJoinToSend,
     isJoinRequest,
     isForum,
+    areStoriesHidden,
+    maxStoryId,
+    hasStories: Boolean(maxStoryId) && !storiesUnavailable,
   };
 }
 
@@ -218,9 +230,14 @@ export function buildApiChatFromPreview(
   if (preview instanceof GramJs.ChatEmpty || preview instanceof GramJs.UserEmpty) {
     return undefined;
   }
+  const id = buildApiPeerId(
+    preview.id,
+    preview instanceof GramJs.User ? 'user'
+      : (preview instanceof GramJs.Chat || preview instanceof GramJs.ChatForbidden) ? 'chat' : 'channel',
+  );
 
   return {
-    id: buildApiPeerId(preview.id, preview instanceof GramJs.User ? 'user' : 'chat'),
+    id,
     type: getApiChatTypeFromPeerEntity(preview),
     title: preview instanceof GramJs.User ? getUserName(preview) : preview.title,
     ...buildApiChatFieldsFromPeerEntity(preview, isSupport),
@@ -548,7 +565,7 @@ export function buildApiTopic(forumTopic: GramJs.TypeForumTopic): ApiTopic | und
     unreadMentionsCount,
     unreadReactionsCount,
     fromId: getApiChatIdFromMtpPeer(fromId),
-    isMuted: silent || (typeof muteUntil === 'number' && getServerTime() < muteUntil),
+    isMuted: silent || (typeof muteUntil === 'number' ? getServerTime() < muteUntil : undefined),
     muteUntil,
   };
 }

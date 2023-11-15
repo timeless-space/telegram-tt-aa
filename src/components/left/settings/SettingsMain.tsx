@@ -1,17 +1,22 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo, useEffect } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import { SettingsScreens } from '../../../types';
 
+import { FAQ_URL, PRIVACY_URL } from '../../../config';
 import { selectIsPremiumPurchaseBlocked } from '../../../global/selectors';
-import useLang from '../../../hooks/useLang';
-import useHistoryBack from '../../../hooks/useHistoryBack';
 
-import ListItem from '../../ui/ListItem';
-import ProfileInfo from '../../common/ProfileInfo';
+import useFlag from '../../../hooks/useFlag';
+import useHistoryBack from '../../../hooks/useHistoryBack';
+import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
+
 import ChatExtra from '../../common/ChatExtra';
 import PremiumIcon from '../../common/PremiumIcon';
+import ProfileInfo from '../../common/ProfileInfo';
+import ConfirmDialog from '../../ui/ConfirmDialog';
+import ListItem from '../../ui/ListItem';
 
 type OwnProps = {
   isActive?: boolean;
@@ -35,9 +40,12 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
 }) => {
   const {
     loadProfilePhotos,
-    loadAuthorizations,
     openPremiumModal,
+    openSupportChat,
+    openUrl,
   } = getActions();
+
+  const [isSupportDialogOpen, openSupportDialog, closeSupportDialog] = useFlag(false);
 
   const lang = useLang();
 
@@ -52,9 +60,10 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
     onBack: onReset,
   });
 
-  useEffect(() => {
-    loadAuthorizations();
-  }, []);
+  const handleOpenSupport = useLastCallback(() => {
+    openSupportChat();
+    closeSupportDialog();
+  });
 
   return (
     <div className="settings-content custom-scroll">
@@ -137,6 +146,8 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
         >
           {lang('StickersName')}
         </ListItem>
+      </div>
+      <div className="settings-main-menu">
         {canBuyPremium && (
           <ListItem
             leftElement={<PremiumIcon withGradient big />}
@@ -148,6 +159,36 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           </ListItem>
         )}
       </div>
+      <div className="settings-main-menu">
+        <ListItem
+          icon="ask-support"
+          onClick={openSupportDialog}
+        >
+          {lang('AskAQuestion')}
+        </ListItem>
+        <ListItem
+          icon="help"
+          // eslint-disable-next-line react/jsx-no-bind
+          onClick={() => openUrl({ url: FAQ_URL })}
+        >
+          {lang('TelegramFaq')}
+        </ListItem>
+        <ListItem
+          icon="privacy-policy"
+          // eslint-disable-next-line react/jsx-no-bind
+          onClick={() => openUrl({ url: PRIVACY_URL })}
+        >
+          {lang('PrivacyPolicy')}
+        </ListItem>
+      </div>
+      <ConfirmDialog
+        isOpen={isSupportDialogOpen}
+        confirmLabel={lang('lng_settings_ask_ok')}
+        title={lang('AskAQuestion')}
+        text={lang('lng_settings_ask_sure')}
+        confirmHandler={handleOpenSupport}
+        onClose={closeSupportDialog}
+      />
     </div>
   );
 };

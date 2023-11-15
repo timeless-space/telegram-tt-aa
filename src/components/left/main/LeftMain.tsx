@@ -4,27 +4,27 @@ import React, {
 } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
+import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
 import type { SettingsScreens } from '../../../types';
 import { LeftColumnContent } from '../../../types';
-import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
 
-import { IS_ELECTRON } from '../../../config';
-import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
+import { PRODUCTION_URL } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
+import { IS_ELECTRON, IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 
+import useForumPanelRender from '../../../hooks/useForumPanelRender';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useShowTransition from '../../../hooks/useShowTransition';
-import useLang from '../../../hooks/useLang';
-import useForumPanelRender from '../../../hooks/useForumPanelRender';
 
-import Transition from '../../ui/Transition';
-import LeftMainHeader from './LeftMainHeader';
-import ChatFolders from './ChatFolders';
-import LeftSearch from '../search/LeftSearch.async';
-import ContactList from './ContactList.async';
-import NewChatButton from '../NewChatButton';
 import Button from '../../ui/Button';
+import Transition from '../../ui/Transition';
+import NewChatButton from '../NewChatButton';
+import LeftSearch from '../search/LeftSearch.async';
+import ChatFolders from './ChatFolders';
+import ContactList from './ContactList.async';
 import ForumPanel from './ForumPanel';
+import LeftMainHeader from './LeftMainHeader';
 
 import './LeftMain.scss';
 
@@ -35,7 +35,8 @@ type OwnProps = {
   contactsFilter: string;
   shouldSkipTransition?: boolean;
   foldersDispatch: FolderEditDispatch;
-  isUpdateAvailable?: boolean;
+  isAppUpdateAvailable?: boolean;
+  isElectronUpdateAvailable?: boolean;
   isForumPanelOpen?: boolean;
   isClosingSearch?: boolean;
   onSearchQuery: (query: string) => void;
@@ -58,7 +59,8 @@ const LeftMain: FC<OwnProps> = ({
   contactsFilter,
   shouldSkipTransition,
   foldersDispatch,
-  isUpdateAvailable,
+  isAppUpdateAvailable,
+  isElectronUpdateAvailable,
   isForumPanelOpen,
   onSearchQuery,
   onContentChange,
@@ -68,6 +70,11 @@ const LeftMain: FC<OwnProps> = ({
 }) => {
   const { closeForumPanel } = getActions();
   const [isNewChatButtonShown, setIsNewChatButtonShown] = useState(IS_TOUCH_ENV);
+  const [isElectronAutoUpdateEnabled, setIsElectronAutoUpdateEnabled] = useState(false);
+
+  useEffect(() => {
+    window.electron?.getIsAutoUpdateEnabled().then(setIsElectronAutoUpdateEnabled);
+  }, []);
 
   const {
     shouldRenderForumPanel, handleForumPanelAnimationEnd,
@@ -79,7 +86,7 @@ const LeftMain: FC<OwnProps> = ({
   const {
     shouldRender: shouldRenderUpdateButton,
     transitionClassNames: updateButtonClassNames,
-  } = useShowTransition(isUpdateAvailable);
+  } = useShowTransition(isAppUpdateAvailable || isElectronUpdateAvailable);
 
   const isMouseInside = useRef(false);
 
@@ -120,7 +127,9 @@ const LeftMain: FC<OwnProps> = ({
   });
 
   const handleUpdateClick = useLastCallback(() => {
-    if (IS_ELECTRON) {
+    if (IS_ELECTRON && !isElectronAutoUpdateEnabled) {
+      window.open(`${PRODUCTION_URL}/get`, '_blank', 'noopener');
+    } else if (isElectronUpdateAvailable) {
       window.electron?.installUpdate();
     } else {
       window.location.reload();

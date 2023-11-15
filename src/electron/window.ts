@@ -1,14 +1,19 @@
+import type { HandlerDetails } from 'electron';
 import {
   app, BrowserWindow, ipcMain, shell, systemPreferences,
 } from 'electron';
-import type { HandlerDetails } from 'electron';
 import path from 'path';
 
-import { ElectronAction, ElectronEvent } from '../types/electron';
 import type { TrafficLightPosition } from '../types/electron';
-import setupAutoUpdates from './autoUpdates';
+import { ElectronAction, ElectronEvent } from '../types/electron';
+
+import setupAutoUpdates, { AUTO_UPDATE_SETTING_KEY, getIsAutoUpdateEnabled } from './autoUpdates';
+import { processDeeplink } from './deeplink';
+import { captureLocalStorage, restoreLocalStorage } from './localStorage';
+import tray from './tray';
 import {
-  forceQuit, getAppTitle, IS_MAC_OS, TRAFFIC_LIGHT_POSITION, windows,
+  forceQuit, getAppTitle, getCurrentWindow, getLastWindow, hasExtraWindows, IS_FIRST_RUN, IS_MAC_OS,
+  IS_PREVIEW, IS_WINDOWS, reloadWindows, store, TRAFFIC_LIGHT_POSITION, windows,
 } from './utils';
 import windowStateKeeper from './windowState';
 
@@ -23,7 +28,7 @@ export function createWindow(url?: string) {
   let x;
   let y;
 
-  const currentWindow = BrowserWindow.getFocusedWindow();
+  const currentWindow = getCurrentWindow();
   if (currentWindow) {
     const [currentWindowX, currentWindowY] = currentWindow.getPosition();
     x = currentWindowX + 24;
@@ -64,10 +69,6 @@ export function createWindow(url?: string) {
     }),
   });
 
-  window.on('page-title-updated', (event: Event) => {
-    event.preventDefault();
-  });
-
   windowState.manage(window);
 
   window.webContents.setWindowOpenHandler((details: HandlerDetails) => {
@@ -79,6 +80,10 @@ export function createWindow(url?: string) {
     return deviceType === 'hid' && ALLOWED_DEVICE_ORIGINS.includes(origin);
   });
 
+  window.on('page-title-updated', (event: Event) => {
+    event.preventDefault();
+  });
+
   window.on('enter-full-screen', () => {
     window.webContents.send(ElectronEvent.FULLSCREEN_CHANGE, true);
   });
@@ -88,32 +93,19 @@ export function createWindow(url?: string) {
   });
 
   window.on('close', (event) => {
-    if (IS_MAC_OS) {
+    if (IS_MAC_OS || (IS_WINDOWS && tray.isEnabled)) {
       if (forceQuit.isEnabled) {
         app.exit(0);
         forceQuit.disable();
+      } else if (hasExtraWindows()) {
+        windows.delete(window);
+        windowState.unmanage();
       } else {
-        const hasExtraWindows = BrowserWindow.getAllWindows().length > 1;
-
-        if (hasExtraWindows) {
-          windows.delete(window);
-          windowState.unmanage();
-        } else {
-          event.preventDefault();
-          window.hide();
-        }
+        event.preventDefault();
+        window.hide();
       }
     }
   });
-
-  if (url) {
-    window.loadURL(url);
-  } else if (app.isPackaged) {
-    window.loadURL(`file://${__dirname}/index.html${windowState.urlHash}`);
-  } else {
-    window.loadURL(`http://localhost:1234${windowState.urlHash}`);
-    window.webContents.openDevTools();
-  }
 
   windowState.clearLastUrlHash();
 
@@ -121,15 +113,45 @@ export function createWindow(url?: string) {
     window.removeMenu();
   }
 
-  window.webContents.once('dom-ready', () => {
-    window.show();
+  if (IS_WINDOWS && tray.isEnabled) {
+    tray.setupListeners(window);
+    tray.create();
+  }
+
+  window.webContents.once('dom-ready', async () => {
+    processDeeplink();
 
     if (process.env.APP_ENV === 'production') {
-      setupAutoUpdates(window, windowState);
+      setupAutoUpdates(windowState);
     }
+
+    if (!IS_FIRST_RUN && getIsAutoUpdateEnabled() === undefined) {
+      store.set(AUTO_UPDATE_SETTING_KEY, true);
+      await captureLocalStorage();
+      reloadWindows();
+    }
+
+    window.show();
   });
 
   windows.add(window);
+  loadWindowUrl(window, url, windowState.urlHash);
+}
+
+function loadWindowUrl(window: BrowserWindow, url?: string, hash?: string): void {
+  if (url) {
+    window.loadURL(url);
+  } else if (!app.isPackaged) {
+    window.loadURL(`http://localhost:1234${hash}`);
+    window.webContents.openDevTools();
+  } else if (getIsAutoUpdateEnabled()) {
+    window.loadURL(`${process.env.BASE_URL}${hash}`);
+  } else if (getIsAutoUpdateEnabled() === undefined && IS_FIRST_RUN) {
+    store.set(AUTO_UPDATE_SETTING_KEY, true);
+    window.loadURL(`${process.env.BASE_URL}${hash}`);
+  } else {
+    window.loadURL(`file://${__dirname}/index.html${hash}`);
+  }
 }
 
 export function setupElectronActionHandlers() {
@@ -138,17 +160,15 @@ export function setupElectronActionHandlers() {
   });
 
   ipcMain.handle(ElectronAction.SET_WINDOW_TITLE, (_, newTitle?: string) => {
-    const currentWindow = BrowserWindow.getFocusedWindow();
-    currentWindow?.setTitle(getAppTitle(newTitle));
+    getCurrentWindow()?.setTitle(getAppTitle(newTitle));
   });
 
   ipcMain.handle(ElectronAction.GET_IS_FULLSCREEN, () => {
-    const currentWindow = BrowserWindow.getFocusedWindow();
-    currentWindow?.isFullScreen();
+    getCurrentWindow()?.isFullScreen();
   });
 
   ipcMain.handle(ElectronAction.HANDLE_DOUBLE_CLICK, () => {
-    const currentWindow = BrowserWindow.getFocusedWindow();
+    const currentWindow = getCurrentWindow();
     const doubleClickAction = systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string');
 
     if (doubleClickAction === 'Minimize') {
@@ -167,9 +187,34 @@ export function setupElectronActionHandlers() {
       return;
     }
 
-    const currentWindow = BrowserWindow.getFocusedWindow();
-    currentWindow?.setTrafficLightPosition(TRAFFIC_LIGHT_POSITION[position]);
+    getCurrentWindow()?.setTrafficLightPosition(TRAFFIC_LIGHT_POSITION[position]);
   });
+
+  ipcMain.handle(ElectronAction.SET_IS_AUTO_UPDATE_ENABLED, async (_, isAutoUpdateEnabled: boolean) => {
+    if (IS_PREVIEW) {
+      return;
+    }
+
+    store.set(AUTO_UPDATE_SETTING_KEY, isAutoUpdateEnabled);
+    await captureLocalStorage();
+    reloadWindows(isAutoUpdateEnabled);
+  });
+
+  ipcMain.handle(ElectronAction.GET_IS_AUTO_UPDATE_ENABLED, () => {
+    return getIsAutoUpdateEnabled();
+  });
+
+  ipcMain.handle(ElectronAction.SET_IS_TRAY_ICON_ENABLED, (_, isTrayIconEnabled: boolean) => {
+    if (isTrayIconEnabled) {
+      tray.enable();
+    } else {
+      tray.disable();
+    }
+  });
+
+  ipcMain.handle(ElectronAction.GET_IS_TRAY_ICON_ENABLED, () => tray.isEnabled);
+
+  ipcMain.handle(ElectronAction.RESTORE_LOCAL_STORAGE, () => restoreLocalStorage());
 }
 
 export function setupCloseHandlers() {
@@ -194,9 +239,7 @@ export function setupCloseHandlers() {
       createWindow();
     } else if (IS_MAC_OS) {
       forceQuit.disable();
-
-      const currentWindow = Array.from(windows).pop();
-      currentWindow?.show();
+      getLastWindow()?.show();
     }
   });
 }

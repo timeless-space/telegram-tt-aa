@@ -1,62 +1,62 @@
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
-
 import type { ApiMessage } from '../../../api/types';
+import type {
+  ActionReturnType,
+  GlobalState,
+} from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 import { FocusDirection } from '../../../types';
-import type {
-  GlobalState, ActionReturnType,
-} from '../../types';
 
 import {
   ANIMATION_END_DELAY,
-  RELEASE_DATETIME,
   FAST_SMOOTH_MAX_DURATION,
+  RELEASE_DATETIME,
   SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../../config';
+import { copyHtmlToClipboard } from '../../../util/clipboard';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { compact, findLast } from '../../../util/iteratees';
+import * as langProvider from '../../../util/langProvider';
+import parseMessageInput from '../../../util/parseMessageInput';
+import { getServerTime } from '../../../util/serverTime';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
+import versionNotification from '../../../versionNotification.txt';
+import { getMessageSummaryText, getSenderTitle, isChatChannel } from '../../helpers';
+import { renderMessageSummaryHtml } from '../../helpers/renderMessageSummaryHtml';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
+  addActiveMessageMediaDownload,
+  cancelMessageMediaDownload,
   enterMessageSelectMode,
-  toggleMessageSelection,
   exitMessageSelectMode,
-  replaceThreadParam,
   replaceTabThreadParam,
+  replaceThreadParam,
+  toggleMessageSelection,
   updateFocusDirection,
   updateFocusedMessage,
-  cancelMessageMediaDownload,
-  addActiveMessageMediaDownload,
 } from '../../reducers';
-import {
-  selectCurrentChat,
-  selectViewportIds,
-  selectIsRightColumnShown,
-  selectCurrentMessageList,
-  selectChat,
-  selectThreadInfo,
-  selectChatMessages,
-  selectAllowedMessageActions,
-  selectMessageIdsByGroupId,
-  selectForwardedMessageIdsByGroupId,
-  selectIsViewportNewest,
-  selectReplyingToId,
-  selectReplyStack,
-  selectSender,
-  selectChatScheduledMessages,
-  selectTabState,
-  selectRequestedMessageTranslationLanguage,
-  selectPinnedIds,
-  selectRequestedChatTranslationLanguage,
-} from '../../selectors';
-import { compact, findLast } from '../../../util/iteratees';
-import { getServerTime } from '../../../util/serverTime';
-
-import versionNotification from '../../../versionNotification.txt';
-import parseMessageInput from '../../../util/parseMessageInput';
-import { getMessageSummaryText, getSenderTitle, isChatChannel } from '../../helpers';
-import * as langProvider from '../../../util/langProvider';
-import { copyHtmlToClipboard } from '../../../util/clipboard';
-import { renderMessageSummaryHtml } from '../../helpers/renderMessageSummaryHtml';
 import { updateTabState } from '../../reducers/tabs';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import {
+  selectAllowedMessageActions,
+  selectChat,
+  selectChatMessages,
+  selectChatScheduledMessages,
+  selectCurrentChat,
+  selectCurrentMessageList,
+  selectDraft,
+  selectForwardedMessageIdsByGroupId,
+  selectIsRightColumnShown,
+  selectIsViewportNewest,
+  selectMessageIdsByGroupId,
+  selectPinnedIds,
+  selectReplyStack,
+  selectRequestedChatTranslationLanguage,
+  selectRequestedMessageTranslationLanguage,
+  selectSender,
+  selectTabState,
+  selectThreadInfo,
+  selectViewportIds,
+} from '../../selectors';
+
 import { getIsMobile } from '../../../hooks/useAppLayout';
 
 const FOCUS_DURATION = 1500;
@@ -75,17 +75,6 @@ addActionHandler('setScrollOffset', (global, actions, payload): ActionReturnType
   global = replaceThreadParam(global, chatId, threadId, 'lastScrollOffset', scrollOffset);
 
   return replaceTabThreadParam(global, chatId, threadId, 'scrollOffset', scrollOffset, tabId);
-});
-
-addActionHandler('setReplyingToId', (global, actions, payload): ActionReturnType => {
-  const { messageId, tabId = getCurrentTabId() } = payload;
-  const currentMessageList = selectCurrentMessageList(global, tabId);
-  if (!currentMessageList) {
-    return undefined;
-  }
-  const { chatId, threadId } = currentMessageList;
-
-  return replaceThreadParam(global, chatId, threadId, 'replyingToId', messageId);
 });
 
 addActionHandler('setEditingId', (global, actions, payload): ActionReturnType => {
@@ -148,12 +137,12 @@ addActionHandler('replyToNextMessage', (global, actions, payload): ActionReturnT
     return;
   }
 
-  const replyingToId = selectReplyingToId(global, chatId, threadId);
+  const replyInfo = selectDraft(global, chatId, threadId)?.replyInfo;
   const isLatest = selectIsViewportNewest(global, chatId, threadId, tabId);
 
   let messageId: number | undefined;
 
-  if (!isLatest || !replyingToId) {
+  if (!isLatest || !replyInfo?.replyToMsgId) {
     if (threadId === MAIN_THREAD_ID) {
       const chat = selectChat(global, chatId);
 
@@ -165,13 +154,13 @@ addActionHandler('replyToNextMessage', (global, actions, payload): ActionReturnT
     }
   } else {
     const chatMessageKeys = Object.keys(chatMessages);
-    const indexOfCurrent = chatMessageKeys.indexOf(replyingToId.toString());
+    const indexOfCurrent = chatMessageKeys.indexOf(replyInfo.replyToMsgId.toString());
     const newIndex = indexOfCurrent + targetIndexDelta;
     messageId = newIndex <= chatMessageKeys.length + 1 && newIndex >= 0
       ? Number(chatMessageKeys[newIndex])
       : undefined;
   }
-  actions.setReplyingToId({ messageId, tabId });
+  actions.updateDraftReplyInfo({ replyToMsgId: messageId, tabId });
   actions.focusMessage({
     chatId,
     threadId,
@@ -482,7 +471,7 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
 
 addActionHandler('openForwardMenu', (global, actions, payload): ActionReturnType => {
   const {
-    fromChatId, messageIds, groupedId, withMyScore, tabId = getCurrentTabId(),
+    fromChatId, messageIds, storyId, groupedId, withMyScore, tabId = getCurrentTabId(),
   } = payload;
   let groupedMessageIds;
   if (groupedId) {
@@ -492,6 +481,7 @@ addActionHandler('openForwardMenu', (global, actions, payload): ActionReturnType
     forwardMessages: {
       fromChatId,
       messageIds: groupedMessageIds || messageIds,
+      storyId,
       isModalShown: true,
       withMyScore,
     },

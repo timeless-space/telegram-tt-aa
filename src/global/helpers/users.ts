@@ -1,14 +1,12 @@
-import type { ApiChat, ApiUser, ApiUserStatus } from '../../api/types';
+import type { ApiPeer, ApiUser, ApiUserStatus } from '../../api/types';
+import type { LangFn } from '../../hooks/useLang';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../../config';
 import { formatFullDate, formatTime } from '../../util/dateFormat';
 import { orderBy } from '../../util/iteratees';
-import type { LangFn } from '../../hooks/useLang';
-import { getServerTime, getServerTimeOffset } from '../../util/serverTime';
-import { prepareSearchWordsForNeedle } from '../../util/searchWords';
 import { formatPhoneNumber } from '../../util/phoneNumber';
-
-const USER_COLOR_KEYS = [1, 8, 5, 2, 7, 4, 6];
+import { prepareSearchWordsForNeedle } from '../../util/searchWords';
+import { getServerTime, getServerTimeOffset } from '../../util/serverTime';
 
 export function getUserFirstOrLastName(user?: ApiUser) {
   if (!user) {
@@ -71,6 +69,10 @@ export function getUserStatus(
 ) {
   if (user.id === SERVICE_NOTIFICATIONS_USER_ID) {
     return lang('ServiceNotifications').toLowerCase();
+  }
+
+  if (user.isSupport) {
+    return lang('SupportStatus');
   }
 
   if (user.type && user.type === 'userTypeBot') {
@@ -188,7 +190,7 @@ export function isUserBot(user: ApiUser) {
 }
 
 export function getCanAddContact(user: ApiUser) {
-  return !user.isContact && !isUserBot(user);
+  return !user.isSelf && !user.isContact && !isUserBot(user);
 }
 
 export function sortUserIds(
@@ -257,22 +259,10 @@ export function filterUsersByName(
   });
 }
 
-export function getUserIdDividend(userId: string) {
-  // Workaround for old-fashioned IDs stored locally
-  if (typeof userId === 'number') {
-    return Math.abs(userId);
-  }
-
-  return Math.abs(Number(userId));
-}
-
-// https://github.com/telegramdesktop/tdesktop/blob/371510cfe23b0bd226de8c076bc49248fbe40c26/Telegram/SourceFiles/data/data_peer.cpp#L53
-export function getUserColorKey(peer: ApiUser | ApiChat | undefined) {
-  const index = peer ? getUserIdDividend(peer.id) % 7 : 0;
-
-  return USER_COLOR_KEYS[index];
-}
-
-export function getMainUsername(userOrChat: ApiUser | ApiChat) {
+export function getMainUsername(userOrChat: ApiPeer) {
   return userOrChat.usernames?.find((u) => u.isActive)?.username;
+}
+
+export function getPeerStoryHtmlId(userId: string) {
+  return `peer-story${userId}`;
 }

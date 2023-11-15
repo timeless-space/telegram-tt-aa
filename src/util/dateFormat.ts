@@ -1,5 +1,6 @@
 import type { LangFn } from '../hooks/useLang';
 import type { TimeFormat } from '../types';
+
 import withCache from './withCache';
 
 const WEEKDAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -120,6 +121,33 @@ export function formatLastUpdated(lang: LangFn, currentTime: number, lastUpdated
   } else {
     return lang('LiveLocationUpdated.TodayAt', formatTime(lang, lastUpdated));
   }
+}
+
+export function formatRelativeTime(lang: LangFn, currentTime: number, lastUpdated = currentTime) {
+  const seconds = currentTime - lastUpdated;
+
+  if (seconds < 60) {
+    return lang('Time.JustNow');
+  }
+
+  // within an hour
+  if (seconds < 60 * 60) {
+    return lang('Time.MinutesAgo', Math.floor(seconds / 60));
+  }
+
+  const lastUpdatedDate = new Date(lastUpdated * 1000);
+  const today = getDayStart(new Date());
+  if (lastUpdatedDate >= today) {
+    return lang('Time.TodayAt', formatTime(lang, lastUpdatedDate));
+  }
+
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (lastUpdatedDate > yesterday) {
+    return lang('Time.YesterdayAt', formatTime(lang, lastUpdatedDate));
+  }
+
+  return lang('Time.AtDate', formatFullDate(lang, lastUpdatedDate));
 }
 
 type DurationType = 'Seconds' | 'Minutes' | 'Hours' | 'Days' | 'Weeks';
@@ -333,6 +361,31 @@ export function formatDateAtTime(
   const formattedDate = formatDateToString(date, lang.code, noYear);
 
   return lang('formatDateAtTime', [formattedDate, time]);
+}
+
+export function formatDateInFuture(
+  lang: LangFn,
+  currentTime: number,
+  datetime: number,
+) {
+  const diff = Math.ceil(datetime - currentTime);
+  if (diff < 0) {
+    return lang('RightNow');
+  }
+
+  if (diff < 60) {
+    return lang('Seconds', diff);
+  }
+
+  if (diff < 60 * 60) {
+    return lang('Minutes', Math.ceil(diff / 60));
+  }
+
+  if (diff < 60 * 60 * 24) {
+    return lang('Hours', Math.ceil(diff / (60 * 60)));
+  }
+
+  return lang('Days', Math.ceil(diff / (60 * 60 * 24)));
 }
 
 function isValidDate(day: number, month: number, year = 2021): boolean {

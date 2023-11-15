@@ -1,23 +1,25 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
-  memo, useRef, useState, useMemo,
+  memo, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
 
-import type { FC } from '../../lib/teact/teact';
+import type { IconName } from '../../types/icons';
 
-import { IS_CANVAS_FILTER_SUPPORTED } from '../../util/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import { formatMediaDateTime, formatPastTimeShort } from '../../util/dateFormat';
+import { IS_CANVAS_FILTER_SUPPORTED } from '../../util/windowEnvironment';
 import { getColorFromExtension, getFileSizeString } from './helpers/documentInfo';
 import { getDocumentThumbnailDimensions } from './helpers/mediaDimensions';
 import renderText from './helpers/renderText';
-import useShowTransition from '../../hooks/useShowTransition';
-import useMediaTransition from '../../hooks/useMediaTransition';
-import useLang from '../../hooks/useLang';
-import useCanvasBlur from '../../hooks/useCanvasBlur';
-import useAppLayout from '../../hooks/useAppLayout';
 
-import ProgressSpinner from '../ui/ProgressSpinner';
+import useAppLayout from '../../hooks/useAppLayout';
+import useCanvasBlur from '../../hooks/useCanvasBlur';
+import useLang from '../../hooks/useLang';
+import useMediaTransition from '../../hooks/useMediaTransition';
+import useShowTransition from '../../hooks/useShowTransition';
+
 import Link from '../ui/Link';
+import ProgressSpinner from '../ui/ProgressSpinner';
 
 import './File.scss';
 
@@ -37,7 +39,7 @@ type OwnProps = {
   isSelectable?: boolean;
   isSelected?: boolean;
   transferProgress?: number;
-  actionIcon?: string;
+  actionIcon?: IconName;
   onClick?: () => void;
   onDateClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
 };
@@ -112,6 +114,7 @@ const File: FC<OwnProps> = ({
               className="full-media"
               width={width}
               height={height}
+              draggable={false}
               alt=""
             />
             {withThumb && (
@@ -142,7 +145,7 @@ const File: FC<OwnProps> = ({
             className={buildClassName(
               'action-icon',
               'icon',
-              actionIcon || 'icon-download',
+              actionIcon ? `icon-${actionIcon}` : 'icon-download',
               shouldSpinnerRender && 'hidden',
             )}
           />

@@ -1,6 +1,7 @@
 import type { ApiWebDocument } from './bots';
 import type { ApiGroupCall, PhoneCallAction } from './calls';
 import type { ApiChat } from './chats';
+import type { ApiMessageStoryData, ApiWebPageStoryData } from './stories';
 
 export interface ApiDimensions {
   width: number;
@@ -95,6 +96,7 @@ export interface ApiVideo {
   blobUrl?: string;
   previewBlobUrl?: string;
   size: number;
+  noSound?: boolean;
 }
 
 export interface ApiAudio {
@@ -192,7 +194,7 @@ export interface ApiInvoice {
   receiptMsgId?: number;
   isTest?: boolean;
   isRecurring?: boolean;
-  recurringTermsUrl?: string;
+  termsUrl?: string;
   extendedMedia?: ApiMessageExtendedMediaPreview;
   maxTipAmount?: number;
   suggestedTipAmounts?: number[];
@@ -210,7 +212,7 @@ export interface ApiPaymentCredentials {
   title: string;
 }
 
-interface ApiGeoPoint {
+export interface ApiGeoPoint {
   long: number;
   lat: number;
   accessHash: string;
@@ -251,6 +253,15 @@ export type ApiGame = {
   document?: ApiDocument;
 };
 
+export type ApiGiveaway = {
+  quantity: number;
+  months: number;
+  untilDate: number;
+  isOnlyForNewSubscribers?: true;
+  countries?: string[];
+  channelIds: string[];
+};
+
 export type ApiNewPoll = {
   summary: ApiPoll['summary'];
   quiz?: {
@@ -279,6 +290,9 @@ export interface ApiAction {
   months?: number;
   topicEmojiIconId?: string;
   isTopicAction?: boolean;
+  slug?: string;
+  isGiveaway?: boolean;
+  isUnclaimed?: boolean;
 }
 
 export interface ApiWebPage {
@@ -293,7 +307,44 @@ export interface ApiWebPage {
   duration?: number;
   document?: ApiDocument;
   video?: ApiVideo;
+  story?: ApiWebPageStoryData;
 }
+
+export type ApiReplyInfo = ApiMessageReplyInfo | ApiStoryReplyInfo;
+
+export interface ApiMessageReplyInfo {
+  type: 'message';
+  replyToMsgId?: number;
+  replyToPeerId?: string;
+  replyFrom?: ApiMessageForwardInfo;
+  replyMedia?: MediaContent;
+  replyToTopId?: number;
+  isForumTopic?: true;
+  isQuote?: true;
+  quoteText?: ApiFormattedText;
+}
+
+export interface ApiStoryReplyInfo {
+  type: 'story';
+  userId: string;
+  storyId: number;
+}
+
+export interface ApiInputMessageReplyInfo {
+  type: 'message';
+  replyToMsgId: number;
+  replyToTopId?: number;
+  replyToPeerId?: string;
+  quoteText?: ApiFormattedText;
+}
+
+export interface ApiInputStoryReplyInfo {
+  type: 'story';
+  userId: string;
+  storyId: number;
+}
+
+export type ApiInputReplyInfo = ApiInputMessageReplyInfo | ApiInputStoryReplyInfo;
 
 export interface ApiMessageForwardInfo {
   date: number;
@@ -376,32 +427,34 @@ export interface ApiFormattedText {
   entities?: ApiMessageEntity[];
 }
 
+export type MediaContent = {
+  text?: ApiFormattedText;
+  photo?: ApiPhoto;
+  video?: ApiVideo;
+  altVideo?: ApiVideo;
+  document?: ApiDocument;
+  sticker?: ApiSticker;
+  contact?: ApiContact;
+  poll?: ApiPoll;
+  action?: ApiAction;
+  webPage?: ApiWebPage;
+  audio?: ApiAudio;
+  voice?: ApiVoice;
+  invoice?: ApiInvoice;
+  location?: ApiLocation;
+  game?: ApiGame;
+  storyData?: ApiMessageStoryData;
+  giveaway?: ApiGiveaway;
+};
+
 export interface ApiMessage {
   id: number;
   chatId: string;
-  content: {
-    text?: ApiFormattedText;
-    photo?: ApiPhoto;
-    video?: ApiVideo;
-    document?: ApiDocument;
-    sticker?: ApiSticker;
-    contact?: ApiContact;
-    poll?: ApiPoll;
-    action?: ApiAction;
-    webPage?: ApiWebPage;
-    audio?: ApiAudio;
-    voice?: ApiVoice;
-    invoice?: ApiInvoice;
-    location?: ApiLocation;
-    game?: ApiGame;
-  };
+  content: MediaContent;
   date: number;
   isOutgoing: boolean;
   senderId?: string;
-  replyToChatId?: string;
-  replyToMessageId?: number;
-  replyToTopMessageId?: number;
-  isTopicReply?: true;
+  replyInfo?: ApiReplyInfo;
   sendingState?: 'messageSendingStatePending' | 'messageSendingStateFailed';
   forwardInfo?: ApiMessageForwardInfo;
   isDeleting?: boolean;
@@ -638,6 +691,12 @@ export type ApiThemeParameters = {
   button_color: string;
   button_text_color: string;
   secondary_bg_color: string;
+  header_bg_color: string;
+  accent_text_color: string;
+  section_bg_color: string;
+  section_header_text_color: string;
+  subtitle_text_color: string;
+  destructive_text_color: string;
 };
 
 export type ApiBotApp = {

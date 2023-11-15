@@ -1,16 +1,17 @@
-import type { RequiredGlobalActions } from '../../index';
-import {
-  addActionHandler, getActions, getGlobal, setGlobal,
-} from '../../index';
 import { addCallback } from '../../../lib/teact/teactn';
 
 import type { ApiChat, ApiMessage } from '../../../api/types';
-import { MAIN_THREAD_ID } from '../../../api/types';
+import type { RequiredGlobalActions } from '../../index';
 import type { ActionReturnType, GlobalState, Thread } from '../../types';
+import { MAIN_THREAD_ID } from '../../../api/types';
 
 import { DEBUG, MESSAGE_LIST_SLICE, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
-import { callApi } from '../../../api/gramjs';
+import { init as initFolderManager } from '../../../util/folderManager';
 import { buildCollectionByKey } from '../../../util/iteratees';
+import { callApi } from '../../../api/gramjs';
+import {
+  addActionHandler, getActions, getGlobal, setGlobal,
+} from '../../index';
 import {
   addChatMessagesById,
   safeReplaceViewportIds,
@@ -20,18 +21,17 @@ import {
   updateThreadInfos,
   updateUsers,
 } from '../../reducers';
+import { updateTabState } from '../../reducers/tabs';
 import {
   selectChatMessage,
   selectChatMessages,
   selectCurrentMessageList,
   selectDraft,
   selectEditingDraft,
-  selectEditingId, selectReplyingToId,
+  selectEditingId,
   selectTabState,
   selectThreadInfo,
 } from '../../selectors';
-import { init as initFolderManager } from '../../../util/folderManager';
-import { updateTabState } from '../../reducers/tabs';
 
 const RELEASE_STATUS_TIMEOUT = 15000; // 15 sec;
 
@@ -59,7 +59,9 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
     releaseStatusTimeout = undefined;
   }, RELEASE_STATUS_TIMEOUT);
 
-  const { loadAllChats, preloadTopChatMessages } = actions;
+  const {
+    loadAllChats, preloadTopChatMessages, loadAllStories, loadAllHiddenStories,
+  } = actions;
 
   loadAllChats({
     listType: 'active',
@@ -72,6 +74,7 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
         ...global,
         isSyncing: false,
         isSynced: true,
+        isFetchingDifference: false,
       };
       setGlobal(global);
 
@@ -84,6 +87,8 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
       loadAllChats({ listType: 'archived', shouldReplace: true });
       void callApi('fetchCurrentUser');
       preloadTopChatMessages();
+      loadAllStories();
+      loadAllHiddenStories();
     },
   });
 });
@@ -106,7 +111,6 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
           draft: selectDraft(global, chatId, Number(threadId)),
           editingId: selectEditingId(global, chatId, Number(threadId)),
           editingDraft: selectEditingDraft(global, chatId, Number(threadId)),
-          replyingToId: selectReplyingToId(global, chatId, Number(threadId)),
         };
 
         return acc2;

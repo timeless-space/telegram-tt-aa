@@ -1,25 +1,25 @@
+import type { FC } from '../../lib/teact/teact';
 import React, { memo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
-import type { ApiMessage, ApiChat } from '../../api/types';
+import type { ApiChat, ApiMessage } from '../../api/types';
 
+import { getMessagePoll } from '../../global/helpers';
 import { selectChat, selectChatMessage, selectTabState } from '../../global/selectors';
 import { buildCollectionByKey } from '../../util/iteratees';
-import { getMessagePoll } from '../../global/helpers';
 import renderText from '../common/helpers/renderText';
 
-import useLang from '../../hooks/useLang';
 import useHistoryBack from '../../hooks/useHistoryBack';
+import useLang from '../../hooks/useLang';
 
-import PollAnswerResults from './PollAnswerResults';
 import Loading from '../ui/Loading';
+import PollAnswerResults from './PollAnswerResults';
 
 import './PollResults.scss';
 
 type OwnProps = {
-  onClose: NoneToVoidFunction;
   isActive: boolean;
+  onClose: NoneToVoidFunction;
 };
 
 type StateProps = {
@@ -28,10 +28,10 @@ type StateProps = {
 };
 
 const PollResults: FC<OwnProps & StateProps> = ({
-  onClose,
   isActive,
   chat,
   message,
+  onClose,
 }) => {
   const lang = useLang();
 

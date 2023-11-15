@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react';
 import type { FC } from '../../lib/teact/teact';
 import React, {
-  useState, useEffect, memo, useCallback,
+  memo, useCallback, useEffect, useState,
 } from '../../lib/teact/teact';
 
 import buildClassName from '../../util/buildClassName';
@@ -77,7 +77,7 @@ const AvatarEditable: FC<OwnProps> = ({
           accept="image/png, image/jpeg"
         />
         <i className="icon icon-camera-add" />
-        {croppedBlobUrl && <img src={croppedBlobUrl} alt="Avatar" />}
+        {croppedBlobUrl && <img src={croppedBlobUrl} draggable={false} alt="Avatar" />}
       </label>
       <CropModal file={selectedFile} onClose={handleModalClose} onChange={handleAvatarCrop} />
     </div>

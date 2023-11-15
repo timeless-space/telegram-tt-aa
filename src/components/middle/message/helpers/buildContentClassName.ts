@@ -17,6 +17,7 @@ export function buildContentClassName(
     hasReactions,
     isGeoLiveActive,
     withVoiceTranscription,
+    peerColorClass,
   }: {
     hasSubheader?: boolean;
     isCustomShape?: boolean | number;
@@ -29,17 +30,22 @@ export function buildContentClassName(
     hasReactions?: boolean;
     isGeoLiveActive?: boolean;
     withVoiceTranscription?: boolean;
+    peerColorClass?: string;
   } = {},
 ) {
   const {
-    text, photo, video, audio, voice, document, poll, webPage, contact, location, invoice,
+    text, photo, video, audio, voice, document, poll, webPage, contact, location, invoice, storyData, giveaway,
   } = getMessageContent(message);
 
   const classNames = [MESSAGE_CONTENT_CLASS_NAME];
-  const isMedia = photo || video || location || invoice?.extendedMedia;
+  const isMedia = storyData || photo || video || location || invoice?.extendedMedia;
   const hasText = text || location?.type === 'venue' || isGeoLiveActive;
   const isMediaWithNoText = isMedia && !hasText;
   const isViaBot = Boolean(message.viaBotId);
+
+  if (peerColorClass) {
+    classNames.push(peerColorClass);
+  }
 
   if (!isMedia && message.emojiOnlyCount) {
     classNames.push('emoji-only');
@@ -81,6 +87,8 @@ export function buildContentClassName(
     classNames.push('contact');
   } else if (poll) {
     classNames.push('poll');
+  } else if (giveaway) {
+    classNames.push('giveaway');
   } else if (webPage) {
     classNames.push('web-page');
 
@@ -91,6 +99,10 @@ export function buildContentClassName(
 
   if (invoice && !invoice.extendedMedia) {
     classNames.push('invoice');
+  }
+
+  if (storyData) {
+    classNames.push('story');
   }
 
   if (asForwarded) {

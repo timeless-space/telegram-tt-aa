@@ -1,22 +1,23 @@
-import type { RequiredGlobalActions } from '../../index';
-import {
-  addActionHandler, getActions, getGlobal, setGlobal,
-} from '../../index';
-
-import type {
-  ActionReturnType, ApiDraft, GlobalState, TabArgs,
-} from '../../types';
 import type {
   ApiAttachment,
   ApiChat,
+  ApiInputMessageReplyInfo,
+  ApiInputReplyInfo,
+  ApiInputStoryReplyInfo,
   ApiMessage,
   ApiMessageEntity,
   ApiNewPoll,
   ApiOnProgress,
+  ApiPeer,
   ApiSticker,
-  ApiUser,
+  ApiStory,
+  ApiStorySkipped,
   ApiVideo,
 } from '../../../api/types';
+import type { RequiredGlobalActions } from '../../index';
+import type {
+  ActionReturnType, ApiDraft, GlobalState, TabArgs,
+} from '../../types';
 import { MAIN_THREAD_ID, MESSAGE_DELETED } from '../../../api/types';
 import { LoadMoreDirection } from '../../../types';
 
@@ -32,11 +33,25 @@ import {
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
-import { IS_IOS } from '../../../util/windowEnvironment';
-import { callApi, cancelApiProgress } from '../../../api/gramjs';
+import { ensureProtocol } from '../../../util/ensureProtocol';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import {
   areSortedArraysIntersecting, buildCollectionByKey, omit, split, unique,
 } from '../../../util/iteratees';
+import { translate } from '../../../util/langProvider';
+import { debounce, onTickEnd, rafPromise } from '../../../util/schedulers';
+import { IS_IOS } from '../../../util/windowEnvironment';
+import { callApi, cancelApiProgress } from '../../../api/gramjs';
+import {
+  getMessageOriginalId,
+  getUserFullName, isChatChannel,
+  isDeletedUser, isMessageLocal,
+  isServiceNotificationMessage,
+  isUserBot,
+} from '../../helpers';
+import {
+  addActionHandler, getActions, getGlobal, setGlobal,
+} from '../../index';
 import {
   addChatMessagesById,
   addChats,
@@ -61,12 +76,13 @@ import {
   updateThreadUnreadFromForwardedMessage,
   updateTopic,
 } from '../../reducers';
+import { updateTabState } from '../../reducers/tabs';
 import {
   selectChat,
   selectChatMessage,
-  selectTranslationLanguage,
   selectCurrentChat,
   selectCurrentMessageList,
+  selectCurrentViewedStory,
   selectDraft,
   selectEditingId,
   selectEditingMessage,
@@ -79,11 +95,12 @@ import {
   selectIsCurrentUserPremium,
   selectLanguageCode,
   selectListedIds,
+  selectMessageReplyInfo,
   selectNoWebPage,
   selectOutlyingListByMessageId,
+  selectPeerStory,
   selectPinnedIds,
   selectRealLastReadId,
-  selectReplyingToId,
   selectScheduledMessage,
   selectSendAs,
   selectSponsoredMessage,
@@ -91,22 +108,11 @@ import {
   selectThreadIdFromMessage,
   selectThreadOriginChat,
   selectThreadTopMessageId,
+  selectTranslationLanguage,
   selectUser,
   selectUserFullInfo,
   selectViewportIds,
 } from '../../selectors';
-import { debounce, onTickEnd, rafPromise } from '../../../util/schedulers';
-import {
-  getMessageOriginalId,
-  getUserFullName, isChatChannel,
-  isDeletedUser, isMessageLocal,
-  isServiceNotificationMessage,
-  isUserBot,
-} from '../../helpers';
-import { translate } from '../../../util/langProvider';
-import { ensureProtocol } from '../../../util/ensureProtocol';
-import { updateTabState } from '../../reducers/tabs';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { deleteMessages } from '../apiUpdaters/messages';
 
 const AUTOLOGIN_TOKEN_KEY = 'autologin_token';
@@ -241,11 +247,19 @@ addActionHandler('loadMessage', async (global, actions, payload): Promise<void> 
 addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => {
   const { messageList, tabId = getCurrentTabId() } = payload;
 
-  if (!messageList) {
+  const { storyId, peerId: storyPeerId } = selectCurrentViewedStory(global, tabId);
+  const isStoryReply = Boolean(storyId && storyPeerId);
+
+  if (!messageList && !isStoryReply) {
     return undefined;
   }
 
-  const { chatId, threadId, type } = messageList;
+  let { chatId, threadId, type } = messageList || {};
+  if (isStoryReply) {
+    chatId = storyPeerId!;
+    threadId = MAIN_THREAD_ID;
+    type = 'thread';
+  }
 
   payload = omit(payload, ['tabId']);
 
@@ -255,26 +269,31 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
     }, tabId);
   }
 
-  const chat = selectChat(global, chatId)!;
-  const replyingToId = selectReplyingToId(global, chatId, threadId);
-  const replyingToMessage = replyingToId ? selectChatMessage(global, chatId, replyingToId) : undefined;
+  const chat = selectChat(global, chatId!)!;
+  const draftReplyInfo = !isStoryReply ? selectDraft(global, chatId!, threadId!)?.replyInfo : undefined;
 
-  const replyingToTopId = chat.isForum
-    ? selectThreadTopMessageId(global, chatId, threadId)
-    : replyingToMessage?.replyToTopMessageId || replyingToMessage?.replyToMessageId;
+  const storyReplyInfo = isStoryReply ? {
+    type: 'story',
+    userId: storyPeerId!,
+    storyId: storyId!,
+  } satisfies ApiInputStoryReplyInfo : undefined;
+
+  const messageReplyInfo = selectMessageReplyInfo(global, chatId!, threadId!, draftReplyInfo);
+
+  const replyInfo = storyReplyInfo || messageReplyInfo;
 
   const params = {
     ...payload,
     chat,
-    currentThreadId: messageList.threadId,
-    replyingTo: replyingToId,
-    replyingToTopId,
-    noWebPage: selectNoWebPage(global, chatId, threadId),
-    sendAs: selectSendAs(global, chatId),
+    replyInfo,
+    noWebPage: selectNoWebPage(global, chatId!, threadId!),
+    sendAs: selectSendAs(global, chatId!),
   };
 
-  actions.setReplyingToId({ messageId: undefined, tabId });
-  actions.clearWebPagePreview({ tabId });
+  if (!isStoryReply) {
+    actions.resetDraftReplyInfo({ tabId });
+    actions.clearWebPagePreview({ tabId });
+  }
 
   const isSingle = !payload.attachments || payload.attachments.length <= 1;
   const isGrouped = !isSingle && payload.shouldGroupMessages;
@@ -318,7 +337,7 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
     });
   } else {
     const {
-      text, entities, attachments, replyingTo, ...commonParams
+      text, entities, attachments, replyInfo: replyToForFirstMessage, ...commonParams
     } = params;
 
     if (text) {
@@ -326,7 +345,7 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
         ...commonParams,
         text,
         entities,
-        replyingTo,
+        replyInfo: replyToForFirstMessage,
       });
     }
 
@@ -379,65 +398,122 @@ addActionHandler('cancelSendingMessage', (global, actions, payload): ActionRetur
   });
 });
 
-addActionHandler('saveDraft', async (global, actions, payload): Promise<void> => {
+addActionHandler('saveDraft', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, threadId, draft, shouldForce,
+    chatId, threadId, text,
   } = payload;
-  if (!draft) {
+  if (!text) {
     return;
   }
 
-  const { text, entities } = draft;
-  const chat = selectChat(global, chatId)!;
-  const user = selectUser(global, chatId)!;
-  if (user && isDeletedUser(user)) return;
+  const currentDraft = selectDraft(global, chatId, threadId);
 
-  draft.isLocal = true;
-  draft.shouldForce = shouldForce;
-  global = replaceThreadParam(global, chatId, threadId, 'draft', draft);
-  global = updateChat(global, chatId, { draftDate: Math.round(Date.now() / 1000) });
+  const newDraft: ApiDraft = {
+    text,
+    replyInfo: currentDraft?.replyInfo,
+  };
+
+  saveDraft(global, chatId, threadId, newDraft);
+});
+
+addActionHandler('clearDraft', (global, actions, payload): ActionReturnType => {
+  const {
+    chatId, threadId = MAIN_THREAD_ID, isLocalOnly, shouldKeepReply,
+  } = payload;
+  const currentDraft = selectDraft(global, chatId, threadId);
+  if (!currentDraft) {
+    return;
+  }
+
+  const currentReplyInfo = currentDraft.replyInfo;
+
+  const newDraft: ApiDraft | undefined = shouldKeepReply && currentReplyInfo ? {
+    replyInfo: currentReplyInfo,
+  } : undefined;
+
+  if (!isLocalOnly) {
+    saveDraft(global, chatId, threadId, newDraft);
+  }
+});
+
+addActionHandler('updateDraftReplyInfo', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId(), ...update } = payload;
+  const currentMessageList = selectCurrentMessageList(global, tabId);
+  if (!currentMessageList) {
+    return;
+  }
+
+  const { chatId, threadId } = currentMessageList;
+
+  const currentDraft = selectDraft(global, chatId, threadId);
+
+  const updatedReplyInfo = {
+    type: 'message',
+    ...currentDraft?.replyInfo,
+    ...update,
+  } as ApiInputMessageReplyInfo;
+
+  if (!updatedReplyInfo.replyToMsgId) return;
+
+  const newDraft: ApiDraft = {
+    ...currentDraft,
+    replyInfo: updatedReplyInfo,
+  };
+
+  saveDraft(global, chatId, threadId, newDraft);
+});
+
+addActionHandler('resetDraftReplyInfo', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const currentMessageList = selectCurrentMessageList(global, tabId);
+  if (!currentMessageList) {
+    return;
+  }
+  const { chatId, threadId } = currentMessageList;
+
+  const currentDraft = selectDraft(global, chatId, threadId);
+  const newDraft: ApiDraft | undefined = !currentDraft?.text ? undefined : {
+    ...currentDraft,
+    replyInfo: undefined,
+  };
+
+  saveDraft(global, chatId, threadId, newDraft);
+});
+
+async function saveDraft<T extends GlobalState>(global: T, chatId: string, threadId: number, draft?: ApiDraft) {
+  const chat = selectChat(global, chatId);
+  const user = selectUser(global, chatId);
+  if (!chat || (user && isDeletedUser(user))) return;
+
+  const replyInfo = selectMessageReplyInfo(global, chatId, threadId, draft?.replyInfo);
+
+  const newDraft: ApiDraft | undefined = draft ? {
+    ...draft,
+    replyInfo,
+    date: Math.floor(Date.now() / 1000),
+    isLocal: true,
+  } : undefined;
+
+  global = replaceThreadParam(global, chatId, threadId, 'draft', newDraft);
+  global = updateChat(global, chatId, { draftDate: newDraft?.date });
 
   setGlobal(global);
 
   const result = await callApi('saveDraft', {
     chat,
-    text,
-    entities,
-    replyToMsgId: selectReplyingToId(global, chatId, threadId),
-    threadId: selectThreadTopMessageId(global, chatId, threadId),
+    draft: newDraft,
   });
 
-  if (result) {
-    draft.isLocal = false;
+  if (result && newDraft) {
+    newDraft.isLocal = false;
   }
 
   global = getGlobal();
-  global = replaceThreadParam(global, chatId, threadId, 'draft', draft);
-  global = updateChat(global, chatId, { draftDate: Math.round(Date.now() / 1000) });
+  global = replaceThreadParam(global, chatId, threadId, 'draft', newDraft);
+  global = updateChat(global, chatId, { draftDate: newDraft?.date });
 
   setGlobal(global);
-});
-
-addActionHandler('clearDraft', (global, actions, payload): ActionReturnType => {
-  const {
-    chatId, threadId = MAIN_THREAD_ID, localOnly, shouldForce,
-  } = payload;
-  if (!selectDraft(global, chatId, threadId)) {
-    return undefined;
-  }
-
-  const chat = selectChat(global, chatId)!;
-
-  if (!localOnly) {
-    void callApi('clearDraft', chat, selectThreadTopMessageId(global, chatId, threadId));
-  }
-
-  const newDraft: ApiDraft | undefined = shouldForce ? { shouldForce, text: '' } : undefined;
-  global = replaceThreadParam(global, chatId, threadId, 'draft', newDraft);
-  global = updateChat(global, chatId, { draftDate: undefined });
-
-  return global;
-});
+}
 
 addActionHandler('toggleMessageWebPage', (global, actions, payload): ActionReturnType => {
   const { chatId, threadId, noWebPage } = payload!;
@@ -825,10 +901,11 @@ addActionHandler('forwardMessages', (global, actions, payload): ActionReturnType
       const { text, entities } = message.content.text || {};
       const { sticker, poll } = message.content;
 
+      const replyInfo = selectMessageReplyInfo(global, toChat.id, toThreadId);
+
       void sendMessage(global, {
         chat: toChat,
-        replyingToTopId: toThreadId,
-        currentThreadId: toThreadId || MAIN_THREAD_ID,
+        replyInfo,
         text,
         entities,
         sticker,
@@ -1091,7 +1168,7 @@ async function loadMessage<T extends GlobalState>(
       const replyMessage = selectChatMessage(global, chat.id, replyOriginForId);
       global = updateChatMessage(global, chat.id, replyOriginForId, {
         ...replyMessage,
-        replyToMessageId: undefined,
+        replyInfo: undefined,
       });
       setGlobal(global);
     }
@@ -1162,16 +1239,15 @@ async function sendMessage<T extends GlobalState>(global: T, params: {
   chat: ApiChat;
   text?: string;
   entities?: ApiMessageEntity[];
-  replyingTo?: number;
+  replyInfo?: ApiInputReplyInfo;
   attachment?: ApiAttachment;
   sticker?: ApiSticker;
+  story?: ApiStory | ApiStorySkipped;
   gif?: ApiVideo;
   poll?: ApiNewPoll;
   isSilent?: boolean;
   scheduledAt?: number;
-  sendAs?: ApiChat | ApiUser;
-  currentThreadId: number;
-  replyingToTopId?: number;
+  sendAs?: ApiPeer;
   groupedId?: string;
 }) {
   let localId: number | undefined;
@@ -1196,21 +1272,8 @@ async function sendMessage<T extends GlobalState>(global: T, params: {
   } : undefined;
 
   // @optimization
-  if (params.replyingTo || IS_IOS) {
+  if (params.replyInfo || IS_IOS) {
     await rafPromise();
-  }
-
-  global = getGlobal();
-  if (params.currentThreadId === undefined) {
-    return;
-  }
-
-  if (!params.replyingTo && params.currentThreadId !== MAIN_THREAD_ID) {
-    params.replyingTo = selectThreadTopMessageId(global, params.chat.id, params.currentThreadId)!;
-  }
-
-  if (params.replyingTo && !params.replyingToTopId && params.currentThreadId !== MAIN_THREAD_ID) {
-    params.replyingToTopId = selectThreadTopMessageId(global, params.chat.id, params.currentThreadId)!;
   }
 
   await callApi('sendMessage', params, progressCallback);
@@ -1400,8 +1463,13 @@ addActionHandler('readAllMentions', (global, actions, payload): ActionReturnType
 addActionHandler('openUrl', (global, actions, payload): ActionReturnType => {
   const { url, shouldSkipModal, tabId = getCurrentTabId() } = payload;
   const urlWithProtocol = ensureProtocol(url)!;
+  const isStoriesViewerOpen = Boolean(selectTabState(global, tabId).storyViewer.peerId);
 
   if (urlWithProtocol.match(RE_TME_LINK) || urlWithProtocol.match(RE_TG_LINK)) {
+    if (isStoriesViewerOpen) {
+      actions.closeStoryViewer({ tabId });
+    }
+
     actions.openTelegramLink({ url, tabId });
     return;
   }
@@ -1417,6 +1485,10 @@ addActionHandler('openUrl', (global, actions, payload): ActionReturnType => {
     }
 
     if (appConfig.urlAuthDomains.includes(parsedUrl.hostname)) {
+      if (isStoriesViewerOpen) {
+        actions.closeStoryViewer({ tabId });
+      }
+
       actions.requestLinkUrlAuth({ url, tabId });
       return;
     }
@@ -1487,6 +1559,35 @@ addActionHandler('forwardToSavedMessages', (global, actions, payload): ActionRet
 
   actions.exitMessageSelectMode({ tabId });
   actions.forwardMessages({ isSilent: true, tabId });
+});
+
+addActionHandler('forwardStory', (global, actions, payload): ActionReturnType => {
+  const { toChatId, tabId = getCurrentTabId() } = payload || {};
+
+  const { fromChatId, storyId } = selectTabState(global, tabId).forwardMessages;
+  const fromChat = fromChatId ? selectChat(global, fromChatId) : undefined;
+  const toChat = toChatId ? selectChat(global, toChatId) : undefined;
+  const story = fromChatId && storyId
+    ? selectPeerStory(global, fromChatId, storyId)
+    : undefined;
+
+  if (!fromChat || !toChat || !story || 'isDeleted' in story) {
+    return;
+  }
+
+  const { text, entities } = (story as ApiStory).content.text || {};
+  void sendMessage(global, {
+    chat: toChat,
+    text,
+    entities,
+    story,
+  });
+
+  global = getGlobal();
+  global = updateTabState(global, {
+    forwardMessages: {},
+  }, tabId);
+  setGlobal(global);
 });
 
 addActionHandler('requestMessageTranslation', (global, actions, payload): ActionReturnType => {

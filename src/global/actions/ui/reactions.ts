@@ -1,8 +1,7 @@
-import { addActionHandler } from '../../index';
-
 import type { ActionReturnType } from '../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { addActionHandler } from '../../index';
 import { updateTabState } from '../../reducers/tabs';
 import { selectTabState } from '../../selectors';
 
@@ -27,7 +26,7 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
   }, tabId);
 });
 
-addActionHandler('openReactionPicker', (global, actions, payload): ActionReturnType => {
+addActionHandler('openMessageReactionPicker', (global, actions, payload): ActionReturnType => {
   const {
     chatId,
     messageId,
@@ -44,6 +43,25 @@ addActionHandler('openReactionPicker', (global, actions, payload): ActionReturnT
   }, tabId);
 });
 
+addActionHandler('openStoryReactionPicker', (global, actions, payload): ActionReturnType => {
+  const {
+    peerId,
+    storyId,
+    position,
+    sendAsMessage,
+    tabId = getCurrentTabId(),
+  } = payload!;
+
+  return updateTabState(global, {
+    reactionPicker: {
+      storyPeerId: peerId,
+      storyId,
+      sendAsMessage,
+      position,
+    },
+  }, tabId);
+});
+
 addActionHandler('closeReactionPicker', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
   const tabState = selectTabState(global, tabId);
@@ -53,6 +71,8 @@ addActionHandler('closeReactionPicker', (global, actions, payload): ActionReturn
       ...tabState.reactionPicker,
       messageId: undefined,
       position: undefined,
+      storyId: undefined,
+      storyPeerId: undefined,
     },
   }, tabId);
 });

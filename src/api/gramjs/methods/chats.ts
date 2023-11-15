@@ -1,76 +1,77 @@
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
+
+import type { ApiDraft } from '../../../global/types';
 import type {
-  OnApiUpdate,
   ApiChat,
-  ApiMessage,
-  ApiUser,
-  ApiMessageEntity,
-  ApiFormattedText,
-  ApiChatFullInfo,
-  ApiChatFolder,
-  ApiChatBannedRights,
   ApiChatAdminRights,
+  ApiChatBannedRights,
+  ApiChatFolder,
+  ApiChatFullInfo,
+  ApiChatReactions,
   ApiGroupCall,
-  ApiUserStatus,
+  ApiMessage,
+  ApiPeer,
   ApiPhoto,
   ApiTopic,
-  ApiChatReactions,
+  ApiUser,
+  ApiUserStatus,
+  OnApiUpdate,
 } from '../../types';
 
 import {
-  DEBUG,
+  ALL_FOLDER_ID,
   ARCHIVED_FOLDER_ID,
+  DEBUG,
+  GENERAL_TOPIC_ID,
+  MAX_INT_32,
   MEMBERS_LOAD_SLICE,
   SERVICE_NOTIFICATIONS_USER_ID,
-  ALL_FOLDER_ID,
-  MAX_INT_32,
   TOPICS_SLICE,
-  GENERAL_TOPIC_ID,
 } from '../../../config';
-import { invokeRequest, uploadFile } from './client';
-import {
-  buildApiChatFromDialog,
-  getPeerKey,
-  buildChatMembers,
-  buildApiChatFromPreview,
-  buildApiChatFolder,
-  buildApiChatFolderFromSuggested,
-  buildApiChatBotCommands,
-  buildApiChatSettings,
-  buildApiChatReactions,
-  buildApiTopic,
-  buildApiChatlistInvite,
-  buildApiChatlistExportedInvite,
-} from '../apiBuilders/chats';
-import { buildApiMessage, buildMessageDraft } from '../apiBuilders/messages';
-import { buildApiUser, buildApiUsersAndStatuses } from '../apiBuilders/users';
 import { buildCollectionByKey } from '../../../util/iteratees';
 import {
+  buildApiChatBotCommands,
+  buildApiChatFolder,
+  buildApiChatFolderFromSuggested,
+  buildApiChatFromDialog,
+  buildApiChatFromPreview,
+  buildApiChatlistExportedInvite,
+  buildApiChatlistInvite,
+  buildApiChatReactions,
+  buildApiChatSettings,
+  buildApiTopic,
+  buildChatMembers,
+  getPeerKey,
+} from '../apiBuilders/chats';
+import { buildApiPhoto } from '../apiBuilders/common';
+import { buildApiMessage, buildMessageDraft } from '../apiBuilders/messages';
+import { buildApiPeerId, getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
+import { buildStickerSet } from '../apiBuilders/symbols';
+import { buildApiUser, buildApiUsersAndStatuses } from '../apiBuilders/users';
+import {
+  buildChatAdminRights,
+  buildChatBannedRights,
+  buildFilterFromApiFolder,
+  buildInputChatReactions,
   buildInputEntity,
   buildInputPeer,
-  buildMtpMessageEntity,
-  buildFilterFromApiFolder,
-  isMessageWithMedia,
-  buildChatBannedRights,
-  buildChatAdminRights,
-  buildInputChatReactions,
   buildInputPhoto,
+  buildInputReplyTo,
+  buildMtpMessageEntity,
   generateRandomBigInt,
+  isMessageWithMedia,
 } from '../gramjsBuilders';
 import {
   addEntitiesToLocalDb,
   addMessageToLocalDb,
   addPhotoToLocalDb,
   isChatFolder,
-
 } from '../helpers';
-import { buildApiPeerId, getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
-import { buildApiPhoto } from '../apiBuilders/common';
-import { buildStickerSet } from '../apiBuilders/symbols';
 import localDb from '../localDb';
-import { updateChannelState } from '../updateManager';
 import { scheduleMutedChatUpdate } from '../scheduleUnmute';
+import { applyState, updateChannelState } from '../updateManager';
+import { invokeRequest, uploadFile } from './client';
 
 type FullChatData = {
   fullInfo: ApiChatFullInfo;
@@ -134,7 +135,7 @@ export async function fetchChats({
   }
 
   const chats: ApiChat[] = [];
-  const draftsById: Record<string, ApiFormattedText> = {};
+  const draftsById: Record<string, ApiDraft> = {};
   const replyingToById: Record<string, number> = {};
 
   const dialogs = (resultPinned ? resultPinned.dialogs : []).concat(result.dialogs);
@@ -179,12 +180,9 @@ export async function fetchChats({
     }
 
     if (dialog.draft) {
-      const { formattedText, replyingToId } = buildMessageDraft(dialog.draft) || {};
-      if (formattedText) {
-        draftsById[chat.id] = formattedText;
-      }
-      if (replyingToId) {
-        replyingToById[chat.id] = replyingToId;
+      const draft = buildMessageDraft(dialog.draft);
+      if (draft) {
+        draftsById[chat.id] = draft;
       }
     }
   });
@@ -356,38 +354,23 @@ export async function requestChatUpdate({
     chat: chatUpdate,
   });
 
+  applyState(result.state);
+
   scheduleMutedChatUpdate(chatUpdate.id, chatUpdate.muteUntil, onUpdate);
 }
 
 export function saveDraft({
   chat,
-  text,
-  entities,
-  threadId,
-  replyToMsgId,
+  draft,
 }: {
   chat: ApiChat;
-  text: string;
-  entities?: ApiMessageEntity[];
-  threadId?: number;
-  replyToMsgId?: number;
+  draft?: ApiDraft;
 }) {
   return invokeRequest(new GramJs.messages.SaveDraft({
     peer: buildInputPeer(chat.id, chat.accessHash),
-    message: text,
-    ...(entities && {
-      entities: entities.map(buildMtpMessageEntity),
-    }),
-    replyToMsgId,
-    topMsgId: threadId,
-  }));
-}
-
-export function clearDraft(chat: ApiChat, threadId?: number) {
-  return invokeRequest(new GramJs.messages.SaveDraft({
-    peer: buildInputPeer(chat.id, chat.accessHash),
-    message: '',
-    ...(threadId && { topMsgId: threadId }),
+    message: draft?.text?.text || '',
+    entities: draft?.text?.entities?.map(buildMtpMessageEntity),
+    replyTo: draft?.replyInfo && buildInputReplyTo(draft.replyInfo),
   }));
 }
 
@@ -493,6 +476,7 @@ async function getFullChannelInfo(
     chatPhoto,
     participantsHidden,
     translationsDisabled,
+    storiesPinnedAvailable,
   } = result.fullChat;
 
   if (chatPhoto instanceof GramJs.Photo) {
@@ -567,6 +551,7 @@ async function getFullChannelInfo(
       stickerSet: stickerset ? buildStickerSet(stickerset) : undefined,
       areParticipantsHidden: participantsHidden,
       isTranslationDisabled: translationsDisabled,
+      hasPinnedStories: Boolean(storiesPinnedAvailable),
     },
     users: [...(users || []), ...(bannedUsers || []), ...(adminUsers || [])],
     userStatusesById: statusesById,
@@ -1221,7 +1206,14 @@ export async function migrateChat(chat: ApiChat) {
 
   updateLocalDb(result);
 
-  return buildApiChatFromPreview(result.chats[1]);
+  const newChannelId = result.updates
+    .find((update): update is GramJs.UpdateChannel => update instanceof GramJs.UpdateChannel)!.channelId;
+
+  const newChannel = result.chats.find((c) => (
+    c instanceof GramJs.Channel && c.id.toString() === newChannelId.toString()
+  ))!;
+
+  return buildApiChatFromPreview(newChannel);
 }
 
 export async function openChatByInvite(hash: string) {
@@ -1478,7 +1470,7 @@ export async function createTopic({
   title: string;
   iconColor?: number;
   iconEmojiId?: string;
-  sendAs?: ApiUser | ApiChat;
+  sendAs?: ApiPeer;
 }) {
   const { id, accessHash } = chat;
 
@@ -1737,7 +1729,7 @@ export async function createChalistInvite({
 }: {
   folderId: number;
   title?: string;
-  peers: (ApiChat | ApiUser)[];
+  peers: ApiPeer[];
 }) {
   const result = await invokeRequest(new GramJs.chatlists.ExportChatlistInvite({
     chatlist: new GramJs.InputChatlistDialogFilter({
@@ -1777,7 +1769,7 @@ export async function editChatlistInvite({
   folderId: number;
   slug: string;
   title?: string;
-  peers: (ApiChat | ApiUser)[];
+  peers: ApiPeer[];
 }) {
   const result = await invokeRequest(new GramJs.chatlists.EditExportedInvite({
     chatlist: new GramJs.InputChatlistDialogFilter({

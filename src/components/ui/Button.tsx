@@ -1,16 +1,15 @@
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
-
 import type { FC } from '../../lib/teact/teact';
 import React, { useRef, useState } from '../../lib/teact/teact';
 
-import { IS_TOUCH_ENV, MouseButton } from '../../util/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
+import { IS_TOUCH_ENV, MouseButton } from '../../util/windowEnvironment';
 
 import useLastCallback from '../../hooks/useLastCallback';
 
-import Spinner from './Spinner';
 import RippleEffect from './RippleEffect';
+import Spinner from './Spinner';
 
 import './Button.scss';
 
@@ -21,7 +20,7 @@ export type OwnProps = {
   size?: 'default' | 'smaller' | 'tiny';
   color?: (
     'primary' | 'secondary' | 'gray' | 'danger' | 'translucent' | 'translucent-white' | 'translucent-black'
-    | 'translucent-bordered' | 'dark'
+    | 'translucent-bordered' | 'dark' | 'green' | 'adaptive'
   );
   backgroundImage?: string;
   id?: string;
@@ -44,6 +43,7 @@ export type OwnProps = {
   tabIndex?: number;
   isRtl?: boolean;
   isShiny?: boolean;
+  isRectangular?: boolean;
   withPremiumGradient?: boolean;
   noPreventDefault?: boolean;
   shouldStopPropagation?: boolean;
@@ -97,6 +97,7 @@ const Button: FC<OwnProps> = ({
   faded,
   tabIndex,
   isRtl,
+  isRectangular,
   noPreventDefault,
   shouldStopPropagation,
   style,
@@ -127,6 +128,7 @@ const Button: FC<OwnProps> = ({
     backgroundImage && 'with-image',
     isShiny && 'shiny',
     withPremiumGradient && 'premium',
+    isRectangular && 'rectangular',
   );
 
   const handleClick = useLastCallback((e: ReactMouseEvent<HTMLButtonElement, MouseEvent>) => {

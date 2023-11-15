@@ -1,17 +1,17 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
   memo, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
-import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
 import { getActions, withGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
 import type { MessageListType } from '../../global/types';
-import { MAIN_THREAD_ID } from '../../api/types';
 import type { IAnchorPosition } from '../../types';
+import { MAIN_THREAD_ID } from '../../api/types';
 import { ManagementScreens } from '../../types';
 
-import { ARE_CALLS_SUPPORTED, IS_APP } from '../../util/windowEnvironment';
+import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
 import {
+  getHasAdminRight,
   isChatBasicGroup, isChatChannel, isChatSuperGroup, isUserId,
 } from '../../global/helpers';
 import {
@@ -30,23 +30,24 @@ import {
   selectTranslationLanguage,
   selectUserFullInfo,
 } from '../../global/selectors';
+import { ARE_CALLS_SUPPORTED, IS_APP } from '../../util/windowEnvironment';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useLang from '../../hooks/useLang';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
 import Button from '../ui/Button';
-import HeaderMenuContainer from './HeaderMenuContainer.async';
 import DropdownMenu from '../ui/DropdownMenu';
 import MenuItem from '../ui/MenuItem';
 import MenuSeparator from '../ui/MenuSeparator';
+import HeaderMenuContainer from './HeaderMenuContainer.async';
 
 interface OwnProps {
   chatId: string;
   threadId: number;
   messageListType: MessageListType;
   canExpandActions: boolean;
-  withForumActions?: boolean;
+  isForForum?: boolean;
   isMobile?: boolean;
   onTopicSearch?: NoneToVoidFunction;
 }
@@ -57,11 +58,13 @@ interface StateProps {
   isRightColumnShown?: boolean;
   canStartBot?: boolean;
   canRestartBot?: boolean;
+  canUnblock?: boolean;
   canSubscribe?: boolean;
   canSearch?: boolean;
   canCall?: boolean;
   canMute?: boolean;
   canViewStatistics?: boolean;
+  canViewBoosts?: boolean;
   canLeave?: boolean;
   canEnterVoiceChat?: boolean;
   canCreateVoiceChat?: boolean;
@@ -88,17 +91,19 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   isChannel,
   canStartBot,
   canRestartBot,
+  canUnblock,
   canSubscribe,
   canSearch,
   canCall,
   canMute,
   canViewStatistics,
+  canViewBoosts,
   canLeave,
   canEnterVoiceChat,
   canCreateVoiceChat,
   pendingJoinRequests,
   isRightColumnShown,
-  withForumActions,
+  isForForum,
   canExpandActions,
   shouldJoinToSend,
   shouldSendJoinRequest,
@@ -124,6 +129,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
     togglePeerTranslations,
     openChatLanguageModal,
     setSettingOption,
+    unblockUser,
   } = getActions();
   // eslint-disable-next-line no-null/no-null
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -162,6 +168,10 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
     restartBot({ chatId });
   });
 
+  const handleUnblock = useLastCallback(() => {
+    unblockUser({ userId: chatId });
+  });
+
   const handleTranslateClick = useLastCallback(() => {
     if (isTranslating) {
       requestChatTranslation({ chatId, toLanguageCode: undefined });
@@ -176,7 +186,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   });
 
   const handleSearchClick = useLastCallback(() => {
-    if (withForumActions) {
+    if (isForForum) {
       onTopicSearch?.();
       return;
     }
@@ -281,7 +291,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
 
   return (
     <div className="HeaderActions">
-      {canTranslate && (
+      {!isForForum && canTranslate && (
         <DropdownMenu
           className="stickers-more-menu with-menu-transitions"
           trigger={MoreMenuButton}
@@ -341,6 +351,16 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
               {lang('BotRestart')}
             </Button>
           )}
+          {canExpandActions && canUnblock && (
+            <Button
+              size="tiny"
+              ripple
+              fluid
+              onClick={handleUnblock}
+            >
+              {lang('Unblock')}
+            </Button>
+          )}
           {canSearch && (
             <Button
               round
@@ -367,7 +387,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           )}
         </>
       )}
-      {!withForumActions && Boolean(pendingJoinRequests) && (
+      {!isForForum && Boolean(pendingJoinRequests) && (
         <Button
           round
           className="badge-button"
@@ -403,18 +423,18 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           withExtraActions={isMobile || !canExpandActions}
           isChannel={isChannel}
           canStartBot={canStartBot}
-          canRestartBot={canRestartBot}
           canSubscribe={canSubscribe}
           canSearch={canSearch}
           canCall={canCall}
           canMute={canMute}
           canViewStatistics={canViewStatistics}
+          canViewBoosts={canViewBoosts}
           canLeave={canLeave}
           canEnterVoiceChat={canEnterVoiceChat}
           canCreateVoiceChat={canCreateVoiceChat}
           pendingJoinRequests={pendingJoinRequests}
           onJoinRequestsClick={handleJoinRequestsClick}
-          withForumActions={withForumActions}
+          withForumActions={isForForum}
           onSubscribeChannel={handleSubscribeClick}
           onSearchClick={handleSearchClick}
           onAsMessagesClick={handleAsMessagesClick}
@@ -434,6 +454,7 @@ export default memo(withGlobal<OwnProps>(
     const isChannel = Boolean(chat && isChatChannel(chat));
     const language = selectLanguageCode(global);
     const translationLanguage = selectTranslationLanguage(global);
+    const isPrivate = isUserId(chatId);
     const { doNotTranslate } = global.settings.byKey;
 
     if (!chat || chat.isRestricted || selectIsInSelectMode(global)) {
@@ -446,16 +467,18 @@ export default memo(withGlobal<OwnProps>(
     }
 
     const bot = selectBot(global, chatId);
-    const chatFullInfo = !isUserId(chatId) ? selectChatFullInfo(global, chatId) : undefined;
-    const userFullInfo = isUserId(chatId) ? selectUserFullInfo(global, chatId) : undefined;
+    const chatFullInfo = !isPrivate ? selectChatFullInfo(global, chatId) : undefined;
+    const userFullInfo = isPrivate ? selectUserFullInfo(global, chatId) : undefined;
     const fullInfo = chatFullInfo || userFullInfo;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;
     const isDiscussionThread = messageListType === 'thread' && threadId !== MAIN_THREAD_ID;
     const isRightColumnShown = selectIsRightColumnShown(global, isMobile);
 
-    const canRestartBot = Boolean(bot && selectIsUserBlocked(global, bot.id));
+    const isUserBlocked = isPrivate ? selectIsUserBlocked(global, chatId) : false;
+    const canRestartBot = Boolean(bot && isUserBlocked);
     const canStartBot = !canRestartBot && Boolean(selectIsChatBotNotStarted(global, chatId));
+    const canUnblock = isUserBlocked && !bot;
     const canSubscribe = Boolean(
       (isMainThread || chat.isForum) && (isChannel || isChatSuperGroup(chat)) && chat.isNotJoined,
     );
@@ -467,6 +490,7 @@ export default memo(withGlobal<OwnProps>(
     const canCreateVoiceChat = ARE_CALLS_SUPPORTED && isMainThread && !chat.isCallActive
       && (chat.adminRights?.manageCall || (chat.isCreator && isChatBasicGroup(chat)));
     const canViewStatistics = isMainThread && chatFullInfo?.canViewStatistics;
+    const canViewBoosts = isMainThread && isChannel && (canViewStatistics || getHasAdminRight(chat, 'postStories'));
     const pendingJoinRequests = isMainThread ? chatFullInfo?.requestsPending : undefined;
     const shouldJoinToSend = Boolean(chat?.isNotJoined && chat.isJoinToSend);
     const shouldSendJoinRequest = Boolean(chat?.isNotJoined && chat.isJoinRequest);
@@ -486,6 +510,7 @@ export default memo(withGlobal<OwnProps>(
       canCall,
       canMute,
       canViewStatistics,
+      canViewBoosts,
       canLeave,
       canEnterVoiceChat,
       canCreateVoiceChat,
@@ -499,6 +524,7 @@ export default memo(withGlobal<OwnProps>(
       language,
       doNotTranslate,
       detectedChatLanguage: chat.detectedLanguage,
+      canUnblock,
     };
   },
 )(HeaderActions));

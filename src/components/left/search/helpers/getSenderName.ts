@@ -1,11 +1,12 @@
 import type { ApiChat, ApiMessage, ApiUser } from '../../../../api/types';
+import type { LangFn } from '../../../../hooks/useLang';
+
 import {
   getChatTitle,
   getSenderTitle,
-  isUserId,
   isChatGroup,
+  isUserId,
 } from '../../../../global/helpers';
-import type { LangFn } from '../../../../hooks/useLang';
 
 export function getSenderName(
   lang: LangFn, message: ApiMessage, chatsById: Record<string, ApiChat>, usersById: Record<string, ApiUser>,
@@ -21,7 +22,7 @@ export function getSenderName(
 
   const chat = chatsById[message.chatId];
   if (chat) {
-    if (isUserId(senderId) && (sender as ApiUser).isSelf) {
+    if ('isSelf' in sender && sender.isSelf) {
       senderName = `${lang('FromYou')} → ${getChatTitle(lang, chat)}`;
     } else if (isChatGroup(chat)) {
       senderName += ` → ${getChatTitle(lang, chat)}`;

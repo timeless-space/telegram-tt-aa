@@ -8,26 +8,25 @@ import {
 } from '../api/types';
 
 import {
-  DEBUG, MEDIA_CACHE_DISABLED, MEDIA_CACHE_NAME, MEDIA_CACHE_NAME_AVATARS, IS_ELECTRON, ELECTRON_HOST_URL,
+  DEBUG, ELECTRON_HOST_URL,
+  IS_ELECTRON_BUILD, MEDIA_CACHE_DISABLED, MEDIA_CACHE_NAME, MEDIA_CACHE_NAME_AVATARS,
 } from '../config';
 import { callApi, cancelApiProgress } from '../api/gramjs';
 import * as cacheApi from './cacheApi';
 import { fetchBlob } from './files';
-import {
-  IS_OPUS_SUPPORTED, IS_PROGRESSIVE_SUPPORTED, isWebpSupported,
-} from './windowEnvironment';
 import { oggToWav } from './oggToWav';
-import { webpToPng } from './webpToPng';
+import {
+  IS_OPUS_SUPPORTED, IS_PROGRESSIVE_SUPPORTED,
+} from './windowEnvironment';
 
 const asCacheApiType = {
   [ApiMediaFormat.BlobUrl]: cacheApi.Type.Blob,
   [ApiMediaFormat.Text]: cacheApi.Type.Text,
   [ApiMediaFormat.DownloadUrl]: undefined,
   [ApiMediaFormat.Progressive]: undefined,
-  [ApiMediaFormat.Stream]: undefined,
 };
 
-const PROGRESSIVE_URL_PREFIX = `${IS_ELECTRON ? ELECTRON_HOST_URL : '.'}/progressive/`;
+const PROGRESSIVE_URL_PREFIX = `${IS_ELECTRON_BUILD ? ELECTRON_HOST_URL : '.'}/progressive/`;
 const URL_DOWNLOAD_PREFIX = './download/';
 const RETRY_MEDIA_AFTER = 2000;
 const MAX_MEDIA_RETRIES = 3;
@@ -142,42 +141,12 @@ async function fetchFromCacheOrRemote(
         media = await oggToWav(media);
       }
 
-      if (cached.type === 'image/webp' && !isWebpSupported() && media) {
-        const mediaPng = await webpToPng(url, media);
-        if (mediaPng) {
-          media = mediaPng;
-        }
-      }
-
       const prepared = prepareMedia(media);
 
       memoryCache.set(url, prepared);
 
       return prepared;
     }
-  }
-
-  if (mediaFormat === ApiMediaFormat.Stream) {
-    const mediaSource = new MediaSource();
-    const streamUrl = URL.createObjectURL(mediaSource);
-    let isOpen = false;
-
-    mediaSource.addEventListener('sourceopen', () => {
-      if (isOpen) {
-        return;
-      }
-      isOpen = true;
-
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-
-      const onProgress = makeOnProgress(url, mediaSource, sourceBuffer);
-      cancellableCallbacks.set(url, onProgress);
-
-      void callApi('downloadMedia', { url, mediaFormat }, onProgress);
-    });
-
-    memoryCache.set(url, streamUrl);
-    return streamUrl;
   }
 
   const onProgress = makeOnProgress(url);
@@ -207,36 +176,17 @@ async function fetchFromCacheOrRemote(
     mimeType = media.type;
   }
 
-  if (mimeType === 'image/webp' && !isWebpSupported()) {
-    const blob = await fetchBlob(prepared as string);
-    URL.revokeObjectURL(prepared as string);
-    const media = await webpToPng(url, blob);
-    if (media) {
-      prepared = prepareMedia(media);
-    }
-  }
-
   memoryCache.set(url, prepared);
 
   return prepared;
 }
 
-function makeOnProgress(url: string, mediaSource?: MediaSource, sourceBuffer?: SourceBuffer) {
-  const onProgress: ApiOnProgress = (progress: number, arrayBuffer: ArrayBuffer) => {
+function makeOnProgress(url: string) {
+  const onProgress: ApiOnProgress = (progress: number) => {
     progressCallbacks.get(url)?.forEach((callback) => {
       callback(progress);
       if (callback.isCanceled) onProgress.isCanceled = true;
     });
-
-    if (progress === 1) {
-      mediaSource?.endOfStream();
-    }
-
-    if (!arrayBuffer) {
-      return;
-    }
-
-    sourceBuffer?.appendBuffer(arrayBuffer);
   };
 
   return onProgress;

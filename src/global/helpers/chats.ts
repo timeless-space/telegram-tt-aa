@@ -1,25 +1,26 @@
 import type {
   ApiChat,
-  ApiUser,
-  ApiChatBannedRights,
   ApiChatAdminRights,
+  ApiChatBannedRights,
   ApiChatFolder,
+  ApiPeer,
   ApiTopic,
+  ApiUser,
 } from '../../api/types';
+import type { LangFn } from '../../hooks/useLang';
+import type { NotifyException, NotifySettings } from '../../types';
 import {
   MAIN_THREAD_ID,
 } from '../../api/types';
 
-import type { NotifyException, NotifySettings } from '../../types';
-import type { LangFn } from '../../hooks/useLang';
-
 import {
-  ARCHIVED_FOLDER_ID, GENERAL_TOPIC_ID, REPLIES_USER_ID, TME_LINK_PREFIX,
+  ARCHIVED_FOLDER_ID, CHANNEL_ID_LENGTH, GENERAL_TOPIC_ID, REPLIES_USER_ID, TME_LINK_PREFIX,
 } from '../../config';
-import { orderBy } from '../../util/iteratees';
-import { getUserFirstOrLastName } from './users';
 import { formatDateToString, formatTime } from '../../util/dateFormat';
+import { orderBy } from '../../util/iteratees';
 import { prepareSearchWordsForNeedle } from '../../util/searchWords';
+import { getGlobal } from '..';
+import { getMainUsername, getUserFirstOrLastName } from './users';
 
 const FOREVER_BANNED_DATE = Date.now() / 1000 + 31622400; // 366 days
 
@@ -27,12 +28,19 @@ const VERIFIED_PRIORITY_BASE = 3e9;
 const PINNED_PRIORITY_BASE = 3e8;
 
 export function isUserId(entityId: string) {
-  // Workaround for old-fashioned IDs stored locally
-  if (typeof entityId === 'number') {
-    return entityId > 0;
-  }
-
   return !entityId.startsWith('-');
+}
+
+export function isChannelId(entityId: string) {
+  return entityId.length === CHANNEL_ID_LENGTH && entityId.startsWith('-100');
+}
+
+export function toChannelId(mtpId: string) {
+  return `-100${mtpId}`;
+}
+
+export function isApiPeerChat(peer: ApiPeer): peer is ApiChat {
+  return 'title' in peer;
 }
 
 export function isChatGroup(chat: ApiChat) {
@@ -88,24 +96,13 @@ export function getChatTitle(lang: LangFn, chat: ApiChat, isSelf = false) {
 }
 
 export function getChatLink(chat: ApiChat) {
-  const activeUsername = chat.usernames?.find((u) => u.isActive);
+  const activeUsername = getMainUsername(chat);
 
-  return activeUsername ? `${TME_LINK_PREFIX}${activeUsername.username}` : undefined;
-}
-
-export function getChatMessageLink(chatId: string, chatUsername?: string, threadId?: number, messageId?: number) {
-  const chatPart = chatUsername || `c/${chatId.replace('-', '')}`;
-  const threadPart = threadId && threadId !== MAIN_THREAD_ID ? `/${threadId}` : '';
-  const messagePart = messageId ? `/${messageId}` : '';
-  return `${TME_LINK_PREFIX}${chatPart}${threadPart}${messagePart}`;
-}
-
-export function getTopicLink(chatId: string, chatUsername?: string, topicId?: number) {
-  return getChatMessageLink(chatId, chatUsername, topicId);
+  return activeUsername ? `${TME_LINK_PREFIX}${activeUsername}` : undefined;
 }
 
 export function getChatAvatarHash(
-  owner: ApiChat | ApiUser,
+  owner: ApiPeer,
   size: 'normal' | 'big' = 'normal',
   avatarHash = owner.avatarHash,
 ) {
@@ -194,7 +191,11 @@ export interface IAllowedAttachmentOptions {
   canSendDocuments: boolean;
 }
 
-export function getAllowedAttachmentOptions(chat?: ApiChat, isChatWithBot = false): IAllowedAttachmentOptions {
+export function getAllowedAttachmentOptions(
+  chat?: ApiChat,
+  isChatWithBot = false,
+  isStoryReply = false,
+): IAllowedAttachmentOptions {
   if (!chat) {
     return {
       canAttachMedia: false,
@@ -215,18 +216,20 @@ export function getAllowedAttachmentOptions(chat?: ApiChat, isChatWithBot = fals
   const isAdmin = isChatAdmin(chat);
 
   return {
-    canAttachMedia: isAdmin || !isUserRightBanned(chat, 'sendMedia'),
-    canAttachPolls: (isAdmin || !isUserRightBanned(chat, 'sendPolls')) && (!isUserId(chat.id) || isChatWithBot),
-    canSendStickers: isAdmin || !isUserRightBanned(chat, 'sendStickers'),
-    canSendGifs: isAdmin || !isUserRightBanned(chat, 'sendGifs'),
-    canAttachEmbedLinks: isAdmin || !isUserRightBanned(chat, 'embedLinks'),
-    canSendPhotos: isAdmin || !isUserRightBanned(chat, 'sendPhotos'),
-    canSendVideos: isAdmin || !isUserRightBanned(chat, 'sendVideos'),
-    canSendRoundVideos: isAdmin || !isUserRightBanned(chat, 'sendRoundvideos'),
-    canSendAudios: isAdmin || !isUserRightBanned(chat, 'sendAudios'),
-    canSendVoices: isAdmin || !isUserRightBanned(chat, 'sendVoices'),
-    canSendPlainText: isAdmin || !isUserRightBanned(chat, 'sendPlain'),
-    canSendDocuments: isAdmin || !isUserRightBanned(chat, 'sendDocs'),
+    canAttachMedia: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendMedia'),
+    canAttachPolls: !isStoryReply
+      && (isAdmin || !isUserRightBanned(chat, 'sendPolls'))
+      && (!isUserId(chat.id) || isChatWithBot),
+    canSendStickers: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendStickers'),
+    canSendGifs: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendGifs'),
+    canAttachEmbedLinks: !isStoryReply && (isAdmin || !isUserRightBanned(chat, 'embedLinks')),
+    canSendPhotos: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendPhotos'),
+    canSendVideos: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendVideos'),
+    canSendRoundVideos: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendRoundvideos'),
+    canSendAudios: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendAudios'),
+    canSendVoices: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendVoices'),
+    canSendPlainText: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendPlain'),
+    canSendDocuments: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendDocs'),
   };
 }
 
@@ -356,7 +359,7 @@ export function getFolderDescriptionText(lang: LangFn, folder: ApiChatFolder, ch
   }
 }
 
-export function getMessageSenderName(lang: LangFn, chatId: string, sender?: ApiUser | ApiChat) {
+export function getMessageSenderName(lang: LangFn, chatId: string, sender?: ApiPeer) {
   if (!sender || isUserId(chatId)) {
     return undefined;
   }
@@ -458,4 +461,24 @@ export function getOrderedTopics(
 
     return [...pinnedOrdered, ...ordered, ...hidden];
   }
+}
+
+export function getCleanPeerId(peerId: string) {
+  return isChannelId(peerId) ? peerId.replace('-100', '') : peerId.replace('-', '');
+}
+
+export function getPeerIdDividend(peerId: string) {
+  return Math.abs(Number(getCleanPeerId(peerId)));
+}
+
+export function getPeerColorKey(peer: ApiPeer | undefined) {
+  if (peer?.color) return peer.color;
+
+  const index = peer ? getPeerIdDividend(peer.id) % 7 : 0;
+  return index;
+}
+
+export function getPeerColorCount(peer: ApiPeer) {
+  const key = getPeerColorKey(peer);
+  return getGlobal().appConfig?.peerColors?.[key]?.length || 1;
 }

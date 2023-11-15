@@ -1,22 +1,24 @@
 import type { FC } from '../../../lib/teact/teact';
 import React, {
-  memo, useState, useEffect, useRef, useMemo,
+  memo, useEffect, useMemo,
+  useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import { callApi } from '../../../api/gramjs';
 import type {
-  ApiMessage,
   ApiChannelStatistics,
   ApiGroupStatistics,
-  StatisticsRecentMessage as StatisticsRecentMessageType,
+  ApiMessage,
   StatisticsGraph,
+  StatisticsRecentMessage as StatisticsRecentMessageType,
 } from '../../../api/types';
-import { selectChat, selectChatFullInfo, selectStatistics } from '../../../global/selectors';
 
+import { selectChat, selectChatFullInfo, selectStatistics } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import useLang from '../../../hooks/useLang';
+import { callApi } from '../../../api/gramjs';
+
 import useForceUpdate from '../../../hooks/useForceUpdate';
+import useLang from '../../../hooks/useLang';
 
 import Loading from '../../ui/Loading';
 import StatisticsOverview from './StatisticsOverview';
@@ -176,7 +178,11 @@ const Statistics: FC<OwnProps & StateProps> = ({
 
   return (
     <div className={buildClassName('Statistics custom-scroll', isReady && 'ready')}>
-      <StatisticsOverview statistics={statistics} isGroup={isGroup} />
+      <StatisticsOverview
+        statistics={statistics}
+        type={isGroup ? 'group' : 'channel'}
+        title={lang('StatisticOverview')}
+      />
 
       {!loadedCharts.current.length && <Loading />}
 

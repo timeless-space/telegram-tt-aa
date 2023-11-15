@@ -1,19 +1,22 @@
 import { useEffect, useRef } from '../../../../lib/teact/teact';
+
 import { requestMeasure } from '../../../../lib/fasterdom/fasterdom';
 
-import useLastCallback from '../../../../hooks/useLastCallback';
 import useBackgroundMode, { isBackgroundModeActive } from '../../../../hooks/useBackgroundMode';
 import useHeavyAnimationCheck, { isHeavyAnimating } from '../../../../hooks/useHeavyAnimationCheck';
+import useLastCallback from '../../../../hooks/useLastCallback';
 import usePriorityPlaybackCheck, { isPriorityPlaybackActive } from '../../../../hooks/usePriorityPlaybackCheck';
 
-export default function useVideoAutoPause(playerRef: { current: HTMLVideoElement | null }, canPlay: boolean) {
+export default function useVideoAutoPause(
+  playerRef: { current: HTMLVideoElement | null }, canPlay: boolean, isPriority?: boolean,
+) {
   const canPlayRef = useRef();
   canPlayRef.current = canPlay;
 
   const { play, pause } = usePlayPause(playerRef);
 
   const unfreezePlaying = useLastCallback(() => {
-    if (canPlayRef.current && !isFrozen()) {
+    if (canPlayRef.current && (isPriority || !isFrozen())) {
       play();
     }
   });
@@ -27,20 +30,20 @@ export default function useVideoAutoPause(playerRef: { current: HTMLVideoElement
   usePriorityPlaybackCheck(pause, unfreezePlaying, !canPlay);
 
   const handlePlaying = useLastCallback(() => {
-    if (!canPlayRef.current || isFrozen()) {
+    if (!canPlayRef.current || (!isPriority && isFrozen())) {
       pause();
     }
   });
 
   useEffect(() => {
     if (canPlay) {
-      if (!isFrozen()) {
+      if (isPriority || !isFrozen()) {
         play();
       }
     } else {
       pause();
     }
-  }, [canPlay, play, pause]);
+  }, [canPlay, play, pause, isPriority]);
 
   return { handlePlaying };
 }

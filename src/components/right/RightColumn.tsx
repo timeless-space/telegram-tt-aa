@@ -1,42 +1,39 @@
 import type { FC } from '../../lib/teact/teact';
-import React, {
-  memo, useEffect, useState,
-} from '../../lib/teact/teact';
+import React, { memo, useEffect, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
+import type { ProfileTabType } from '../../types';
+import { MAIN_THREAD_ID } from '../../api/types';
 import {
   ManagementScreens, NewChatMembersProgress, ProfileState, RightColumnContent,
 } from '../../types';
-import { MAIN_THREAD_ID } from '../../api/types';
 
 import { ANIMATION_END_DELAY, MIN_SCREEN_WIDTH_FOR_STATIC_RIGHT_COLUMN } from '../../config';
-import captureEscKeyListener from '../../util/captureEscKeyListener';
 import {
-  selectAreActiveChatsLoaded,
-  selectChat,
-  selectCurrentMessageList, selectTabState,
-  selectRightColumnContentKey,
+  selectAreActiveChatsLoaded, selectChat, selectCurrentMessageList, selectRightColumnContentKey, selectTabState,
 } from '../../global/selectors';
+import captureEscKeyListener from '../../util/captureEscKeyListener';
 
+import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
+import useHistoryBack from '../../hooks/useHistoryBack';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
 import useWindowSize from '../../hooks/useWindowSize';
-import useHistoryBack from '../../hooks/useHistoryBack';
-import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
 
-import RightHeader from './RightHeader';
-import Profile from './Profile';
 import Transition from '../ui/Transition';
-import RightSearch from './RightSearch.async';
-import Management from './management/Management.async';
-import Statistics from './statistics/Statistics.async';
-import MessageStatistics from './statistics/MessageStatistics.async';
-import StickerSearch from './StickerSearch.async';
-import GifSearch from './GifSearch.async';
-import PollResults from './PollResults.async';
 import AddChatMembers from './AddChatMembers';
 import CreateTopic from './CreateTopic.async';
 import EditTopic from './EditTopic.async';
+import GifSearch from './GifSearch.async';
+import Management from './management/Management.async';
+import PollResults from './PollResults.async';
+import Profile from './Profile';
+import RightHeader from './RightHeader';
+import RightSearch from './RightSearch.async';
+import BoostStatistics from './statistics/BoostStatistics';
+import MessageStatistics from './statistics/MessageStatistics.async';
+import Statistics from './statistics/Statistics.async';
+import StickerSearch from './StickerSearch.async';
 
 import './RightColumn.scss';
 
@@ -52,6 +49,7 @@ type StateProps = {
   isChatSelected: boolean;
   shouldSkipHistoryAnimations?: boolean;
   nextManagementScreen?: ManagementScreens;
+  nextProfileTab?: ProfileTabType;
 };
 
 const ANIMATION_DURATION = 450 + ANIMATION_END_DELAY;
@@ -74,6 +72,7 @@ const RightColumn: FC<OwnProps & StateProps> = ({
   isChatSelected,
   shouldSkipHistoryAnimations,
   nextManagementScreen,
+  nextProfileTab,
 }) => {
   const {
     toggleChatInfo,
@@ -89,8 +88,10 @@ const RightColumn: FC<OwnProps & StateProps> = ({
     toggleMessageStatistics,
     setOpenedInviteInfo,
     requestNextManagementScreen,
+    resetNextProfileTab,
     closeCreateTopicPanel,
     closeEditTopicPanel,
+    closeBoostStatistics,
   } = getActions();
 
   const { width: windowWidth } = useWindowSize();
@@ -106,6 +107,7 @@ const RightColumn: FC<OwnProps & StateProps> = ({
   const isManagement = contentKey === RightColumnContent.Management;
   const isStatistics = contentKey === RightColumnContent.Statistics;
   const isMessageStatistics = contentKey === RightColumnContent.MessageStatistics;
+  const isBoostStatistics = contentKey === RightColumnContent.BoostStatistics;
   const isStickerSearch = contentKey === RightColumnContent.StickerSearch;
   const isGifSearch = contentKey === RightColumnContent.GifSearch;
   const isPollResults = contentKey === RightColumnContent.PollResults;
@@ -177,6 +179,9 @@ const RightColumn: FC<OwnProps & StateProps> = ({
       case RightColumnContent.Statistics:
         toggleStatistics();
         break;
+      case RightColumnContent.BoostStatistics:
+        closeBoostStatistics();
+        break;
       case RightColumnContent.Search: {
         blurSearchInput();
         closeLocalTextSearch();
@@ -225,7 +230,13 @@ const RightColumn: FC<OwnProps & StateProps> = ({
       setManagementScreen(nextManagementScreen);
       requestNextManagementScreen(undefined);
     }
-  }, [nextManagementScreen, requestNextManagementScreen]);
+  }, [nextManagementScreen]);
+
+  useEffect(() => {
+    if (!nextProfileTab) return;
+
+    resetNextProfileTab();
+  }, [nextProfileTab]);
 
   // Close Right Column when it transforms into overlayed state on screen resize
   useEffect(() => {
@@ -307,6 +318,8 @@ const RightColumn: FC<OwnProps & StateProps> = ({
 
       case RightColumnContent.Statistics:
         return <Statistics chatId={chatId!} />;
+      case RightColumnContent.BoostStatistics:
+        return <BoostStatistics />;
       case RightColumnContent.MessageStatistics:
         return <MessageStatistics chatId={chatId!} isActive={isOpen && isActive} />;
       case RightColumnContent.StickerSearch:
@@ -341,6 +354,7 @@ const RightColumn: FC<OwnProps & StateProps> = ({
           isSearch={isSearch}
           isManagement={isManagement}
           isStatistics={isStatistics}
+          isBoostStatistics={isBoostStatistics}
           isMessageStatistics={isMessageStatistics}
           isStickerSearch={isStickerSearch}
           isGifSearch={isGifSearch}
@@ -374,7 +388,7 @@ export default memo(withGlobal<OwnProps>(
   (global, { isMobile }): StateProps => {
     const { chatId, threadId } = selectCurrentMessageList(global) || {};
     const areActiveChatsLoaded = selectAreActiveChatsLoaded(global);
-    const { management, shouldSkipHistoryAnimations } = selectTabState(global);
+    const { management, shouldSkipHistoryAnimations, nextProfileTab } = selectTabState(global);
     const nextManagementScreen = chatId ? management.byChatId[chatId]?.nextScreen : undefined;
     const isForum = chatId ? selectChat(global, chatId)?.isForum : undefined;
     const isInsideTopic = isForum && Boolean(threadId && threadId !== MAIN_THREAD_ID);
@@ -387,6 +401,7 @@ export default memo(withGlobal<OwnProps>(
       isChatSelected: Boolean(chatId && areActiveChatsLoaded),
       shouldSkipHistoryAnimations,
       nextManagementScreen,
+      nextProfileTab,
     };
   },
 )(RightColumn));

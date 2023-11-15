@@ -1,25 +1,27 @@
 import type { ChangeEvent } from 'react';
-
 import type { FC } from '../../lib/teact/teact';
 import React, { memo, useMemo, useState } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type { ApiPhoto, ApiReportReason } from '../../api/types';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useLang from '../../hooks/useLang';
+import buildClassName from '../../util/buildClassName';
 
-import Modal from '../ui/Modal';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
+
 import Button from '../ui/Button';
-import RadioGroup from '../ui/RadioGroup';
 import InputText from '../ui/InputText';
+import Modal from '../ui/Modal';
+import RadioGroup from '../ui/RadioGroup';
 
 export type OwnProps = {
   isOpen: boolean;
-  subject?: 'peer' | 'messages' | 'media';
-  chatId?: string;
+  subject?: 'peer' | 'messages' | 'media' | 'story';
+  peerId?: string;
   photo?: ApiPhoto;
   messageIds?: number[];
+  storyId?: number;
   onClose: () => void;
   onCloseAnimationEnd?: () => void;
 };
@@ -27,9 +29,10 @@ export type OwnProps = {
 const ReportModal: FC<OwnProps> = ({
   isOpen,
   subject = 'messages',
-  chatId,
+  peerId,
   photo,
   messageIds,
+  storyId,
   onClose,
   onCloseAnimationEnd,
 }) => {
@@ -37,6 +40,7 @@ const ReportModal: FC<OwnProps> = ({
     reportMessages,
     reportPeer,
     reportProfilePhoto,
+    reportStory,
     exitMessageSelectMode,
   } = getActions();
 
@@ -50,13 +54,17 @@ const ReportModal: FC<OwnProps> = ({
         exitMessageSelectMode();
         break;
       case 'peer':
-        reportPeer({ chatId, reason: selectedReason, description });
+        reportPeer({ chatId: peerId, reason: selectedReason, description });
         break;
       case 'media':
         reportProfilePhoto({
-          chatId, photo, reason: selectedReason, description,
+          chatId: peerId, photo, reason: selectedReason, description,
         });
         break;
+      case 'story':
+        reportStory({
+          peerId: peerId!, storyId: storyId!, reason: selectedReason, description,
+        });
     }
     onClose();
   });
@@ -84,8 +92,9 @@ const ReportModal: FC<OwnProps> = ({
 
   if (
     (subject === 'messages' && !messageIds)
-    || (subject === 'peer' && !chatId)
-    || (subject === 'media' && (!chatId || !photo))
+    || (subject === 'peer' && !peerId)
+    || (subject === 'media' && (!peerId || !photo))
+    || (subject === 'story' && (!storyId || !peerId))
   ) {
     return undefined;
   }
@@ -100,7 +109,7 @@ const ReportModal: FC<OwnProps> = ({
       onClose={onClose}
       onEnter={isOpen ? handleReport : undefined}
       onCloseAnimationEnd={onCloseAnimationEnd}
-      className="narrow"
+      className={buildClassName('narrow', subject === 'story' && 'component-theme-dark')}
       title={title}
     >
       <RadioGroup

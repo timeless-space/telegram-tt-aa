@@ -1,17 +1,19 @@
 import { Api as GramJs } from '../../../lib/gramjs';
 
+import type { ApiPrivacyKey } from '../../../types';
 import type {
-  ApiConfig, ApiCountry, ApiSession, ApiUrlAuthResult, ApiWallpaper, ApiWebSession, ApiLangString,
+  ApiConfig, ApiCountry, ApiLangString,
+  ApiSession, ApiUrlAuthResult, ApiWallpaper, ApiWebSession,
 } from '../../types';
-import type { ApiPrivacySettings, ApiPrivacyKey, PrivacyVisibility } from '../../../types';
 
-import { buildApiDocument, buildApiReaction } from './messages';
-import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
 import { omit, pick } from '../../../util/iteratees';
 import { getServerTime } from '../../../util/serverTime';
-import { buildApiUser } from './users';
 import { addUserToLocalDb } from '../helpers';
 import { omitVirtualClassFields } from './helpers';
+import { buildApiDocument } from './messageContent';
+import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
+import { buildApiReaction } from './reactions';
+import { buildApiUser } from './users';
 
 export function buildApiWallpaper(wallpaper: GramJs.TypeWallPaper): ApiWallpaper | undefined {
   if (wallpaper instanceof GramJs.WallPaperNoFile) {
@@ -41,6 +43,7 @@ export function buildApiSession(session: GramJs.Authorization): ApiSession {
     hash: String(session.hash),
     areCallsEnabled: !session.callRequestsDisabled,
     areSecretChatsEnabled: !session.encryptedRequestsDisabled,
+    isUnconfirmed: session.unconfirmed,
     ...pick(session, [
       'deviceModel', 'platform', 'systemVersion', 'appName', 'appVersion', 'dateCreated', 'dateActive',
       'ip', 'country', 'region',
@@ -62,6 +65,8 @@ export function buildPrivacyKey(key: GramJs.TypePrivacyKey): ApiPrivacyKey | und
   switch (key.className) {
     case 'PrivacyKeyPhoneNumber':
       return 'phoneNumber';
+    case 'PrivacyKeyAddedByPhone':
+      return 'addByPhone';
     case 'PrivacyKeyStatusTimestamp':
       return 'lastSeen';
     case 'PrivacyKeyProfilePhoto':
@@ -79,47 +84,6 @@ export function buildPrivacyKey(key: GramJs.TypePrivacyKey): ApiPrivacyKey | und
   }
 
   return undefined;
-}
-
-export function buildPrivacyRules(rules: GramJs.TypePrivacyRule[]): ApiPrivacySettings {
-  let visibility: PrivacyVisibility | undefined;
-  let allowUserIds: string[] | undefined;
-  let allowChatIds: string[] | undefined;
-  let blockUserIds: string[] | undefined;
-  let blockChatIds: string[] | undefined;
-
-  rules.forEach((rule) => {
-    if (rule instanceof GramJs.PrivacyValueAllowAll) {
-      visibility = visibility || 'everybody';
-    } else if (rule instanceof GramJs.PrivacyValueAllowContacts) {
-      visibility = visibility || 'contacts';
-    } else if (rule instanceof GramJs.PrivacyValueDisallowContacts) {
-      visibility = visibility || 'nonContacts';
-    } else if (rule instanceof GramJs.PrivacyValueDisallowAll) {
-      visibility = visibility || 'nobody';
-    } else if (rule instanceof GramJs.PrivacyValueAllowUsers) {
-      allowUserIds = rule.users.map((chatId) => buildApiPeerId(chatId, 'user'));
-    } else if (rule instanceof GramJs.PrivacyValueDisallowUsers) {
-      blockUserIds = rule.users.map((chatId) => buildApiPeerId(chatId, 'user'));
-    } else if (rule instanceof GramJs.PrivacyValueAllowChatParticipants) {
-      allowChatIds = rule.chats.map((chatId) => buildApiPeerId(chatId, 'chat'));
-    } else if (rule instanceof GramJs.PrivacyValueDisallowChatParticipants) {
-      blockChatIds = rule.chats.map((chatId) => buildApiPeerId(chatId, 'chat'));
-    }
-  });
-
-  if (!visibility) {
-    // disallow by default.
-    visibility = 'nobody';
-  }
-
-  return {
-    visibility,
-    allowUserIds: allowUserIds || [],
-    allowChatIds: allowChatIds || [],
-    blockUserIds: blockUserIds || [],
-    blockChatIds: blockChatIds || [],
-  };
 }
 
 export function buildApiNotifyException(

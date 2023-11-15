@@ -13,7 +13,7 @@ export {
 
 export {
   fetchChats, fetchFullChat, searchChats, requestChatUpdate, fetchChatSettings,
-  saveDraft, clearDraft, fetchChat, updateChatMutedState, updateTopicMutedState,
+  saveDraft, fetchChat, updateChatMutedState, updateTopicMutedState,
   createChannel, joinChannel, deleteChatUser, deleteChat, leaveChannel, deleteChannel, createGroupChat, editChatPhoto,
   toggleChatPinned, toggleChatArchived, toggleDialogUnread, setChatEnabledReactions,
   fetchChatFolders, editChatFolder, deleteChatFolder, sortChatFolders, fetchRecommendedChatFolders,
@@ -39,6 +39,7 @@ export {
 export {
   fetchFullUser, fetchNearestCountry, fetchTopUsers, fetchContactList, fetchUsers,
   updateContact, importContact, deleteContact, fetchProfilePhotos, fetchCommonChats, reportSpam, updateEmojiStatus,
+  saveCloseFriends,
 } from './users';
 
 export {
@@ -57,7 +58,7 @@ export {
 } from './management';
 
 export {
-  updateProfile, checkUsername, updateUsername, fetchBlockedContacts, blockContact, unblockContact,
+  updateProfile, checkUsername, updateUsername, fetchBlockedUsers, blockUser, unblockUser,
   updateProfilePhoto, uploadProfilePhoto, deleteProfilePhotos, fetchWallpapers, uploadWallpaper,
   fetchAuthorizations, terminateAuthorization, terminateAllAuthorizations,
   fetchWebAuthorizations, terminateWebAuthorization, terminateAllWebAuthorizations,
@@ -80,11 +81,8 @@ export {
   answerCallbackButton, fetchTopInlineBots, fetchInlineBot, fetchInlineBotResults, sendInlineBotResult, startBot,
   requestWebView, requestSimpleWebView, sendWebViewData, prolongWebView, loadAttachBots, toggleAttachBot, fetchBotApp,
   requestBotUrlAuth, requestLinkUrlAuth, acceptBotUrlAuth, acceptLinkUrlAuth, loadAttachBot, requestAppWebView,
+  allowBotSendMessages, fetchBotCanSendMessage, invokeWebViewCustomMethod,
 } from './bots';
-
-export {
-  validateRequestedInfo, sendPaymentForm, getPaymentForm, getReceipt, fetchPremiumPromo, fetchTemporaryPaymentPassword,
-} from './payments';
 
 export {
   getGroupCall, joinGroupCall, discardGroupCall, createGroupCall,
@@ -111,3 +109,10 @@ export {
 export {
   broadcastLocalDbUpdateFull,
 } from '../localDb';
+
+export * from './stories';
+
+export {
+  validateRequestedInfo, sendPaymentForm, getPaymentForm, getReceipt, fetchPremiumPromo, fetchTemporaryPaymentPassword,
+  applyBoost, fetchBoostsList, fetchBoostsStatus, fetchGiveawayInfo, fetchMyBoosts, applyGiftCode, checkGiftCode,
+} from './payments';

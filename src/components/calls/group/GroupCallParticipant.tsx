@@ -1,28 +1,28 @@
-import type { GroupCallParticipant as TypeGroupCallParticipant } from '../../../lib/secret-sauce';
-import { THRESHOLD } from '../../../lib/secret-sauce';
 import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useCallback, useMemo, useRef,
 } from '../../../lib/teact/teact';
 import { withGlobal } from '../../../global';
 
-import type { ApiChat, ApiUser } from '../../../api/types';
+import type { ApiPeer } from '../../../api/types';
+import type { GroupCallParticipant as TypeGroupCallParticipant } from '../../../lib/secret-sauce';
 
 import { GROUP_CALL_DEFAULT_VOLUME } from '../../../config';
+import { THRESHOLD } from '../../../lib/secret-sauce';
+import { selectChat, selectUser } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import renderText from '../../common/helpers/renderText';
-import { selectChat, selectUser } from '../../../global/selectors';
 import formatGroupCallVolume from './helpers/formatGroupCallVolume';
 
-import useLang from '../../../hooks/useLang';
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
+import useLang from '../../../hooks/useLang';
 import useMenuPosition from '../../../hooks/useMenuPosition';
 
 import Avatar from '../../common/Avatar';
-import OutlinedMicrophoneIcon from './OutlinedMicrophoneIcon';
+import FullNameTitle from '../../common/FullNameTitle';
 import ListItem from '../../ui/ListItem';
 import GroupCallParticipantMenu from './GroupCallParticipantMenu';
-import FullNameTitle from '../../common/FullNameTitle';
+import OutlinedMicrophoneIcon from './OutlinedMicrophoneIcon';
 
 import styles from './GroupCallParticipant.module.scss';
 
@@ -31,7 +31,7 @@ type OwnProps = {
 };
 
 type StateProps = {
-  peer?: ApiUser | ApiChat;
+  peer?: ApiPeer;
 };
 
 const GroupCallParticipant: FC<OwnProps & StateProps> = ({

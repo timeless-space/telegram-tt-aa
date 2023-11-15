@@ -1,13 +1,12 @@
 import { useCallback, useRef } from '../lib/teact/teact';
 import { getActions } from '../lib/teact/teactn';
-import { requestMeasure } from '../lib/fasterdom/fasterdom';
 
 import { IS_TEST } from '../config';
+import { requestMeasure } from '../lib/fasterdom/fasterdom';
 import { IS_IOS } from '../util/windowEnvironment';
-
-import useSyncEffect from './useSyncEffect';
 import useEffectOnce from './useEffectOnce';
 import useLastCallback from './useLastCallback';
+import useSyncEffect from './useSyncEffect';
 
 const PATH_BASE = `${window.location.pathname}${window.location.search}`;
 // Carefully selected by swiping and observing visual changes
@@ -271,11 +270,6 @@ export default function useHistoryBack({
         wasReplaced.current = true;
       },
     };
-
-    // Delete forward navigation in the virtual history. Not really needed, just looks better when debugging `logState`
-    for (let i = indexRef.current + 1; i < historyState.length; i++) {
-      delete historyState[i];
-    }
 
     deferHistoryOperation({
       type: shouldReplace ? 'replaceState' : 'pushState',

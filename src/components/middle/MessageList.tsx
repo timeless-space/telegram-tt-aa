@@ -1,3 +1,4 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
   memo,
   useEffect,
@@ -5,18 +6,15 @@ import React, {
   useRef,
 } from '../../lib/teact/teact';
 import { addExtraClass, removeExtraClass } from '../../lib/teact/teact-dom';
-import { requestForcedReflow, forceMeasure, requestMeasure } from '../../lib/fasterdom/fasterdom';
-
-import type { FC } from '../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../global';
+
 import type {
   ApiMessage, ApiRestrictionReason, ApiTopic,
 } from '../../api/types';
-
-import { MAIN_THREAD_ID } from '../../api/types';
 import type { MessageListType } from '../../global/types';
 import type { Signal } from '../../util/signals';
 import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
+import { MAIN_THREAD_ID } from '../../api/types';
 import { LoadMoreDirection } from '../../types';
 
 import {
@@ -24,59 +22,60 @@ import {
   MESSAGE_LIST_SLICE,
   SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../config';
+import { forceMeasure, requestForcedReflow, requestMeasure } from '../../lib/fasterdom/fasterdom';
 import {
-  selectChatMessages,
-  selectIsViewportNewest,
-  selectFirstUnreadId,
-  selectFocusedMessageId,
-  selectChat,
-  selectIsInSelectMode,
-  selectIsChatWithSelf,
+  getMessageHtmlId,
+  isChatChannel,
+  isChatGroup,
+  isChatWithRepliesBot,
+  isLocalMessageId,
+  isUserId,
+} from '../../global/helpers';
+import {
   selectBot,
-  selectScrollOffset,
-  selectThreadTopMessageId,
+  selectChat,
+  selectChatFullInfo,
+  selectChatMessages,
   selectChatScheduledMessages,
   selectCurrentMessageIds,
+  selectFirstUnreadId,
+  selectFocusedMessageId,
+  selectIsChatWithSelf,
   selectIsCurrentUserPremium,
+  selectIsInSelectMode,
+  selectIsViewportNewest,
   selectLastScrollOffset,
-  selectThreadInfo,
-  selectTabState,
-  selectChatFullInfo,
   selectPerformanceSettingsValue,
+  selectScrollOffset,
+  selectTabState,
+  selectThreadInfo,
+  selectThreadTopMessageId,
 } from '../../global/selectors';
-import {
-  isChatChannel,
-  isUserId,
-  isChatWithRepliesBot,
-  isChatGroup,
-  isLocalMessageId,
-  getMessageHtmlId,
-} from '../../global/helpers';
-import { orderBy } from '../../util/iteratees';
-import { debounce, onTickEnd } from '../../util/schedulers';
+import animateScroll, { isAnimatingScroll, restartCurrentScrollAnimation } from '../../util/animateScroll';
 import buildClassName from '../../util/buildClassName';
+import { orderBy } from '../../util/iteratees';
+import resetScroll from '../../util/resetScroll';
+import { debounce, onTickEnd } from '../../util/schedulers';
 import { groupMessages } from './helpers/groupMessages';
 import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
-import resetScroll from '../../util/resetScroll';
-import animateScroll, { isAnimatingScroll, restartCurrentScrollAnimation } from '../../util/animateScroll';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import { useStateRef } from '../../hooks/useStateRef';
-import useSyncEffect from '../../hooks/useSyncEffect';
-import useStickyDates from './hooks/useStickyDates';
+import { isBackgroundModeActive } from '../../hooks/useBackgroundMode';
+import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
 import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
 import useInterval from '../../hooks/useInterval';
-import useNativeCopySelectedMessages from '../../hooks/useNativeCopySelectedMessages';
+import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
-import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
+import useNativeCopySelectedMessages from '../../hooks/useNativeCopySelectedMessages';
+import { useStateRef } from '../../hooks/useStateRef';
+import useSyncEffect from '../../hooks/useSyncEffect';
 import useContainerHeight from './hooks/useContainerHeight';
-import { isBackgroundModeActive } from '../../hooks/useBackgroundMode';
+import useStickyDates from './hooks/useStickyDates';
 
 import Loading from '../ui/Loading';
-import MessageListContent from './MessageListContent';
 import ContactGreeting from './ContactGreeting';
-import NoMessages from './NoMessages';
 import MessageListBotInfo from './MessageListBotInfo';
+import MessageListContent from './MessageListContent';
+import NoMessages from './NoMessages';
 
 import './MessageList.scss';
 
@@ -123,6 +122,7 @@ type StateProps = {
 
 const MESSAGE_REACTIONS_POLLING_INTERVAL = 15 * 1000;
 const MESSAGE_COMMENTS_POLLING_INTERVAL = 15 * 1000;
+const MESSAGE_STORY_POLLING_INTERVAL = 5 * 60 * 1000;
 const BOTTOM_THRESHOLD = 50;
 const UNREAD_DIVIDER_TOP = 10;
 const UNREAD_DIVIDER_TOP_WITH_TOOLS = 60;
@@ -173,7 +173,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
 }) => {
   const {
     loadViewportMessages, setScrollOffset, loadSponsoredMessages, loadMessageReactions, copyMessagesByIds,
-    loadMessageViews,
+    loadMessageViews, loadPeerStoriesByIds,
   } = getActions();
 
   // eslint-disable-next-line no-null/no-null
@@ -258,6 +258,28 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
     loadMessageReactions({ chatId, ids });
   }, MESSAGE_REACTIONS_POLLING_INTERVAL);
+
+  useInterval(() => {
+    if (!messageIds || !messagesById || type === 'scheduled') {
+      return;
+    }
+    const storyDataList = messageIds.map((id) => messagesById[id]?.content.storyData).filter(Boolean);
+
+    if (!storyDataList.length) return;
+
+    const storiesByPeerIds = storyDataList.reduce((acc, storyData) => {
+      const { peerId, id } = storyData!;
+      if (!acc[peerId]) {
+        acc[peerId] = [];
+      }
+      acc[peerId].push(id);
+      return acc;
+    }, {} as Record<string, number[]>);
+
+    Object.entries(storiesByPeerIds).forEach(([peerId, storyIds]) => {
+      loadPeerStoriesByIds({ peerId, storyIds });
+    });
+  }, MESSAGE_STORY_POLLING_INTERVAL);
 
   useInterval(() => {
     if (!messageIds || !messagesById || threadId !== MAIN_THREAD_ID || type === 'scheduled') {

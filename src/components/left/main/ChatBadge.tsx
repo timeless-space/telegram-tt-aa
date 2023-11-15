@@ -1,17 +1,17 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo, useMemo } from '../../../lib/teact/teact';
 
 import type { ApiChat, ApiTopic } from '../../../api/types';
-import type { FC } from '../../../lib/teact/teact';
-
 import type { Signal } from '../../../util/signals';
+
+import buildClassName from '../../../util/buildClassName';
 import { isSignal } from '../../../util/signals';
 import { formatIntegerCompact } from '../../../util/textFormat';
-import buildClassName from '../../../util/buildClassName';
 
 import useDerivedState from '../../../hooks/useDerivedState';
 
-import ShowTransition from '../../ui/ShowTransition';
 import AnimatedCounter from '../../common/AnimatedCounter';
+import ShowTransition from '../../ui/ShowTransition';
 
 import './ChatBadge.scss';
 
@@ -48,7 +48,7 @@ const ChatBadge: FC<OwnProps> = ({
 
   const shouldBeMuted = useMemo(() => {
     const hasUnmutedUnreadTopics = chat.topics
-      && Object.values(chat.topics).some((acc) => acc.isMuted && acc.unreadCount);
+      && Object.values(chat.topics).some((acc) => !acc.isMuted && acc.unreadCount);
 
     return isMuted || (chat.topics && !hasUnmutedUnreadTopics);
   }, [chat, isMuted]);

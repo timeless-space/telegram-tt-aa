@@ -1,11 +1,9 @@
-import { requestMutation } from '../lib/fasterdom/fasterdom';
-
 import type { ISettings } from '../types';
 
+import { requestMutation } from '../lib/fasterdom/fasterdom';
+import themeColors from '../styles/themes.json';
 import { animate } from './animation';
 import { lerp } from './math';
-
-import themeColors from '../styles/themes.json';
 import { DARK_THEME_BG_COLOR } from '../config';
 
 type RGBAColor = {
@@ -22,8 +20,10 @@ const HEX_COLOR_REGEX = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i
 const DURATION_MS = 200;
 const ENABLE_ANIMATION_DELAY_MS = 500;
 const RGB_VARIABLES = new Set([
+  '--color-text',
   '--color-primary-shade',
   '--color-text-secondary',
+  '--color-accent-own',
 ]);
 
 const DISABLE_ANIMATION_CSS = `

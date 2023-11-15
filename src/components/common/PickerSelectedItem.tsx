@@ -1,13 +1,15 @@
+import type { FC, TeactNode } from '../../lib/teact/teact';
 import React, { memo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
-import type { FC, TeactNode } from '../../lib/teact/teact';
 import type { ApiChat, ApiUser } from '../../api/types';
+import type { IconName } from '../../types/icons';
 
+import { getChatTitle, getUserFirstOrLastName } from '../../global/helpers';
 import { selectChat, selectUser } from '../../global/selectors';
-import { getChatTitle, getUserFirstOrLastName, isUserId } from '../../global/helpers';
-import renderText from './helpers/renderText';
 import buildClassName from '../../util/buildClassName';
+import renderText from './helpers/renderText';
+
 import useLang from '../../hooks/useLang';
 
 import Avatar from './Avatar';
@@ -15,20 +17,22 @@ import Avatar from './Avatar';
 import './PickerSelectedItem.scss';
 
 type OwnProps = {
-  chatOrUserId?: string;
-  icon?: string;
+  peerId?: string;
+  icon?: IconName;
   title?: string;
   isMinimized?: boolean;
   canClose?: boolean;
-  onClick: (arg: any) => void;
-  clickArg: any;
+  forceShowSelf?: boolean;
+  clickArg?: any;
   className?: string;
+  fluid?: boolean;
+  onClick: (arg: any) => void;
 };
 
 type StateProps = {
   chat?: ApiChat;
   user?: ApiUser;
-  currentUserId?: string;
+  isSavedMessages?: boolean;
 };
 
 const PickerSelectedItem: FC<OwnProps & StateProps> = ({
@@ -40,7 +44,8 @@ const PickerSelectedItem: FC<OwnProps & StateProps> = ({
   chat,
   user,
   className,
-  currentUserId,
+  fluid,
+  isSavedMessages,
   onClick,
 }) => {
   const lang = useLang();
@@ -61,13 +66,13 @@ const PickerSelectedItem: FC<OwnProps & StateProps> = ({
       <Avatar
         peer={user || chat}
         size="small"
-        isSavedMessages={user?.isSelf}
+        isSavedMessages={isSavedMessages}
       />
     );
 
-    const name = !chat || (user && !user.isSelf)
+    const name = !chat || (user && !isSavedMessages)
       ? getUserFirstOrLastName(user)
-      : getChatTitle(lang, chat, chat.id === currentUserId);
+      : getChatTitle(lang, chat, isSavedMessages);
 
     titleText = name ? renderText(name) : undefined;
   }
@@ -78,6 +83,7 @@ const PickerSelectedItem: FC<OwnProps & StateProps> = ({
     chat?.isForum && 'forum-avatar',
     isMinimized && 'minimized',
     canClose && 'closeable',
+    fluid && 'fluid',
   );
 
   return (
@@ -103,18 +109,19 @@ const PickerSelectedItem: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatOrUserId }): StateProps => {
-    if (!chatOrUserId) {
+  (global, { peerId, forceShowSelf }): StateProps => {
+    if (!peerId) {
       return {};
     }
 
-    const chat = chatOrUserId ? selectChat(global, chatOrUserId) : undefined;
-    const user = isUserId(chatOrUserId) ? selectUser(global, chatOrUserId) : undefined;
+    const chat = selectChat(global, peerId);
+    const user = selectUser(global, peerId);
+    const isSavedMessages = !forceShowSelf && user && user.isSelf;
 
     return {
       chat,
       user,
-      currentUserId: global.currentUserId,
+      isSavedMessages,
     };
   },
 )(PickerSelectedItem));

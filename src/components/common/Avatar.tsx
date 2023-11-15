@@ -1,42 +1,44 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import React, {
-  memo, useRef,
-} from '../../lib/teact/teact';
-
 import type { FC, TeactNode } from '../../lib/teact/teact';
+import React, { memo, useRef } from '../../lib/teact/teact';
+import { getActions } from '../../global';
+
 import type {
-  ApiChat, ApiPhoto, ApiUser,
+  ApiChat, ApiPeer, ApiPhoto, ApiUser,
 } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
+import type { StoryViewerOrigin } from '../../types';
 import { ApiMediaFormat } from '../../api/types';
 
 import { IS_TEST } from '../../config';
 import {
   getChatAvatarHash,
   getChatTitle,
-  getUserColorKey,
+  getPeerStoryHtmlId,
   getUserFullName,
-  isUserId,
   isChatWithRepliesBot,
   isDeletedUser,
+  isUserId,
 } from '../../global/helpers';
-import { getFirstLetters } from '../../util/textFormat';
 import buildClassName, { createClassNameBuilder } from '../../util/buildClassName';
+import { getFirstLetters } from '../../util/textFormat';
+import { getPeerColorClass } from './helpers/peerColor';
 import renderText from './helpers/renderText';
 
+import { useFastClick } from '../../hooks/useFastClick';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 import useMedia from '../../hooks/useMedia';
 import useMediaTransition from '../../hooks/useMediaTransition';
-import useLang from '../../hooks/useLang';
-import { useFastClick } from '../../hooks/useFastClick';
-import useLastCallback from '../../hooks/useLastCallback';
 
 import OptimizedVideo from '../ui/OptimizedVideo';
+import AvatarStoryCircle from './AvatarStoryCircle';
 
 import './Avatar.scss';
 
 const LOOP_COUNT = 3;
 
-export type AvatarSize = 'micro' | 'tiny' | 'mini' | 'small' | 'small-mobile' | 'medium' | 'large' | 'jumbo';
+export type AvatarSize = 'micro' | 'tiny' | 'mini' | 'small' | 'small-mobile' | 'medium' | 'large' | 'giant' | 'jumbo';
 
 const cn = createClassNameBuilder('Avatar');
 cn.media = cn('media');
@@ -45,11 +47,17 @@ cn.icon = cn('icon');
 type OwnProps = {
   className?: string;
   size?: AvatarSize;
-  peer?: ApiChat | ApiUser;
+  peer?: ApiPeer;
   photo?: ApiPhoto;
   text?: string;
   isSavedMessages?: boolean;
   withVideo?: boolean;
+  withStory?: boolean;
+  forPremiumPromo?: boolean;
+  withStoryGap?: boolean;
+  withStorySolid?: boolean;
+  storyViewerOrigin?: StoryViewerOrigin;
+  storyViewerMode?: 'full' | 'single-peer' | 'disabled';
   loopIndefinitely?: boolean;
   noPersonalPhoto?: boolean;
   observeIntersection?: ObserveFn;
@@ -64,10 +72,18 @@ const Avatar: FC<OwnProps> = ({
   text,
   isSavedMessages,
   withVideo,
+  withStory,
+  forPremiumPromo,
+  withStoryGap,
+  withStorySolid,
+  storyViewerOrigin,
+  storyViewerMode = 'single-peer',
   loopIndefinitely,
   noPersonalPhoto,
   onClick,
 }) => {
+  const { openStoryViewer } = getActions();
+
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLDivElement>(null);
   const videoLoopCountRef = useRef(0);
@@ -163,6 +179,7 @@ const Avatar: FC<OwnProps> = ({
           className={buildClassName(cn.media, 'avatar-media', transitionClassNames, videoBlobUrl && 'poster')}
           alt={author}
           decoding="async"
+          draggable={false}
         />
         {shouldPlayVideo && (
           <OptimizedVideo
@@ -174,6 +191,7 @@ const Avatar: FC<OwnProps> = ({
             autoPlay
             disablePictureInPicture
             playsInline
+            draggable={false}
             onEnded={handleVideoEnded}
           />
         )}
@@ -192,11 +210,14 @@ const Avatar: FC<OwnProps> = ({
   const fullClassName = buildClassName(
     `Avatar size-${size}`,
     className,
-    `color-bg-${getUserColorKey(peer)}`,
+    getPeerColorClass(peer),
     isSavedMessages && 'saved-messages',
     isDeleted && 'deleted-account',
     isReplies && 'replies-bot-account',
     isForum && 'forum',
+    ((withStory && peer?.hasStories) || forPremiumPromo) && 'with-story-circle',
+    withStorySolid && peer?.hasStories && 'with-story-solid',
+    withStorySolid && peer?.hasUnreadStories && 'has-unread-story',
     onClick && 'interactive',
     (!isSavedMessages && !imgBlobUrl) && 'no-photo',
   );
@@ -204,6 +225,17 @@ const Avatar: FC<OwnProps> = ({
   const hasMedia = Boolean(isSavedMessages || imgBlobUrl);
 
   const { handleClick, handleMouseDown } = useFastClick((e: ReactMouseEvent<HTMLDivElement, MouseEvent>) => {
+    if (withStory && storyViewerMode !== 'disabled' && peer?.hasStories) {
+      e.stopPropagation();
+
+      openStoryViewer({
+        peerId: peer.id,
+        isSinglePeer: storyViewerMode === 'single-peer',
+        origin: storyViewerOrigin,
+      });
+      return;
+    }
+
     if (onClick) {
       onClick(e, hasMedia);
     }
@@ -213,12 +245,19 @@ const Avatar: FC<OwnProps> = ({
     <div
       ref={ref}
       className={fullClassName}
+      id={peer?.id && withStory ? getPeerStoryHtmlId(peer.id) : undefined}
+      data-peer-id={peer?.id}
       data-test-sender-id={IS_TEST ? peer?.id : undefined}
       aria-label={typeof content === 'string' ? author : undefined}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
     >
-      {typeof content === 'string' ? renderText(content, [size === 'jumbo' ? 'hq_emoji' : 'emoji']) : content}
+      <div className="inner">
+        {typeof content === 'string' ? renderText(content, [size === 'jumbo' ? 'hq_emoji' : 'emoji']) : content}
+      </div>
+      {withStory && peer?.hasStories && (
+        <AvatarStoryCircle peerId={peer.id} size={size} withExtraGap={withStoryGap} />
+      )}
     </div>
   );
 };

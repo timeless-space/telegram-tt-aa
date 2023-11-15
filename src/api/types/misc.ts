@@ -1,13 +1,12 @@
+import type { ApiLimitType, CallbackAction } from '../../global/types';
 import type { ApiDocument, ApiPhoto, ApiReaction } from './messages';
 import type { ApiUser } from './users';
-import type { ApiLimitType, CallbackAction } from '../../global/types';
 
 export interface ApiInitialArgs {
   userAgent: string;
   platform?: string;
   sessionData?: ApiSessionData;
   isTest?: boolean;
-  isMovSupported?: boolean;
   isWebmSupported?: boolean;
   maxBufferSize?: number;
   webAuthToken?: string;
@@ -25,7 +24,6 @@ export interface ApiOnProgress {
   ): void;
 
   isCanceled?: boolean;
-  acceptsBuffer?: boolean;
 }
 
 export interface ApiAttachment {
@@ -78,6 +76,7 @@ export interface ApiSession {
   region: string;
   areCallsEnabled: boolean;
   areSecretChatsEnabled: boolean;
+  isUnconfirmed?: true;
 }
 
 export interface ApiWebSession {
@@ -110,8 +109,9 @@ export type ApiNotification = {
   title?: string;
   message: string;
   actionText?: string;
-  action?: CallbackAction;
+  action?: CallbackAction | CallbackAction[];
   className?: string;
+  duration?: number;
 };
 
 export type ApiError = {
@@ -191,6 +191,12 @@ export interface ApiAppConfig {
   hiddenMembersMinCount: number;
   limits: Record<ApiLimitType, readonly [number, number]>;
   canDisplayAutoarchiveSetting: boolean;
+  areStoriesHidden?: boolean;
+  storyExpirePeriod: number;
+  storyViewersExpirePeriod: number;
+  storyChangelogUserId: string;
+  peerColors: Record<string, string[]>;
+  darkPeerColors: Record<string, string[]>;
 }
 
 export interface ApiConfig {

@@ -1,16 +1,17 @@
 import type { RefObject, UIEvent } from 'react';
+import type { FC } from '../../lib/teact/teact';
 import React, {
   useEffect, useLayoutEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
-import { requestForcedReflow } from '../../lib/fasterdom/fasterdom';
 
 import { LoadMoreDirection } from '../../types';
-import type { FC } from '../../lib/teact/teact';
 
-import { debounce } from '../../util/schedulers';
-import resetScroll from '../../util/resetScroll';
-import { IS_ANDROID } from '../../util/windowEnvironment';
+import { requestForcedReflow } from '../../lib/fasterdom/fasterdom';
 import buildStyle from '../../util/buildStyle';
+import resetScroll from '../../util/resetScroll';
+import { debounce } from '../../util/schedulers';
+import { IS_ANDROID } from '../../util/windowEnvironment';
+
 import useLastCallback from '../../hooks/useLastCallback';
 
 type OwnProps = {
@@ -32,6 +33,8 @@ type OwnProps = {
   children: React.ReactNode;
   onLoadMore?: ({ direction }: { direction: LoadMoreDirection; noScroll?: boolean }) => void;
   onScroll?: (e: UIEvent<HTMLDivElement>) => void;
+  onWheel?: (e: React.WheelEvent<HTMLDivElement>) => void;
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onKeyDown?: (e: React.KeyboardEvent<any>) => void;
   onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragLeave?: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -62,6 +65,8 @@ const InfiniteScroll: FC<OwnProps> = ({
   children,
   onLoadMore,
   onScroll,
+  onWheel,
+  onClick,
   onKeyDown,
   onDragOver,
   onDragLeave,
@@ -239,10 +244,12 @@ const InfiniteScroll: FC<OwnProps> = ({
       id={id}
       className={className}
       onScroll={handleScroll}
+      onWheel={onWheel}
       teactFastList={!noFastList && !withAbsolutePositioning}
       onKeyDown={onKeyDown}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
+      onClick={onClick}
       style={style}
     >
       {beforeChildren}

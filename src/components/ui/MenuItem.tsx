@@ -1,17 +1,19 @@
 import type { FC } from '../../lib/teact/teact';
 import React from '../../lib/teact/teact';
 
+import type { IconName } from '../../types/icons';
+
 import { IS_TEST } from '../../config';
 import buildClassName from '../../util/buildClassName';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useLang from '../../hooks/useLang';
 import useAppLayout from '../../hooks/useAppLayout';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
 import './MenuItem.scss';
 
 export type MenuItemProps = {
-  icon?: string;
+  icon?: IconName | 'A' | 'K';
   isCharIcon?: boolean;
   customIcon?: React.ReactNode;
   className?: string;

@@ -1,45 +1,45 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
-import { requestNextMutation } from '../../../lib/fasterdom/fasterdom';
 
-import type { FC } from '../../../lib/teact/teact';
 import type { ApiChat } from '../../../api/types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
 import {
-  GENERAL_TOPIC_ID, TOPICS_SLICE, TOPIC_HEIGHT_PX, TOPIC_LIST_SENSITIVE_AREA,
+  GENERAL_TOPIC_ID, TOPIC_HEIGHT_PX, TOPIC_LIST_SENSITIVE_AREA, TOPICS_SLICE,
 } from '../../../config';
-import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
+import { requestNextMutation } from '../../../lib/fasterdom/fasterdom';
+import { getOrderedTopics } from '../../../global/helpers';
 import {
   selectCanAnimateInterface, selectChat, selectCurrentMessageList, selectIsForumPanelOpen, selectTabState,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import { getOrderedTopics } from '../../../global/helpers';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
-import { waitForTransitionEnd } from '../../../util/cssAnimationEndListeners';
 import { captureEvents, SwipeDirection } from '../../../util/captureEvents';
+import { waitForTransitionEnd } from '../../../util/cssAnimationEndListeners';
 import { createLocationHash } from '../../../util/routing';
+import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 
-import useLastCallback from '../../../hooks/useLastCallback';
+import useAppLayout from '../../../hooks/useAppLayout';
+import { dispatchHeavyAnimationEvent } from '../../../hooks/useHeavyAnimationCheck';
+import useHistoryBack from '../../../hooks/useHistoryBack';
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
 import { useIntersectionObserver, useOnIntersect } from '../../../hooks/useIntersectionObserver';
-import useOrderDiff from './hooks/useOrderDiff';
 import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 import usePrevious from '../../../hooks/usePrevious';
-import useHistoryBack from '../../../hooks/useHistoryBack';
-import { dispatchHeavyAnimationEvent } from '../../../hooks/useHeavyAnimationCheck';
-import useAppLayout from '../../../hooks/useAppLayout';
+import useOrderDiff from './hooks/useOrderDiff';
 
+import GroupCallTopPane from '../../calls/group/GroupCallTopPane';
 import GroupChatInfo from '../../common/GroupChatInfo';
+import HeaderActions from '../../middle/HeaderActions';
 import Button from '../../ui/Button';
-import Topic from './Topic';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import Loading from '../../ui/Loading';
-import HeaderActions from '../../middle/HeaderActions';
-import GroupCallTopPane from '../../calls/group/GroupCallTopPane';
 import EmptyForum from './EmptyForum';
+import Topic from './Topic';
 
 import styles from './ForumPanel.module.scss';
 
@@ -243,7 +243,7 @@ const ForumPanel: FC<OwnProps & StateProps> = ({
               threadId={MAIN_THREAD_ID}
               messageListType="thread"
               canExpandActions={false}
-              withForumActions
+              isForForum
               isMobile={isMobile}
               onTopicSearch={onTopicSearch}
             />
@@ -280,9 +280,7 @@ const ForumPanel: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, ownProps, detachWhenChanged): StateProps => {
-    detachWhenChanged(selectIsForumPanelOpen(global));
-
+  (global): StateProps => {
     const chatId = selectTabState(global).forumPanelChatId;
     const chat = chatId ? selectChat(global, chatId) : undefined;
     const {
@@ -296,4 +294,5 @@ export default memo(withGlobal<OwnProps>(
       withInterfaceAnimations: selectCanAnimateInterface(global),
     };
   },
+  (global) => selectIsForumPanelOpen(global),
 )(ForumPanel));

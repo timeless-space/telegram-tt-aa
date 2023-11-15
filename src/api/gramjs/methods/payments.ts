@@ -1,24 +1,33 @@
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
-import { invokeRequest } from './client';
-import { buildInputInvoice, buildInputPeer, buildShippingInfo } from '../gramjsBuilders';
+
+import type {
+  ApiChat, ApiPeer, ApiRequestInputInvoice,
+  OnApiUpdate,
+} from '../../types';
+
+import { buildCollectionByCallback } from '../../../util/iteratees';
+import { buildApiChatFromPreview } from '../apiBuilders/chats';
 import {
+  buildApiBoostsStatus,
+  buildApiCheckedGiftCode,
+  buildApiGiveawayInfo,
   buildApiInvoiceFromForm,
-  buildApiPremiumPromo,
+  buildApiMyBoost,
   buildApiPaymentForm,
+  buildApiPremiumPromo,
   buildApiReceipt,
   buildShippingOptions,
 } from '../apiBuilders/payments';
-import type {
-  ApiChat, OnApiUpdate, ApiRequestInputInvoice,
-} from '../../types';
-import localDb from '../localDb';
+import { buildApiUser } from '../apiBuilders/users';
+import { buildInputInvoice, buildInputPeer, buildShippingInfo } from '../gramjsBuilders';
 import {
   addEntitiesToLocalDb,
   deserializeBytes,
   serializeBytes,
 } from '../helpers';
-import { buildApiUser } from '../apiBuilders/users';
+import localDb from '../localDb';
+import { invokeRequest } from './client';
 import { getTemporaryPaymentPassword } from './twoFaSettings';
 
 let onUpdate: OnApiUpdate;
@@ -182,4 +191,159 @@ export async function fetchTemporaryPaymentPassword(password: string) {
     value: serializeBytes(result.tmpPassword),
     validUntil: result.validUntil,
   };
+}
+
+export async function fetchMyBoosts() {
+  const result = await invokeRequest(new GramJs.premium.GetMyBoosts());
+
+  if (!result) return undefined;
+
+  addEntitiesToLocalDb(result.users);
+  addEntitiesToLocalDb(result.chats);
+
+  const users = result.users.map(buildApiUser).filter(Boolean);
+  const chats = result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean);
+  const boosts = result.myBoosts.map(buildApiMyBoost);
+
+  return {
+    users,
+    chats,
+    boosts,
+  };
+}
+
+export async function applyBoost({
+  chat,
+  slots,
+} : {
+  chat: ApiChat;
+  slots: number[];
+}) {
+  const result = await invokeRequest(new GramJs.premium.ApplyBoost({
+    peer: buildInputPeer(chat.id, chat.accessHash),
+    slots,
+  }));
+
+  if (!result) return undefined;
+
+  addEntitiesToLocalDb(result.users);
+  addEntitiesToLocalDb(result.chats);
+
+  const users = result.users.map(buildApiUser).filter(Boolean);
+  const chats = result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean);
+  const boosts = result.myBoosts.map(buildApiMyBoost);
+
+  return {
+    users,
+    chats,
+    boosts,
+  };
+}
+
+export async function fetchBoostsStatus({
+  chat,
+}: {
+  chat: ApiChat;
+}) {
+  const result = await invokeRequest(new GramJs.premium.GetBoostsStatus({
+    peer: buildInputPeer(chat.id, chat.accessHash),
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  return buildApiBoostsStatus(result);
+}
+
+export async function fetchBoostsList({
+  chat,
+  offset = '',
+  limit,
+}: {
+  chat: ApiChat;
+  offset?: string;
+  limit?: number;
+}) {
+  const result = await invokeRequest(new GramJs.premium.GetBoostsList({
+    peer: buildInputPeer(chat.id, chat.accessHash),
+    offset,
+    limit,
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  addEntitiesToLocalDb(result.users);
+
+  const users = result.users.map(buildApiUser).filter(Boolean);
+
+  const userBoosts = result.boosts.filter((boost) => boost.userId);
+  const boosterIds = userBoosts.map((boost) => boost.userId!.toString());
+  const boosters = buildCollectionByCallback(userBoosts, (boost) => (
+    [boost.userId!.toString(), boost.expires]
+  ));
+
+  return {
+    count: result.count,
+    users,
+    boosters,
+    boosterIds,
+    nextOffset: result.nextOffset,
+  };
+}
+
+export async function fetchGiveawayInfo({
+  peer,
+  messageId,
+}: {
+  peer: ApiPeer;
+  messageId: number;
+}) {
+  const result = await invokeRequest(new GramJs.payments.GetGiveawayInfo({
+    peer: buildInputPeer(peer.id, peer.accessHash),
+    msgId: messageId,
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  return buildApiGiveawayInfo(result);
+}
+
+export async function checkGiftCode({
+  slug,
+}: {
+  slug: string;
+}) {
+  const result = await invokeRequest(new GramJs.payments.CheckGiftCode({
+    slug,
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  addEntitiesToLocalDb(result.users);
+  addEntitiesToLocalDb(result.chats);
+
+  return {
+    code: buildApiCheckedGiftCode(result),
+    users: result.users.map(buildApiUser).filter(Boolean),
+    chats: result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean),
+  };
+}
+
+export function applyGiftCode({
+  slug,
+}: {
+  slug: string;
+}) {
+  return invokeRequest(new GramJs.payments.ApplyGiftCode({
+    slug,
+  }), {
+    shouldReturnTrue: true,
+  });
 }

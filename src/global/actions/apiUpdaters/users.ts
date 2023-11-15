@@ -1,13 +1,12 @@
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
-
 import type { ApiUserStatus } from '../../../api/types';
-
-import {
-  deleteContact, replaceUserStatuses, updateUser, updateUserFullInfo,
-} from '../../reducers';
-import { throttle } from '../../../util/schedulers';
-import { selectIsCurrentUserPremium, selectUserFullInfo } from '../../selectors';
 import type { ActionReturnType, RequiredGlobalState } from '../../types';
+
+import { throttle } from '../../../util/schedulers';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import {
+  deleteContact, replaceUserStatuses, updatePeerStoriesHidden, updateUser, updateUserFullInfo,
+} from '../../reducers';
+import { selectIsCurrentUserPremium, selectUser, selectUserFullInfo } from '../../selectors';
 
 const STATUS_UPDATE_THROTTLE = 3000;
 
@@ -42,8 +41,9 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     case 'updateUser': {
       Object.values(global.byTabId).forEach(({ id: tabId }) => {
         if (update.id === global.currentUserId && update.user.isPremium !== selectIsCurrentUserPremium(global)) {
-          // TODO Do not display modal if premium is bought from another device
-          if (update.user.isPremium) actions.openPremiumModal({ isSuccess: true, tabId });
+          if (update.user.isPremium && global.byTabId[tabId].premiumModal) {
+            actions.openPremiumModal({ isSuccess: true, tabId });
+          }
 
           // Reset translation cache cause premium provides additional formatting
           global = {
@@ -55,9 +55,15 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         }
       });
 
+      const localUser = selectUser(global, update.id);
+
       global = updateUser(global, update.id, update.user);
       if (update.fullInfo) {
         global = updateUserFullInfo(global, update.id, update.fullInfo);
+      }
+
+      if (localUser?.areStoriesHidden !== update.user.areStoriesHidden) {
+        global = updatePeerStoriesHidden(global, update.id, update.user.areStoriesHidden || false);
       }
 
       return global;

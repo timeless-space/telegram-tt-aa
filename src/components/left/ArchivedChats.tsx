@@ -1,25 +1,29 @@
+import type { FC } from '../../lib/teact/teact';
 import React, { memo, useEffect, useRef } from '../../lib/teact/teact';
 import { getActions, getGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
-import type { LeftColumnContent, SettingsScreens } from '../../types';
-import type { FolderEditDispatch } from '../../hooks/reducers/useFoldersReducer';
 import type { GlobalState } from '../../global/types';
+import type { FolderEditDispatch } from '../../hooks/reducers/useFoldersReducer';
+import type { LeftColumnContent, SettingsScreens } from '../../types';
 
+import { ANIMATION_END_DELAY } from '../../config';
 import buildClassName from '../../util/buildClassName';
+import { ANIMATION_DURATION } from '../story/helpers/ribbonAnimation';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useLang from '../../hooks/useLang';
-import useHistoryBack from '../../hooks/useHistoryBack';
-import useLeftHeaderButtonRtlForumTransition from './main/hooks/useLeftHeaderButtonRtlForumTransition';
-import useShowTransition from '../../hooks/useShowTransition';
 import useForumPanelRender from '../../hooks/useForumPanelRender';
+import useHistoryBack from '../../hooks/useHistoryBack';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
+import useShowTransition from '../../hooks/useShowTransition';
+import useLeftHeaderButtonRtlForumTransition from './main/hooks/useLeftHeaderButtonRtlForumTransition';
 
+import StoryRibbon from '../story/StoryRibbon';
+import StoryToggler from '../story/StoryToggler';
 import Button from '../ui/Button';
-import ChatList from './main/ChatList';
-import ForumPanel from './main/ForumPanel';
 import DropdownMenu from '../ui/DropdownMenu';
 import MenuItem from '../ui/MenuItem';
+import ChatList from './main/ChatList';
+import ForumPanel from './main/ForumPanel';
 
 import './ArchivedChats.scss';
 import { sendScreenName } from '../../util/tlCustomFunction';
@@ -28,6 +32,7 @@ export type OwnProps = {
   isActive: boolean;
   isForumPanelOpen?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
+  isStoryRibbonShown?: boolean;
   onReset: () => void;
   onTopicSearch: NoneToVoidFunction;
   onSettingsScreenSelect: (screen: SettingsScreens) => void;
@@ -39,6 +44,7 @@ const ArchivedChats: FC<OwnProps> = ({
   isActive,
   isForumPanelOpen,
   archiveSettings,
+  isStoryRibbonShown,
   onReset,
   onTopicSearch,
   onSettingsScreenSelect,
@@ -79,9 +85,15 @@ const ArchivedChats: FC<OwnProps> = ({
     onReset();
   };
 
+  const {
+    shouldRender: shouldRenderStoryRibbon,
+    transitionClassNames: storyRibbonClassNames,
+    isClosing: isStoryRibbonClosing,
+  } = useShowTransition(isStoryRibbonShown, undefined, undefined, '', false, ANIMATION_DURATION + ANIMATION_END_DELAY);
+
   return (
     <div className="ArchivedChats">
-      <div className="left-header">
+      <div className={buildClassName('left-header', !shouldRenderStoryRibbon && 'left-header-shadow')}>
         {lang.isRtl && <div className="DropdownMenuFiller" />}
         <Button
           round
@@ -99,6 +111,9 @@ const ArchivedChats: FC<OwnProps> = ({
           <i className="icon icon-arrow-left" />
         </Button>
         {shouldRenderTitle && <h3 className={titleClassNames}>{lang('ArchivedChats')}</h3>}
+        <div className="story-toggler-wrapper">
+          <StoryToggler canShow isArchived />
+        </div>
         {archiveSettings.isHidden && (
           <DropdownMenu
             className="archived-chats-more-menu"
@@ -111,15 +126,26 @@ const ArchivedChats: FC<OwnProps> = ({
           </DropdownMenu>
         )}
       </div>
-      <ChatList
-        folderType="archived"
-        isActive={isActive}
-        isForumPanelOpen={isForumPanelVisible}
-        onSettingsScreenSelect={onSettingsScreenSelect}
-        onLeftColumnContentChange={onLeftColumnContentChange}
-        foldersDispatch={foldersDispatch}
-        archiveSettings={archiveSettings}
-      />
+      <div
+        className={buildClassName(
+          'chat-list-wrapper',
+          shouldRenderStoryRibbon && 'with-story-ribbon',
+          storyRibbonClassNames,
+        )}
+      >
+        {shouldRenderStoryRibbon && (
+          <StoryRibbon isArchived className="left-header-shadow" isClosing={isStoryRibbonClosing} />
+        )}
+        <ChatList
+          folderType="archived"
+          isActive={isActive}
+          isForumPanelOpen={isForumPanelVisible}
+          onSettingsScreenSelect={onSettingsScreenSelect}
+          onLeftColumnContentChange={onLeftColumnContentChange}
+          foldersDispatch={foldersDispatch}
+          archiveSettings={archiveSettings}
+        />
+      </div>
       {shouldRenderForumPanel && (
         <ForumPanel
           isOpen={isForumPanelOpen}

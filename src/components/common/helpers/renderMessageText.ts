@@ -1,28 +1,41 @@
 import type { ApiMessage } from '../../../api/types';
-import { ApiMessageEntityTypes } from '../../../api/types';
-import type { TextPart } from '../../../types';
 import type { LangFn } from '../../../hooks/useLang';
+import type { TextPart } from '../../../types';
+import { ApiMessageEntityTypes } from '../../../api/types';
 
 import {
+  getMessageKey,
   getMessageSummaryDescription,
   getMessageSummaryEmoji,
   getMessageSummaryText,
   getMessageText,
   TRUNCATED_SUMMARY_LENGTH,
 } from '../../../global/helpers';
+import trimText from '../../../util/trimText';
 import renderText from './renderText';
 import { renderTextWithEntities } from './renderTextWithEntities';
-import trimText from '../../../util/trimText';
 
-export function renderMessageText(
-  message: ApiMessage,
-  highlight?: string,
-  emojiSize?: number,
-  isSimple?: boolean,
-  truncateLength?: number,
-  isProtected?: boolean,
-  shouldRenderAsHtml?: boolean,
-) {
+export function renderMessageText({
+  message,
+  highlight,
+  emojiSize,
+  isSimple,
+  truncateLength,
+  isProtected,
+  forcePlayback,
+  shouldRenderAsHtml,
+  isForMediaViewer,
+} : {
+  message: ApiMessage;
+  highlight?: string;
+  emojiSize?: number;
+  isSimple?: boolean;
+  truncateLength?: number;
+  isProtected?: boolean;
+  forcePlayback?: boolean;
+  shouldRenderAsHtml?: boolean;
+  isForMediaViewer?: boolean;
+}) {
   const { text, entities } = message.content.text || {};
 
   if (!text) {
@@ -30,15 +43,18 @@ export function renderMessageText(
     return contentNotSupportedText ? [trimText(contentNotSupportedText, truncateLength)] : undefined;
   }
 
+  const messageKey = getMessageKey(message);
+
   return renderTextWithEntities({
     text: trimText(text, truncateLength),
     entities,
     highlight,
     emojiSize,
     shouldRenderAsHtml,
-    messageId: message.id,
+    containerId: `${isForMediaViewer ? 'mv-' : ''}${messageKey}`,
     isSimple,
     isProtected,
+    forcePlayback,
   });
 }
 
@@ -67,7 +83,9 @@ export function renderMessageSummary(
   const emoji = !noEmoji && getMessageSummaryEmoji(message);
   const emojiWithSpace = emoji ? `${emoji} ` : '';
 
-  const text = renderMessageText(message, highlight, undefined, true, truncateLength);
+  const text = renderMessageText({
+    message, highlight, isSimple: true, truncateLength,
+  });
   const description = getMessageSummaryDescription(lang, message, text);
 
   return [

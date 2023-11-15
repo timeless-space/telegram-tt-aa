@@ -1,11 +1,11 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
-  useEffect, memo, useRef, useMemo,
+  memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
 import { getGlobal, withGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
 import type {
-  ApiStickerSet, ApiSticker, ApiReaction, ApiAvailableReaction,
+  ApiAvailableReaction, ApiReaction, ApiSticker, ApiStickerSet,
 } from '../../api/types';
 import type { StickerSetOrReactionsSetOrRecent } from '../../types';
 
@@ -20,12 +20,6 @@ import {
   STICKER_SIZE_PICKER_HEADER,
   TOP_SYMBOL_SET_ID,
 } from '../../config';
-import { REM } from './helpers/mediaDimensions';
-import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
-import { MEMO_EMPTY_ARRAY } from '../../util/memo';
-import buildClassName from '../../util/buildClassName';
-import animateHorizontalScroll from '../../util/animateHorizontalScroll';
-import { pickTruthy, unique } from '../../util/iteratees';
 import { isSameReaction } from '../../global/helpers';
 import {
   selectCanPlayAnimatedEmojis,
@@ -33,20 +27,26 @@ import {
   selectIsChatWithSelf,
   selectIsCurrentUserPremium,
 } from '../../global/selectors';
+import animateHorizontalScroll from '../../util/animateHorizontalScroll';
+import buildClassName from '../../util/buildClassName';
+import { pickTruthy, unique } from '../../util/iteratees';
+import { MEMO_EMPTY_ARRAY } from '../../util/memo';
+import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
+import { REM } from './helpers/mediaDimensions';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useAsyncRendering from '../right/hooks/useAsyncRendering';
+import useAppLayout from '../../hooks/useAppLayout';
 import useHorizontalScroll from '../../hooks/useHorizontalScroll';
 import useLang from '../../hooks/useLang';
-import useAppLayout from '../../hooks/useAppLayout';
-import { useStickerPickerObservers } from './hooks/useStickerPickerObservers';
+import useLastCallback from '../../hooks/useLastCallback';
 import useScrolledState from '../../hooks/useScrolledState';
+import useAsyncRendering from '../right/hooks/useAsyncRendering';
+import { useStickerPickerObservers } from './hooks/useStickerPickerObservers';
 
-import Loading from '../ui/Loading';
+import StickerSetCover from '../middle/composer/StickerSetCover';
 import Button from '../ui/Button';
+import Loading from '../ui/Loading';
 import StickerButton from './StickerButton';
 import StickerSet from './StickerSet';
-import StickerSetCover from '../middle/composer/StickerSetCover';
 
 import pickerStyles from '../middle/composer/StickerPicker.module.scss';
 import styles from './CustomEmojiPicker.module.scss';
@@ -153,6 +153,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
       : Object.values(pickTruthy(customEmojisById!, recentCustomEmojiIds!));
   }, [customEmojisById, isStatusPicker, recentCustomEmojiIds, recentStatusEmojis]);
 
+  const prefix = `${idPrefix}-custom-emoji`;
   const {
     activeSetIndex,
     observeIntersectionForSet,
@@ -160,7 +161,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
     observeIntersectionForShowingItems,
     observeIntersectionForCovers,
     selectStickerSet,
-  } = useStickerPickerObservers(containerRef, headerRef, idPrefix, isHidden);
+  } = useStickerPickerObservers(containerRef, headerRef, prefix, isHidden);
 
   const lang = useLang();
 
@@ -321,6 +322,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
             <StickerSetCover
               stickerSet={stickerSet as ApiStickerSet}
               noPlay={!canAnimate || !loadAndPlay}
+              forcePlayback
               observeIntersection={observeIntersectionForCovers}
               sharedCanvasRef={withSharedCanvas ? (isHq ? sharedCanvasHqRef : sharedCanvasRef) : undefined}
             />
@@ -344,6 +346,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
         withTranslucentThumb={isTranslucent}
         onClick={selectStickerSet}
         clickArg={index}
+        forcePlayback
       />
     );
   }
@@ -401,7 +404,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
               stickerSet={stickerSet}
               loadAndPlay={Boolean(canAnimate && loadAndPlay)}
               index={i}
-              idPrefix={idPrefix}
+              idPrefix={prefix}
               observeIntersection={observeIntersectionForSet}
               observeIntersectionForPlayingItems={observeIntersectionForPlayingItems}
               observeIntersectionForShowingItems={observeIntersectionForShowingItems}
@@ -421,6 +424,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
               onContextMenuOpen={onContextMenuOpen}
               onContextMenuClose={onContextMenuClose}
               onContextMenuClick={onContextMenuClick}
+              forcePlayback
             />
           );
         })}
