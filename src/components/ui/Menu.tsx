@@ -136,6 +136,7 @@ const Menu: FC<OwnProps> = ({
     transitionClassNames,
     bubbleClassName,
     shouldCloseFast && 'close-fast',
+    !isOpen && 'hidden',
   );
 
   const transformOriginYStyle = transformOriginY !== undefined ? `${transformOriginY}px` : undefined;
@@ -176,7 +177,7 @@ const Menu: FC<OwnProps> = ({
         )}
         onClick={autoClose ? onClose : undefined}
       >
-        {isOpen && children}
+        {children}
         {/* {footer && <div className="footer">{footer}</div>} */}
       </div>
     </div>

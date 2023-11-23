@@ -1,6 +1,6 @@
 import type { FC } from '../../lib/teact/teact';
 import React, {
-  memo, useEffect, useMemo, useRef, useState,
+  memo, useCallback, useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
@@ -263,6 +263,8 @@ const MESSAGE_MAX_LENGTH = 4096;
 const SENDING_ANIMATION_DURATION = 350;
 const MOUNT_ANIMATION_DURATION = 430;
 
+let interval: any;
+
 const Composer: FC<OwnProps & StateProps> = ({
   type,
   isOnActiveTab,
@@ -361,6 +363,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     openStoryReactionPicker,
     closeReactionPicker,
     sendStoryReaction,
+    sendDefaultReaction,
   } = getActions();
 
   const lang = useLang();
@@ -391,6 +394,17 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   const isSentStoryReactionHeart = sentStoryReaction && 'emoticon' in sentStoryReaction
     ? sentStoryReaction.emoticon === HEART_REACTION.emoticon : false;
+
+  useEffect(() => {
+    const clearIntervalFn = () => {
+      clearInterval(interval);
+    };
+    window.addEventListener('cleanup-interval', clearIntervalFn);
+
+    return () => {
+      window.removeEventListener('cleanup-interval', clearIntervalFn);
+    };
+  }, []);
 
   useEffect(processMessageInputForCustomEmoji, [getHtml]);
 
@@ -1199,6 +1213,40 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
   });
 
+  /**
+   * TL - Send a post message to Timeless Wallet
+   * Description: The data is an object with 2 properties: chatId and threadId
+   */
+  const handleSendCrypto = useCallback(() => {
+    (window as any).webkit?.messageHandlers?.sendCrypto.postMessage({
+      chatId,
+    });
+  }, [chatId]);
+
+  const handleGetLastMessageId = useCallback(() => {
+    return getGlobal().chats.byId[chatId].lastMessage?.id;
+  }, [chatId]);
+
+  /**
+  * TL - Create POAP function
+  */
+  const handleCreatePOAP = useCallback(() => {
+    (window as any).webkit?.messageHandlers?.createPOAP.postMessage({
+      chatId,
+    });
+
+    const currentMessageId = handleGetLastMessageId();
+    if (currentMessageId) {
+      interval = setInterval(() => {
+        const messageId = handleGetLastMessageId();
+        if (currentMessageId !== messageId && messageId) {
+          sendDefaultReaction({ chatId, messageId });
+          window.dispatchEvent(new Event('cleanup-interval'));
+        }
+      }, 5000);
+    }
+  }, [chatId, handleGetLastMessageId]);
+
   const handleSendAsMenuOpen = useLastCallback(() => {
     const messageInput = document.querySelector<HTMLDivElement>(editableInputCssSelector);
 
@@ -1747,6 +1795,9 @@ const Composer: FC<OwnProps & StateProps> = ({
             attachBots={isInMessageList ? attachBots : undefined}
             peerType={attachMenuPeerType}
             shouldCollectDebugLogs={shouldCollectDebugLogs}
+            isChatWithBot={(isChatWithBot || isChatWithSelf) ?? false}
+            handleSendCrypto={handleSendCrypto}
+            handleCreatePOAP={handleCreatePOAP}
             theme={theme}
             onMenuOpen={onAttachMenuOpen}
             onMenuClose={onAttachMenuClose}

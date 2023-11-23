@@ -3,8 +3,6 @@ import React, { memo, useCallback, useState } from '../../../lib/teact/teact';
 
 import { LeftColumnContent } from '../../../types';
 
-import { LAYERS_ANIMATION_NAME } from '../../../util/windowEnvironment';
-
 import Transition from '../../ui/Transition';
 import NewChatStep1 from './NewChatStep1';
 import NewChatStep2 from './NewChatStep2';
@@ -37,7 +35,7 @@ const NewChat: FC<OwnProps> = ({
   return (
     <Transition
       id="NewChat"
-      name={LAYERS_ANIMATION_NAME}
+      name="zoomFade"
       renderCount={RENDER_COUNT}
       activeKey={content}
     >

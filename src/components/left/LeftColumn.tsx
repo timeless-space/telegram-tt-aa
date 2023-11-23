@@ -10,8 +10,9 @@ import { LeftColumnContent, SettingsScreens } from '../../types';
 import { selectCurrentChat, selectIsForumPanelOpen, selectTabState } from '../../global/selectors';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { captureControlledSwipe } from '../../util/swipeController';
+import { sendScreenName } from '../../util/tlCustomFunction';
 import {
-  IS_APP, IS_MAC_OS, IS_TOUCH_ENV, LAYERS_ANIMATION_NAME,
+  IS_APP, IS_MAC_OS, IS_TOUCH_ENV,
 } from '../../util/windowEnvironment';
 
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
@@ -28,7 +29,6 @@ import NewChat from './newChat/NewChat.async';
 import Settings from './settings/Settings.async';
 
 import './LeftColumn.scss';
-import { sendScreenName } from '../../util/tlCustomFunction';
 
 interface OwnProps {
   ref: RefObject<HTMLDivElement>;
@@ -548,7 +548,7 @@ function LeftColumn({
   return (
     <Transition
       ref={ref}
-      name={shouldSkipHistoryAnimations ? 'none' : LAYERS_ANIMATION_NAME}
+      name="slide"
       renderCount={RENDER_COUNT}
       activeKey={contentType}
       shouldCleanup

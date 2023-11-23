@@ -1,5 +1,10 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { useEffect, useRef, useState } from '../../lib/teact/teact';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { ApiExportedInvite } from '../../api/types';
@@ -222,12 +227,12 @@ const RightHeader: FC<OwnProps & StateProps> = ({
    * TL - Send a post message to Timeless Wallet
    * Description: The data is an object with 2 properties: chatId and threadId
    */
-  const handleSendCrypto = () => {
+  const handleSendCrypto = useCallback(() => {
     (window as any).sendCrypto?.postMessage(JSON.stringify({
       chatId,
       threadId,
     }));
-  };
+  }, [chatId, threadId]);
 
   useEffect(() => {
     setTimeout(() => {

@@ -113,4 +113,8 @@
   &.in-portal {
     z-index: var(--z-portal-menu);
   }
+
+  .hidden {
+    display: none !important;
+  }
 }

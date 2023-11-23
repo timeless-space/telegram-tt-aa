@@ -4,8 +4,9 @@
  */
 import Axios from 'axios';
 import { getActions, getGlobal } from '../global';
-import type { Message } from '../global/types';
+
 import type { ApiUser } from '../api/types';
+import type { Message } from '../global/types';
 
 const HEIGHT_HEADER_FIXED = 56;
 

@@ -12,8 +12,11 @@ import {
 import { selectTabState, selectTheme } from '../global/selectors';
 import { addActiveTabChangeListener } from '../util/activeTabMonitor';
 import buildClassName from '../util/buildClassName';
+import { setupBeforeInstallPrompt } from '../util/installPrompt';
+import { mobileSubscribe, mobileUnsubscribe } from '../util/notifications';
 import { parseInitialLocationHash } from '../util/routing';
 import { hasStoredSession } from '../util/sessions';
+import { handleSendMessage } from '../util/tlCustomFunction';
 import { IS_INSTALL_PROMPT_SUPPORTED, IS_MULTITAB_SUPPORTED, PLATFORM_ENV } from '../util/windowEnvironment';
 import { updateSizes } from '../util/windowSize';
 
@@ -30,9 +33,6 @@ import Main from './main/Main.async';
 import Transition from './ui/Transition';
 
 import styles from './App.module.scss';
-import { setupBeforeInstallPrompt } from '../util/installPrompt';
-import { mobileSubscribe, mobileUnsubscribe } from '../util/notifications';
-import { handleSendMessage } from '../util/tlCustomFunction';
 
 type StateProps = {
   authState: GlobalState['authState'];
