@@ -22,6 +22,45 @@
   margin-inline-end: calc($margin - var(--scrollbar-width));
 }
 
+@mixin gradient-border-top($width, $cutout: 0px) {
+  mask-image: linear-gradient(transparent $cutout, black $width);
+}
+
+@mixin gradient-border-bottom($width, $cutout: 0px) {
+  mask-image: linear-gradient(to top, transparent $cutout, black $width);
+}
+
+@mixin gradient-border-top-bottom($top, $bottom) {
+  mask-image: linear-gradient(transparent 0%, black $top, black calc(100% - $bottom), transparent 100%);
+}
+
+@mixin peer-gradient($property, $colorCount) {
+  --_accent-color-rgb: var(--color-accent-own-rgb);
+
+  html.theme-dark {
+    --_accent-color-rgb: var(--color-text-rgb);
+  }
+
+  @if $colorCount == 2 {
+    #{$property}: repeating-linear-gradient(
+      -45deg,
+      rgb(var(--_accent-color-rgb), 100%),
+      rgb(var(--_accent-color-rgb), 100%) 5px,
+      rgb(var(--_accent-color-rgb), 35%) 5px,
+      rgb(var(--_accent-color-rgb), 35%) 10px
+    );
+  } @else {
+    #{$property}: repeating-linear-gradient(
+      -45deg,
+      rgb(var(--_accent-color-rgb), 100%),
+      rgb(var(--_accent-color-rgb), 100%) 5px,
+      rgb(var(--_accent-color-rgb), 60%) 5px,
+      rgb(var(--_accent-color-rgb), 60%) 10px,
+      rgb(var(--_accent-color-rgb), 20%) 10px,
+      rgb(var(--_accent-color-rgb), 20%) 15px
+    );
+  }
+}
 
 @mixin reset-range() {
   input[type="range"] {
@@ -94,5 +133,16 @@
     right: 0;
     height: 0.125rem;
     box-shadow: 0 0.125rem 0.125rem var(--color-light-shadow);
+  }
+}
+
+@mixin side-panel-section {
+  background-color: var(--color-background);
+  box-shadow: inset 0 -0.0625rem 0 0 var(--color-background-secondary-accent);
+  border-bottom: 0.625rem solid var(--color-background-secondary);
+
+  &:last-child {
+    border-bottom: none;
+    box-shadow: none;
   }
 }

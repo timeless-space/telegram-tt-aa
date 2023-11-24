@@ -1,11 +1,12 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
-  useEffect, memo, useRef, useMemo,
+  memo, useEffect, useMemo,
+  useRef,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiStickerSet, ApiSticker, ApiChat } from '../../../api/types';
+import type { ApiChat, ApiSticker, ApiStickerSet } from '../../../api/types';
 import type { StickerSetOrReactionsSetOrRecent } from '../../../types';
-import type { FC } from '../../../lib/teact/teact';
 
 import {
   CHAT_STICKER_SET_ID,
@@ -16,32 +17,32 @@ import {
   STICKER_PICKER_MAX_SHARED_COVERS,
   STICKER_SIZE_PICKER_HEADER,
 } from '../../../config';
-import { REM } from '../../common/helpers/mediaDimensions';
-import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
-import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { isUserId } from '../../../global/helpers';
-import buildClassName from '../../../util/buildClassName';
-import animateHorizontalScroll from '../../../util/animateHorizontalScroll';
-import { pickTruthy, uniqueByField } from '../../../util/iteratees';
 import {
   selectChat, selectChatFullInfo, selectIsChatWithSelf, selectIsCurrentUserPremium, selectShouldLoopStickers,
 } from '../../../global/selectors';
+import animateHorizontalScroll from '../../../util/animateHorizontalScroll';
+import buildClassName from '../../../util/buildClassName';
+import { pickTruthy, uniqueByField } from '../../../util/iteratees';
+import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
+import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
+import { REM } from '../../common/helpers/mediaDimensions';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import useAsyncRendering from '../../right/hooks/useAsyncRendering';
 import useHorizontalScroll from '../../../hooks/useHorizontalScroll';
 import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
+import useScrolledState from '../../../hooks/useScrolledState';
 import useSendMessageAction from '../../../hooks/useSendMessageAction';
 import { useStickerPickerObservers } from '../../common/hooks/useStickerPickerObservers';
-import useScrolledState from '../../../hooks/useScrolledState';
+import useAsyncRendering from '../../right/hooks/useAsyncRendering';
 
 import Avatar from '../../common/Avatar';
-import Loading from '../../ui/Loading';
-import Button from '../../ui/Button';
+import PremiumIcon from '../../common/PremiumIcon';
 import StickerButton from '../../common/StickerButton';
 import StickerSet from '../../common/StickerSet';
+import Button from '../../ui/Button';
+import Loading from '../../ui/Loading';
 import StickerSetCover from './StickerSetCover';
-import PremiumIcon from '../../common/PremiumIcon';
 
 import styles from './StickerPicker.module.scss';
 
@@ -53,6 +54,8 @@ type OwnProps = {
   isTranslucent?: boolean;
   loadAndPlay: boolean;
   canSendStickers?: boolean;
+  noContextMenus?: boolean;
+  idPrefix: string;
   onStickerSelect: (
     sticker: ApiSticker, isSilent?: boolean, shouldSchedule?: boolean, canUpdateStickerSetsOrder?: boolean,
   ) => void;
@@ -90,6 +93,8 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
   canAnimate,
   isSavedMessages,
   isCurrentUserPremium,
+  noContextMenus,
+  idPrefix,
   onStickerSelect,
 }) => {
   const {
@@ -114,6 +119,7 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
 
   const sendMessageAction = useSendMessageAction(chat!.id, threadId);
 
+  const prefix = `${idPrefix}-sticker-set`;
   const {
     activeSetIndex,
     observeIntersectionForSet,
@@ -121,7 +127,7 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
     observeIntersectionForShowingItems,
     observeIntersectionForCovers,
     selectStickerSet,
-  } = useStickerPickerObservers(containerRef, headerRef, 'sticker-set', isHidden);
+  } = useStickerPickerObservers(containerRef, headerRef, prefix, isHidden);
 
   const lang = useLang();
 
@@ -289,6 +295,7 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
               noPlay={!canAnimate || !loadAndPlay}
               observeIntersection={observeIntersectionForCovers}
               sharedCanvasRef={withSharedCanvas ? sharedCanvasRef : undefined}
+              forcePlayback
             />
           )}
         </Button>
@@ -309,6 +316,7 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
           withTranslucentThumb={isTranslucent}
           onClick={selectStickerSet}
           clickArg={index}
+          forcePlayback
         />
       );
     }
@@ -355,7 +363,9 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
             key={stickerSet.id}
             stickerSet={stickerSet}
             loadAndPlay={Boolean(canAnimate && loadAndPlay)}
+            noContextMenus={noContextMenus}
             index={i}
+            idPrefix={prefix}
             observeIntersection={observeIntersectionForSet}
             observeIntersectionForPlayingItems={observeIntersectionForPlayingItems}
             observeIntersectionForShowingItems={observeIntersectionForShowingItems}
@@ -368,6 +378,7 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
             onStickerUnfave={handleStickerUnfave}
             onStickerFave={handleStickerFave}
             onStickerRemoveRecent={handleRemoveRecentSticker}
+            forcePlayback
           />
         ))}
       </div>

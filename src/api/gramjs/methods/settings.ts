@@ -1,6 +1,8 @@
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
+import type { LANG_PACKS } from '../../../config';
+import type { ApiInputPrivacyRules, ApiPrivacyKey, LangCode } from '../../../types';
 import type {
   ApiAppConfig,
   ApiConfig,
@@ -10,11 +12,14 @@ import type {
   ApiPhoto,
   ApiUser,
 } from '../../types';
-import type { ApiPrivacyKey, InputPrivacyRules, LangCode } from '../../../types';
-import type { LANG_PACKS } from '../../../config';
 
 import { BLOCKED_LIST_LIMIT, DEFAULT_LANG_PACK, MAX_INT_32 } from '../../../config';
-import { ACCEPTABLE_USERNAME_ERRORS } from './management';
+import { buildCollectionByKey } from '../../../util/iteratees';
+import { getServerTime } from '../../../util/serverTime';
+import { buildAppConfig } from '../apiBuilders/appConfig';
+import { buildApiChatFromPreview } from '../apiBuilders/chats';
+import { buildApiPhoto, buildPrivacyRules } from '../apiBuilders/common';
+import { omitVirtualClassFields } from '../apiBuilders/helpers';
 import {
   buildApiConfig,
   buildApiCountryList,
@@ -22,23 +27,18 @@ import {
   buildApiSession,
   buildApiWallpaper,
   buildApiWebSession, buildLangPack, buildLangPackString,
-  buildPrivacyRules,
 } from '../apiBuilders/misc';
-
-import { buildApiPhoto } from '../apiBuilders/common';
-import { buildApiUser } from '../apiBuilders/users';
-import { buildApiChatFromPreview } from '../apiBuilders/chats';
 import { getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
-import { buildAppConfig } from '../apiBuilders/appConfig';
-import { omitVirtualClassFields } from '../apiBuilders/helpers';
+import { buildApiUser } from '../apiBuilders/users';
 import {
-  buildInputEntity, buildInputPeer, buildInputPrivacyKey, buildInputPhoto,
+  buildInputEntity, buildInputPeer, buildInputPhoto,
+  buildInputPrivacyKey,
+  buildInputPrivacyRules,
 } from '../gramjsBuilders';
-import { getClient, invokeRequest, uploadFile } from './client';
-import { buildCollectionByKey } from '../../../util/iteratees';
-import { getServerTime } from '../../../util/serverTime';
 import { addEntitiesToLocalDb, addPhotoToLocalDb } from '../helpers';
 import localDb from '../localDb';
+import { getClient, invokeRequest, uploadFile } from './client';
+import { ACCEPTABLE_USERNAME_ERRORS } from './management';
 
 const BETA_LANG_CODES = ['ar', 'fa', 'id', 'ko', 'uz', 'en'];
 
@@ -225,8 +225,13 @@ export async function uploadWallpaper(file: File) {
   return { wallpaper };
 }
 
-export async function fetchBlockedContacts() {
+export async function fetchBlockedUsers({
+  isOnlyStories,
+}: {
+  isOnlyStories?: true;
+}) {
   const result = await invokeRequest(new GramJs.contacts.GetBlocked({
+    myStoriesFrom: isOnlyStories,
     limit: BLOCKED_LIST_LIMIT,
   }));
   if (!result) {
@@ -243,15 +248,29 @@ export async function fetchBlockedContacts() {
   };
 }
 
-export function blockContact(chatOrUserId: string, accessHash?: string) {
+export function blockUser({
+  user,
+  isOnlyStories,
+} : {
+  user: ApiUser;
+  isOnlyStories?: true;
+}) {
   return invokeRequest(new GramJs.contacts.Block({
-    id: buildInputPeer(chatOrUserId, accessHash),
+    id: buildInputPeer(user.id, user.accessHash),
+    myStoriesFrom: isOnlyStories,
   }));
 }
 
-export function unblockContact(chatOrUserId: string, accessHash?: string) {
+export function unblockUser({
+  user,
+  isOnlyStories,
+} : {
+  user: ApiUser;
+  isOnlyStories?: true;
+}) {
   return invokeRequest(new GramJs.contacts.Unblock({
-    id: buildInputPeer(chatOrUserId, accessHash),
+    id: buildInputPeer(user.id, user.accessHash),
+    myStoriesFrom: isOnlyStories,
   }));
 }
 
@@ -513,48 +532,10 @@ export function unregisterDevice(token: string) {
 }
 
 export async function setPrivacySettings(
-  privacyKey: ApiPrivacyKey, rules: InputPrivacyRules,
+  privacyKey: ApiPrivacyKey, rules: ApiInputPrivacyRules,
 ) {
   const key = buildInputPrivacyKey(privacyKey);
-  const privacyRules: GramJs.TypeInputPrivacyRule[] = [];
-
-  if (rules.allowedUsers) {
-    privacyRules.push(new GramJs.InputPrivacyValueAllowUsers({
-      users: rules.allowedUsers.map(({ id, accessHash }) => buildInputEntity(id, accessHash) as GramJs.InputUser),
-    }));
-  }
-  if (rules.allowedChats) {
-    privacyRules.push(new GramJs.InputPrivacyValueAllowChatParticipants({
-      chats: rules.allowedChats.map(({ id }) => buildInputEntity(id) as BigInt.BigInteger),
-    }));
-  }
-  if (rules.blockedUsers) {
-    privacyRules.push(new GramJs.InputPrivacyValueDisallowUsers({
-      users: rules.blockedUsers.map(({ id, accessHash }) => buildInputEntity(id, accessHash) as GramJs.InputUser),
-    }));
-  }
-  if (rules.blockedChats) {
-    privacyRules.push(new GramJs.InputPrivacyValueDisallowChatParticipants({
-      chats: rules.blockedChats.map(({ id }) => buildInputEntity(id) as BigInt.BigInteger),
-    }));
-  }
-  switch (rules.visibility) {
-    case 'everybody':
-      privacyRules.push(new GramJs.InputPrivacyValueAllowAll());
-      break;
-
-    case 'contacts':
-      privacyRules.push(new GramJs.InputPrivacyValueAllowContacts());
-      break;
-
-    case 'nonContacts':
-      privacyRules.push(new GramJs.InputPrivacyValueDisallowContacts());
-      break;
-
-    case 'nobody':
-      privacyRules.push(new GramJs.InputPrivacyValueDisallowAll());
-      break;
-  }
+  const privacyRules = buildInputPrivacyRules(rules);
 
   const result = await invokeRequest(new GramJs.account.SetPrivacy({ key, rules: privacyRules }));
 
@@ -645,7 +626,7 @@ export async function updateGlobalPrivacySettings({ shouldArchiveAndMuteNewNonCo
 }) {
   const result = await invokeRequest(new GramJs.account.SetGlobalPrivacySettings({
     settings: new GramJs.GlobalPrivacySettings({
-      archiveAndMuteNewNoncontactPeers: shouldArchiveAndMuteNewNonContact,
+      ...(shouldArchiveAndMuteNewNonContact && { archiveAndMuteNewNoncontactPeers: true }),
     }),
   }));
 

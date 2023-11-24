@@ -1,7 +1,8 @@
-import type { GlobalState } from '../types';
 import type {
-  ApiChat, ApiUser, ApiUserFullInfo, ApiUserStatus,
+  ApiPeer, ApiUser, ApiUserFullInfo, ApiUserStatus,
 } from '../../api/types';
+import type { GlobalState } from '../types';
+
 import { isUserBot } from '../helpers';
 
 export function selectUser<T extends GlobalState>(global: T, userId: string): ApiUser | undefined {
@@ -37,8 +38,8 @@ export function selectUserByPhoneNumber<T extends GlobalState>(global: T, phoneN
   return Object.values(global.users.byId).find((user) => user?.phoneNumber === phoneNumberCleaned);
 }
 
-export function selectIsUserOrChatContact<T extends GlobalState>(global: T, userOrChat: ApiUser | ApiChat) {
-  return global.contactList && global.contactList.userIds.includes(userOrChat.id);
+export function selectIsUserOrChatContact<T extends GlobalState>(global: T, peer: ApiPeer) {
+  return global.contactList && global.contactList.userIds.includes(peer.id);
 }
 
 export function selectBot<T extends GlobalState>(global: T, userId: string): ApiUser | undefined {

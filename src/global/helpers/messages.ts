@@ -1,20 +1,20 @@
 import type {
-  ApiChat, ApiMessage, ApiMessageEntityTextUrl, ApiUser,
+  ApiChat, ApiMessage, ApiMessageEntityTextUrl, ApiPeer, ApiStory, ApiUser,
 } from '../../api/types';
-import { ApiMessageEntityTypes } from '../../api/types';
 import type { LangFn } from '../../hooks/useLang';
+import { ApiMessageEntityTypes } from '../../api/types';
 
 import {
   CONTENT_NOT_SUPPORTED,
   RE_LINK_TEMPLATE,
   SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../config';
-import { getUserFullName } from './users';
-import { IS_OPUS_SUPPORTED, isWebpSupported } from '../../util/windowEnvironment';
-import { getChatTitle, isUserId } from './chats';
-import { getGlobal } from '../index';
 import { areSortedArraysIntersecting, unique } from '../../util/iteratees';
 import { getServerTime } from '../../util/serverTime';
+import { IS_OPUS_SUPPORTED } from '../../util/windowEnvironment';
+import { getGlobal } from '../index';
+import { getChatTitle, isUserId } from './chats';
+import { getUserFullName } from './users';
 
 const RE_LINK = new RegExp(RE_LINK_TEMPLATE, 'i');
 
@@ -52,33 +52,35 @@ export function getMessageTranscription(message: ApiMessage) {
   return transcriptionId && global.transcriptions[transcriptionId]?.text;
 }
 
-export function hasMessageText(message: ApiMessage) {
+export function hasMessageText(message: ApiMessage | ApiStory) {
   const {
     text, sticker, photo, video, audio, voice, document, poll, webPage, contact, invoice, location,
-    game, action,
+    game, action, storyData, giveaway,
   } = message.content;
 
   return Boolean(text) || !(
     sticker || photo || video || audio || voice || document || contact || poll || webPage || invoice || location
-    || game || action?.phoneCall
+    || game || action?.phoneCall || storyData || giveaway
   );
 }
 
-export function getMessageText(message: ApiMessage) {
+export function getMessageText(message: ApiMessage | ApiStory) {
   return hasMessageText(message) ? message.content.text?.text || CONTENT_NOT_SUPPORTED : undefined;
 }
 
 export function getMessageCustomShape(message: ApiMessage): boolean {
   const {
-    text, sticker, photo, video, audio, voice, document, poll, webPage, contact, action, game, invoice, location,
+    text, sticker, photo, video, audio, voice,
+    document, poll, webPage, contact, action,
+    game, invoice, location, storyData,
   } = message.content;
 
   if (sticker || (video?.isRound)) {
     return true;
   }
 
-  if (!text || photo || video || audio || voice || document || poll || webPage || contact || action || game
-    || invoice || location) {
+  if (!text || photo || video || audio || voice || document || poll || webPage || contact || action || game || invoice
+    || location || storyData) {
     return false;
   }
 
@@ -162,12 +164,12 @@ export function isOwnMessage(message: ApiMessage) {
   return message.isOutgoing;
 }
 
-export function isReplyMessage(message: ApiMessage) {
-  return Boolean(message.replyToMessageId);
+export function isReplyToMessage(message: ApiMessage) {
+  return Boolean(message.replyInfo?.type === 'message');
 }
 
 export function isForwardedMessage(message: ApiMessage) {
-  return Boolean(message.forwardInfo);
+  return Boolean(message.forwardInfo || message.content.storyData);
 }
 
 export function isActionMessage(message: ApiMessage) {
@@ -182,7 +184,7 @@ export function isAnonymousOwnMessage(message: ApiMessage) {
   return Boolean(message.senderId) && !isUserId(message.senderId!) && isOwnMessage(message);
 }
 
-export function getSenderTitle(lang: LangFn, sender: ApiUser | ApiChat) {
+export function getSenderTitle(lang: LangFn, sender: ApiPeer) {
   return isUserId(sender.id) ? getUserFullName(sender as ApiUser) : getChatTitle(lang, sender as ApiChat);
 }
 
@@ -225,8 +227,7 @@ export function getMessageContentFilename(message: ApiMessage) {
   }
 
   if (content.sticker) {
-    const extension = content.sticker.isLottie ? 'tgs' : content.sticker.isVideo
-      ? 'webm' : isWebpSupported() ? 'webp' : 'png';
+    const extension = content.sticker.isLottie ? 'tgs' : content.sticker.isVideo ? 'webm' : 'webp';
     return `${content.sticker.id}.${extension}`;
   }
 
@@ -311,14 +312,14 @@ export function mergeIdRanges(ranges: number[][], idsUpdate: number[]): number[]
   return newOutlyingLists;
 }
 
-export function extractMessageText(message: ApiMessage, inChatList = false) {
+export function extractMessageText(message: ApiMessage | ApiStory, inChatList = false) {
   const contentText = message.content.text;
   if (!contentText) return undefined;
 
   const { text } = contentText;
   let { entities } = contentText;
 
-  if (text && inChatList && message.chatId === SERVICE_NOTIFICATIONS_USER_ID
+  if (text && inChatList && 'chatId' in message && message.chatId === SERVICE_NOTIFICATIONS_USER_ID
     // eslint-disable-next-line eslint-multitab-tt/no-immediate-global
     && !getGlobal().settings.byKey.shouldShowLoginCodeInChatList) {
     const authCode = text.match(/^\D*([\d-]{5,7})\D/)?.[1];

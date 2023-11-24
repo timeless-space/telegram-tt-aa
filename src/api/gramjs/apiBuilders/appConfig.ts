@@ -1,11 +1,18 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import BigInt from 'big-integer';
-import localDb from '../localDb';
 import { Api as GramJs } from '../../../lib/gramjs';
-import type { ApiAppConfig } from '../../types';
+
 import type { ApiLimitType } from '../../../global/types';
+import type { ApiAppConfig } from '../../types';
+
+import {
+  DEFAULT_LIMITS,
+  SERVICE_NOTIFICATIONS_USER_ID,
+  STORY_EXPIRE_PERIOD,
+  STORY_VIEWERS_EXPIRE_PERIOD,
+} from '../../../config';
+import localDb from '../localDb';
 import { buildJson } from './misc';
-import { DEFAULT_LIMITS } from '../../../config';
 
 type LimitType = 'default' | 'premium';
 type Limit = 'upload_max_fileparts' | 'stickers_faved_limit' | 'saved_gifs_limit' | 'dialog_filters_chats_limit' |
@@ -37,8 +44,16 @@ export interface GramJsAppConfig extends LimitsConfig {
   default_emoji_statuses_stickerset_id: string;
   hidden_members_group_size_min: number;
   autoarchive_setting_available: boolean;
+  authorization_autoconfirm_period: number;
   // Forums
   topics_pinned_limit: number;
+  // Stories
+  stories_all_hidden?: boolean;
+  story_expire_period: number;
+  story_viewers_expire_period: number;
+  stories_changelog_user_id?: number;
+  peer_colors: Record<string, string[]>;
+  dark_peer_colors: Record<string, string[]>;
 }
 
 function buildEmojiSounds(appConfig: GramJsAppConfig) {
@@ -100,5 +115,11 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
       chatlistJoined: getLimit(appConfig, 'chatlist_joined_limit', 'chatlistJoined'),
     },
     hash,
+    areStoriesHidden: appConfig.stories_all_hidden,
+    storyExpirePeriod: appConfig.story_expire_period ?? STORY_EXPIRE_PERIOD,
+    storyViewersExpirePeriod: appConfig.story_viewers_expire_period ?? STORY_VIEWERS_EXPIRE_PERIOD,
+    storyChangelogUserId: appConfig.stories_changelog_user_id?.toString() ?? SERVICE_NOTIFICATIONS_USER_ID,
+    peerColors: appConfig.peer_colors,
+    darkPeerColors: appConfig.dark_peer_colors,
   };
 }

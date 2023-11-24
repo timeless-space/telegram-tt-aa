@@ -1,29 +1,29 @@
-import React, { memo } from '../../lib/teact/teact';
-
-import type { ApiChat, ApiUser } from '../../api/types';
 import type { FC } from '../../lib/teact/teact';
+import React, { memo } from '../../lib/teact/teact';
+import { getActions } from '../../global';
+
+import type { ApiChat, ApiPeer, ApiUser } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 
-import { getActions } from '../../global';
 import { EMOJI_STATUS_LOOP_LIMIT } from '../../config';
-import renderText from './helpers/renderText';
 import { getChatTitle, getUserFullName, isUserId } from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { copyTextToClipboard } from '../../util/clipboard';
 import stopEvent from '../../util/stopEvent';
+import renderText from './helpers/renderText';
 
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 
-import VerifiedIcon from './VerifiedIcon';
-import FakeIcon from './FakeIcon';
 import CustomEmoji from './CustomEmoji';
+import FakeIcon from './FakeIcon';
 import PremiumIcon from './PremiumIcon';
+import VerifiedIcon from './VerifiedIcon';
 
 import styles from './FullNameTitle.module.scss';
 
 type OwnProps = {
-  peer: ApiChat | ApiUser;
+  peer: ApiPeer;
   className?: string;
   noVerified?: boolean;
   noFake?: boolean;

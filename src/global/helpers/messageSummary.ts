@@ -1,12 +1,14 @@
 import type { TeactNode } from '../../lib/teact/teact';
+
 import type { ApiMessage } from '../../api/types';
-import { ApiMessageEntityTypes } from '../../api/types';
-import { CONTENT_NOT_SUPPORTED } from '../../config';
-
 import type { LangFn } from '../../hooks/useLang';
+import { ApiMessageEntityTypes } from '../../api/types';
 
+import { CONTENT_NOT_SUPPORTED } from '../../config';
 import trimText from '../../util/trimText';
+import { getGlobal } from '../index';
 import { getMessageText, getMessageTranscription } from './messages';
+import { getUserFirstOrLastName } from './users';
 
 const SPOILER_CHARS = ['⠺', '⠵', '⠞', '⠟'];
 export const TRUNCATED_SUMMARY_LENGTH = 80;
@@ -117,6 +119,8 @@ export function getMessageSummaryDescription(
     invoice,
     location,
     game,
+    storyData,
+    giveaway,
   } = message.content;
 
   let hasUsedTruncatedText = false;
@@ -185,6 +189,23 @@ export function getMessageSummaryDescription(
 
   if (game) {
     summary = `🎮 ${game.title}`;
+  }
+
+  if (giveaway) {
+    summary = lang('BoostingGiveawayChannelStarted');
+  }
+
+  if (storyData) {
+    if (storyData.isMention) {
+      // eslint-disable-next-line eslint-multitab-tt/no-immediate-global
+      const global = getGlobal();
+      const firstName = getUserFirstOrLastName(global.users.byId[message.chatId]);
+      summary = message.isOutgoing
+        ? lang('Chat.Service.StoryMentioned.You', firstName)
+        : lang('Chat.Service.StoryMentioned', firstName);
+    } else {
+      summary = lang('ForwardedStory');
+    }
   }
 
   return summary || CONTENT_NOT_SUPPORTED;

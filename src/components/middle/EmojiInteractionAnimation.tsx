@@ -6,17 +6,16 @@ import { getActions, withGlobal } from '../../global';
 
 import type { ActiveEmojiInteraction } from '../../global/types';
 
-import { IS_ANDROID } from '../../util/windowEnvironment';
-
 import {
   selectAnimatedEmojiEffect,
 } from '../../global/selectors';
-import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
-
-import useLastCallback from '../../hooks/useLastCallback';
-import useFlag from '../../hooks/useFlag';
-import useMedia from '../../hooks/useMedia';
 import buildClassName from '../../util/buildClassName';
+import { IS_ANDROID } from '../../util/windowEnvironment';
+
+import useFlag from '../../hooks/useFlag';
+import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
+import useLastCallback from '../../hooks/useLastCallback';
+import useMedia from '../../hooks/useMedia';
 
 import AnimatedSticker from '../common/AnimatedSticker';
 
@@ -108,7 +107,7 @@ const EmojiInteractionAnimation: FC<OwnProps & StateProps> = ({
         tgsUrl={effectTgsUrl}
         play
         quality={IS_ANDROID ? 0.5 : undefined}
-        forceOnHeavyAnimation
+        forceAlways
         noLoop
         onLoad={startPlaying}
       />

@@ -4,14 +4,13 @@ import React, {
 } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
-import type { IAnchorPosition, ISettings } from '../../../types';
 import type { ApiAttachBot } from '../../../api/types';
+import type { IAnchorPosition, ISettings } from '../../../types';
 
-import useLastCallback from '../../../hooks/useLastCallback';
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 
-import Portal from '../../ui/Portal';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
 import AttachBotIcon from './AttachBotIcon';
@@ -19,8 +18,10 @@ import AttachBotIcon from './AttachBotIcon';
 type OwnProps = {
   bot: ApiAttachBot;
   theme: ISettings['theme'];
-  chatId: string;
+  isInSideMenu?: true;
+  chatId?: string;
   threadId?: number;
+  canShowNew?: boolean;
   onMenuOpened: VoidFunction;
   onMenuClosed: VoidFunction;
 };
@@ -30,6 +31,8 @@ const AttachBotItem: FC<OwnProps> = ({
   theme,
   chatId,
   threadId,
+  isInSideMenu,
+  canShowNew,
   onMenuOpened,
   onMenuClosed,
 }) => {
@@ -50,6 +53,21 @@ const AttachBotItem: FC<OwnProps> = ({
     setMenuPosition({ x: rect.right, y: rect.bottom });
     onMenuOpened();
     openMenu();
+  });
+
+  const handleClick = useLastCallback(() => {
+    if (isInSideMenu) {
+      callAttachBot({
+        bot,
+        isFromSideMenu: true,
+      });
+    } else {
+      callAttachBot({
+        bot,
+        chatId: chatId!,
+        threadId,
+      });
+    }
   });
 
   const handleCloseMenu = useLastCallback(() => {
@@ -73,29 +91,24 @@ const AttachBotItem: FC<OwnProps> = ({
       key={bot.id}
       customIcon={icon && <AttachBotIcon icon={icon} theme={theme} />}
       icon={!icon ? 'bots' : undefined}
-      // eslint-disable-next-line react/jsx-no-bind
-      onClick={() => callAttachBot({
-        bot,
-        chatId,
-        threadId,
-      })}
+      onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
       {bot.shortName}
+      {canShowNew && bot.isDisclaimerNeeded && <span className="menu-item-badge">{lang('New')}</span>}
       {menuPosition && (
-        <Portal>
-          <Menu
-            isOpen={isMenuOpen}
-            positionX="right"
-            style={`left: ${menuPosition.x}px;top: ${menuPosition.y}px;`}
-            className="bot-attach-context-menu"
-            autoClose
-            onClose={handleCloseMenu}
-            onCloseAnimationEnd={handleCloseAnimationEnd}
-          >
-            <MenuItem icon="stop" destructive onClick={handleRemoveBot}>{lang('WebApp.RemoveBot')}</MenuItem>
-          </Menu>
-        </Portal>
+        <Menu
+          isOpen={isMenuOpen}
+          positionX="right"
+          style={`left: ${menuPosition.x}px;top: ${menuPosition.y}px;`}
+          className="bot-attach-context-menu"
+          autoClose
+          withPortal
+          onClose={handleCloseMenu}
+          onCloseAnimationEnd={handleCloseAnimationEnd}
+        >
+          <MenuItem icon="stop" destructive onClick={handleRemoveBot}>{lang('WebApp.RemoveBot')}</MenuItem>
+        </Menu>
       )}
 
     </MenuItem>

@@ -1,30 +1,32 @@
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
-
-import type { ActionReturnType, GlobalState } from '../../types';
-import type {
-  PrivacyVisibility, InputPrivacyRules, InputPrivacyContact, ApiPrivacySettings,
-} from '../../../types';
 import type { ApiUser, ApiUsername } from '../../../api/types';
+import type {
+  ApiPrivacySettings,
+} from '../../../types';
+import type { ActionReturnType } from '../../types';
 import {
   ProfileEditProgress,
   UPLOADING_WALLPAPER_SLUG,
 } from '../../../types';
 
 import { APP_CONFIG_REFETCH_INTERVAL, COUNTRIES_WITH_12H_TIME_FORMAT } from '../../../config';
-import { callApi } from '../../../api/gramjs';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { buildCollectionByKey } from '../../../util/iteratees';
-import { subscribe, unsubscribe, requestPermission } from '../../../util/notifications';
 import { setTimeFormat } from '../../../util/langProvider';
+import { requestPermission, subscribe, unsubscribe } from '../../../util/notifications';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { getServerTime } from '../../../util/serverTime';
-import { selectChat, selectUser, selectTabState } from '../../selectors';
+import { updatePeerColors } from '../../../util/theme';
+import { callApi } from '../../../api/gramjs';
+import { buildApiInputPrivacyRules } from '../../helpers';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
-  addUsers, addBlockedContact, updateChats, updateUser, removeBlockedContact, replaceSettings, updateNotifySettings,
-  addNotifyExceptions, updateChat, updateUserFullInfo,
+  addBlockedUser, addNotifyExceptions, addUsers, removeBlockedUser, replaceSettings, updateChat, updateChats,
+  updateNotifySettings, updateUser, updateUserFullInfo,
 } from '../../reducers';
-import { isUserId } from '../../helpers';
 import { updateTabState } from '../../reducers/tabs';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import {
+  selectChat, selectTabState, selectUser, selectUserFullInfo,
+} from '../../selectors';
 
 addActionHandler('updateProfile', async (global, actions, payload): Promise<void> => {
   const {
@@ -50,7 +52,6 @@ addActionHandler('updateProfile', async (global, actions, payload): Promise<void
       global = getGlobal();
       global = addUsers(global, buildCollectionByKey(result.users, 'id'));
       setGlobal(global);
-      actions.loadProfilePhotos({ profileId: currentUserId });
     }
   }
 
@@ -97,6 +98,10 @@ addActionHandler('updateProfile', async (global, actions, payload): Promise<void
     },
   }, tabId);
   setGlobal(global);
+
+  if (photo) {
+    actions.loadFullUser({ userId: currentUserId, withPhotos: true });
+  }
 });
 
 addActionHandler('updateProfilePhoto', async (global, actions, payload): Promise<void> => {
@@ -108,6 +113,7 @@ addActionHandler('updateProfilePhoto', async (global, actions, payload): Promise
 
   global = updateUser(global, currentUserId, { avatarHash: undefined });
   global = updateUserFullInfo(global, currentUserId, { profilePhoto: undefined });
+
   setGlobal(global);
 
   const result = await callApi('updateProfilePhoto', photo, isFallback);
@@ -117,28 +123,40 @@ addActionHandler('updateProfilePhoto', async (global, actions, payload): Promise
   global = getGlobal();
   global = addUsers(global, buildCollectionByKey(users, 'id'));
   setGlobal(global);
-
-  actions.loadFullUser({ userId: currentUserId });
-  actions.loadProfilePhotos({ profileId: currentUserId });
+  actions.loadFullUser({ userId: currentUserId, withPhotos: true });
 });
 
 addActionHandler('deleteProfilePhoto', async (global, actions, payload): Promise<void> => {
   const { photo } = payload;
   const { currentUserId } = global;
   if (!currentUserId) return;
-  const currentUser = selectChat(global, currentUserId);
+  const currentUser = selectUser(global, currentUserId);
   if (!currentUser) return;
-  if (currentUser.avatarHash === photo.id) {
+
+  const fullInfo = selectUserFullInfo(global, currentUserId);
+
+  if (currentUser.avatarHash === photo.id || fullInfo?.profilePhoto?.id === photo.id) {
     global = updateUser(global, currentUserId, { avatarHash: undefined });
     global = updateUserFullInfo(global, currentUserId, { profilePhoto: undefined });
-    setGlobal(global);
   }
 
-  const result = await callApi('deleteProfilePhotos', [photo]);
-  if (!result) return;
+  if (fullInfo?.fallbackPhoto?.id === photo.id) {
+    global = updateUserFullInfo(global, currentUserId, { fallbackPhoto: undefined });
+  }
 
-  actions.loadFullUser({ userId: currentUserId });
-  actions.loadProfilePhotos({ profileId: currentUserId });
+  if (fullInfo?.personalPhoto?.id === photo.id) {
+    global = updateUserFullInfo(global, currentUserId, { personalPhoto: undefined });
+  }
+
+  const { photos = [] } = currentUser;
+
+  const newPhotos = photos.filter((p) => p.id !== photo.id);
+  global = updateUser(global, currentUserId, { photos: newPhotos });
+
+  setGlobal(global);
+
+  await callApi('deleteProfilePhotos', [photo]);
+  actions.loadFullUser({ userId: currentUserId, withPhotos: true });
 });
 
 addActionHandler('checkUsername', async (global, actions, payload): Promise<void> => {
@@ -254,11 +272,9 @@ addActionHandler('uploadWallpaper', async (global, actions, payload): Promise<vo
   setGlobal(global);
 });
 
-addActionHandler('loadBlockedContacts', async (global): Promise<void> => {
-  const result = await callApi('fetchBlockedContacts');
-  if (!result) {
-    return;
-  }
+addActionHandler('loadBlockedUsers', async (global): Promise<void> => {
+  const result = await callApi('fetchBlockedUsers', {});
+  if (!result) return;
 
   global = getGlobal();
 
@@ -272,7 +288,6 @@ addActionHandler('loadBlockedContacts', async (global): Promise<void> => {
   global = {
     ...global,
     blocked: {
-      ...global.blocked,
       ids: result.blockedIds,
       totalCount: result.totalCount,
     },
@@ -281,40 +296,37 @@ addActionHandler('loadBlockedContacts', async (global): Promise<void> => {
   setGlobal(global);
 });
 
-addActionHandler('blockContact', async (global, actions, payload): Promise<void> => {
-  const { contactId, accessHash } = payload!;
+addActionHandler('blockUser', async (global, actions, payload): Promise<void> => {
+  const { userId, isOnlyStories } = payload;
 
-  const result = await callApi('blockContact', contactId, accessHash);
-  if (!result) {
-    return;
-  }
+  const user = selectUser(global, userId);
+  if (!user) return;
+
+  const result = await callApi('blockUser', {
+    user,
+    isOnlyStories: isOnlyStories || undefined,
+  });
+  if (!result) return;
 
   global = getGlobal();
-  global = addBlockedContact(global, contactId);
+  global = addBlockedUser(global, userId);
   setGlobal(global);
 });
 
-addActionHandler('unblockContact', async (global, actions, payload): Promise<void> => {
-  const { contactId } = payload!;
-  let accessHash: string | undefined;
-  const isPrivate = isUserId(contactId);
+addActionHandler('unblockUser', async (global, actions, payload): Promise<void> => {
+  const { userId, isOnlyStories } = payload;
 
-  if (isPrivate) {
-    const user = selectUser(global, contactId);
-    if (!user) {
-      return;
-    }
+  const user = selectUser(global, userId);
+  if (!user) return;
 
-    accessHash = user.accessHash;
-  }
-
-  const result = await callApi('unblockContact', contactId, accessHash);
-  if (!result) {
-    return;
-  }
+  const result = await callApi('unblockUser', {
+    user,
+    isOnlyStories: isOnlyStories || undefined,
+  });
+  if (!result) return;
 
   global = getGlobal();
-  global = removeBlockedContact(global, contactId);
+  global = removeBlockedUser(global, userId);
   setGlobal(global);
 });
 
@@ -401,6 +413,7 @@ addActionHandler('loadLanguages', async (global): Promise<void> => {
 addActionHandler('loadPrivacySettings', async (global): Promise<void> => {
   const result = await Promise.all([
     callApi('fetchPrivacySettings', 'phoneNumber'),
+    callApi('fetchPrivacySettings', 'addByPhone'),
     callApi('fetchPrivacySettings', 'lastSeen'),
     callApi('fetchPrivacySettings', 'profilePhoto'),
     callApi('fetchPrivacySettings', 'forwards'),
@@ -408,6 +421,7 @@ addActionHandler('loadPrivacySettings', async (global): Promise<void> => {
     callApi('fetchPrivacySettings', 'phoneCall'),
     callApi('fetchPrivacySettings', 'phoneP2P'),
     callApi('fetchPrivacySettings', 'voiceMessages'),
+    callApi('fetchPrivacySettings', 'bio'),
   ]);
 
   if (result.some((e) => e === undefined)) {
@@ -416,6 +430,7 @@ addActionHandler('loadPrivacySettings', async (global): Promise<void> => {
 
   const [
     phoneNumberSettings,
+    addByPhoneSettings,
     lastSeenSettings,
     profilePhotoSettings,
     forwardsSettings,
@@ -423,6 +438,7 @@ addActionHandler('loadPrivacySettings', async (global): Promise<void> => {
     phoneCallSettings,
     phoneP2PSettings,
     voiceMessagesSettings,
+    bioSettings,
   ] = result as {
     users: ApiUser[];
     rules: ApiPrivacySettings;
@@ -439,6 +455,7 @@ addActionHandler('loadPrivacySettings', async (global): Promise<void> => {
       privacy: {
         ...global.settings.privacy,
         phoneNumber: phoneNumberSettings.rules,
+        addByPhone: addByPhoneSettings.rules,
         lastSeen: lastSeenSettings.rules,
         profilePhoto: profilePhotoSettings.rules,
         forwards: forwardsSettings.rules,
@@ -446,6 +463,7 @@ addActionHandler('loadPrivacySettings', async (global): Promise<void> => {
         phoneCall: phoneCallSettings.rules,
         phoneP2P: phoneP2PSettings.rules,
         voiceMessages: voiceMessagesSettings.rules,
+        bio: bioSettings.rules,
       },
     },
   };
@@ -463,10 +481,10 @@ addActionHandler('setPrivacyVisibility', async (global, actions, payload): Promi
     return;
   }
 
-  const rules = buildInputPrivacyRules(global, {
+  const rules = buildApiInputPrivacyRules(global, {
     visibility,
     allowedIds: [...settings.allowUserIds, ...settings.allowChatIds],
-    deniedIds: [...settings.blockUserIds, ...settings.blockChatIds],
+    blockedIds: [...settings.blockUserIds, ...settings.blockChatIds],
   });
 
   const result = await callApi('setPrivacySettings', privacyKey, rules);
@@ -490,7 +508,7 @@ addActionHandler('setPrivacyVisibility', async (global, actions, payload): Promi
 });
 
 addActionHandler('setPrivacySettings', async (global, actions, payload): Promise<void> => {
-  const { privacyKey, isAllowList, contactsIds } = payload!;
+  const { privacyKey, isAllowList, updatedIds } = payload!;
   const {
     privacy: { [privacyKey]: settings },
   } = global.settings;
@@ -499,10 +517,11 @@ addActionHandler('setPrivacySettings', async (global, actions, payload): Promise
     return;
   }
 
-  const rules = buildInputPrivacyRules(global, {
+  const rules = buildApiInputPrivacyRules(global, {
     visibility: settings.visibility,
-    allowedIds: isAllowList ? contactsIds : [...settings.allowUserIds, ...settings.allowChatIds],
-    deniedIds: !isAllowList ? contactsIds : [...settings.blockUserIds, ...settings.blockChatIds],
+    isUnspecified: settings.isUnspecified,
+    allowedIds: isAllowList ? updatedIds : [...settings.allowUserIds, ...settings.allowChatIds],
+    blockedIds: !isAllowList ? updatedIds : [...settings.blockUserIds, ...settings.blockChatIds],
   });
 
   const result = await callApi('setPrivacySettings', privacyKey, rules);
@@ -524,74 +543,6 @@ addActionHandler('setPrivacySettings', async (global, actions, payload): Promise
   };
   setGlobal(global);
 });
-
-function buildInputPrivacyRules(global: GlobalState, {
-  visibility,
-  allowedIds,
-  deniedIds,
-}: {
-  visibility: PrivacyVisibility;
-  allowedIds: string[];
-  deniedIds: string[];
-}): InputPrivacyRules {
-  const {
-    users: { byId: usersById },
-    chats: { byId: chatsById },
-  } = global;
-
-  const rules: InputPrivacyRules = {
-    visibility,
-  };
-  let users: InputPrivacyContact[];
-  let chats: InputPrivacyContact[];
-
-  const collectUsers = (userId: string) => {
-    if (!isUserId(userId)) {
-      return undefined;
-    }
-    const { id, accessHash } = usersById[userId] || {};
-    if (!id) {
-      return undefined;
-    }
-
-    return { id, accessHash };
-  };
-
-  const collectChats = (userId: string) => {
-    if (isUserId(userId)) {
-      return undefined;
-    }
-    const chat = chatsById[userId];
-
-    return chat ? { id: chat.id } : undefined;
-  };
-
-  if (visibility === 'contacts' || visibility === 'nobody') {
-    users = allowedIds.map(collectUsers).filter(Boolean) as InputPrivacyContact[];
-    chats = allowedIds.map(collectChats).filter(Boolean) as InputPrivacyContact[];
-
-    if (users.length > 0) {
-      rules.allowedUsers = users;
-    }
-    if (chats.length > 0) {
-      rules.allowedChats = chats;
-    }
-  }
-
-  if (visibility === 'everybody' || visibility === 'contacts') {
-    users = deniedIds.map(collectUsers).filter(Boolean) as InputPrivacyContact[];
-    chats = deniedIds.map(collectChats).filter(Boolean) as InputPrivacyContact[];
-
-    if (users.length > 0) {
-      rules.blockedUsers = users;
-    }
-    if (chats.length > 0) {
-      rules.blockedChats = chats;
-    }
-  }
-
-  return rules;
-}
 
 addActionHandler('updateIsOnline', (global, actions, payload): ActionReturnType => {
   if (global.connectionState !== 'connectionStateReady') return;
@@ -672,6 +623,10 @@ addActionHandler('loadAppConfig', async (global, actions, payload): Promise<void
     appConfig,
   };
   setGlobal(global);
+
+  if (appConfig.peerColors) {
+    updatePeerColors(appConfig.peerColors, appConfig.darkPeerColors);
+  }
 });
 
 addActionHandler('loadConfig', async (global): Promise<void> => {

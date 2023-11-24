@@ -2,47 +2,48 @@ import type { FC } from '../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
+import { getActions, withGlobal } from '../../global';
 
 import type {
-  ApiChat, ApiMessage, ApiPhoto, ApiUser,
+  ApiMessage, ApiPeer, ApiPhoto, ApiUser,
 } from '../../api/types';
 import { MediaViewerOrigin } from '../../types';
 
-import { getActions, withGlobal } from '../../global';
+import { ANIMATION_END_DELAY } from '../../config';
 import { getChatMediaMessageIds, isChatAdmin, isUserId } from '../../global/helpers';
 import {
   selectChat,
   selectChatMessage,
   selectChatMessages,
   selectChatScheduledMessages,
-  selectCurrentMediaSearch, selectTabState,
-  selectIsChatWithSelf,
+  selectCurrentMediaSearch, selectIsChatWithSelf,
   selectListedIds,
-  selectScheduledMessage,
-  selectUser,
   selectOutlyingListByMessageId,
-  selectUserFullInfo,
   selectPerformanceSettingsValue,
+  selectScheduledMessage,
+  selectTabState,
+  selectUser,
+  selectUserFullInfo,
 } from '../../global/selectors';
 import { stopCurrentAudio } from '../../util/audioPlayer';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
-import { ANIMATION_END_DELAY } from '../../config';
-import { MEDIA_VIEWER_MEDIA_QUERY } from '../common/helpers/mediaDimensions';
 import { disableDirectTextInput, enableDirectTextInput } from '../../util/directInputManager';
-import { animateClosing, animateOpening } from './helpers/ghostAnimation';
+import { MEDIA_VIEWER_MEDIA_QUERY } from '../common/helpers/mediaDimensions';
 import { renderMessageText } from '../common/helpers/renderMessageText';
+import { animateClosing, animateOpening } from './helpers/ghostAnimation';
 
+import useAppLayout from '../../hooks/useAppLayout';
+import useElectronDrag from '../../hooks/useElectronDrag';
 import useFlag from '../../hooks/useFlag';
 import useForceUpdate from '../../hooks/useForceUpdate';
 import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
-import { dispatchPriorityPlaybackEvent } from '../../hooks/usePriorityPlaybackCheck';
-import { exitPictureInPictureIfNeeded, usePictureInPictureSignal } from '../../hooks/usePictureInPicture';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
+import { exitPictureInPictureIfNeeded, usePictureInPictureSignal } from '../../hooks/usePictureInPicture';
 import usePrevious from '../../hooks/usePrevious';
-import { useMediaProps } from './hooks/useMediaProps';
-import useElectronDrag from '../../hooks/useElectronDrag';
-import useAppLayout from '../../hooks/useAppLayout';
+import { dispatchPriorityPlaybackEvent } from '../../hooks/usePriorityPlaybackCheck';
 import { useStateRef } from '../../hooks/useStateRef';
+import { useMediaProps } from './hooks/useMediaProps';
 
 import ReportModal from '../common/ReportModal';
 import Button from '../ui/Button';
@@ -53,7 +54,6 @@ import MediaViewerSlides from './MediaViewerSlides';
 import SenderInfo from './SenderInfo';
 
 import './MediaViewer.scss';
-import useLastCallback from '../../hooks/useLastCallback';
 
 type StateProps = {
   chatId?: string;
@@ -63,7 +63,7 @@ type StateProps = {
   isChatWithSelf?: boolean;
   canUpdateMedia?: boolean;
   origin?: MediaViewerOrigin;
-  avatarOwner?: ApiChat | ApiUser;
+  avatarOwner?: ApiPeer;
   avatarOwnerFallbackPhoto?: ApiPhoto;
   message?: ApiMessage;
   chatMessages?: Record<number, ApiMessage>;
@@ -73,7 +73,7 @@ type StateProps = {
   shouldSkipHistoryAnimations?: boolean;
 };
 
-const ANIMATION_DURATION = 350;
+const ANIMATION_DURATION = 250;
 
 const MediaViewer: FC<StateProps> = ({
   chatId,
@@ -205,9 +205,9 @@ const MediaViewer: FC<StateProps> = ({
   const prevIsHidden = usePrevious<boolean | undefined>(isHidden);
   const prevOrigin = usePrevious(origin);
   const prevMediaId = usePrevious(mediaId);
-  const prevAvatarOwner = usePrevious<ApiChat | ApiUser | undefined>(avatarOwner);
+  const prevAvatarOwner = usePrevious<ApiPeer | undefined>(avatarOwner);
   const prevBestImageData = usePrevious(bestImageData);
-  const textParts = message ? renderMessageText(message) : undefined;
+  const textParts = message ? renderMessageText({ message, forcePlayback: true, isForMediaViewer: true }) : undefined;
   const hasFooter = Boolean(textParts);
   const shouldAnimateOpening = prevIsHidden && prevMediaId !== mediaId;
 
@@ -307,7 +307,7 @@ const MediaViewer: FC<StateProps> = ({
         chatId={avatarOwner.id}
         isAvatar
         isFallbackAvatar={isUserId(avatarOwner.id)
-          && (avatarOwner as ApiUser).photos?.[mediaId!].id === avatarOwnerFallbackPhoto?.id}
+          && (avatarOwner as ApiUser).photos?.[mediaId!]?.id === avatarOwnerFallbackPhoto?.id}
       />
     ) : (
       <SenderInfo
@@ -362,7 +362,7 @@ const MediaViewer: FC<StateProps> = ({
           onClose={closeReportModal}
           subject="media"
           photo={avatarPhoto}
-          chatId={avatarOwner?.id}
+          peerId={avatarOwner?.id}
         />
       </div>
       <MediaViewerSlides

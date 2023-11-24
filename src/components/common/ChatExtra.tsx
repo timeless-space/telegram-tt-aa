@@ -1,9 +1,9 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
 import type {
   ApiChat, ApiCountryCode, ApiUser, ApiUsername,
 } from '../../api/types';
@@ -11,31 +11,32 @@ import { MAIN_THREAD_ID } from '../../api/types';
 
 import { TME_LINK_PREFIX } from '../../config';
 import {
-  selectChat,
-  selectChatFullInfo,
-  selectCurrentMessageList,
-  selectNotifyExceptions,
-  selectNotifySettings,
-  selectUser,
-  selectUserFullInfo,
-} from '../../global/selectors';
-import {
   getChatLink,
-  getTopicLink,
   getHasAdminRight,
   isChatChannel,
   isUserId,
   isUserRightBanned,
   selectIsChatMuted,
 } from '../../global/helpers';
-import renderText from './helpers/renderText';
+import {
+  selectChat,
+  selectChatFullInfo,
+  selectCurrentMessageList,
+  selectNotifyExceptions,
+  selectNotifySettings,
+  selectTopicLink,
+  selectUser,
+  selectUserFullInfo,
+} from '../../global/selectors';
 import { copyTextToClipboard } from '../../util/clipboard';
 import { formatPhoneNumberWithCode } from '../../util/phoneNumber';
 import { debounce } from '../../util/schedulers';
 import stopEvent from '../../util/stopEvent';
+import renderText from './helpers/renderText';
 
-import useLastCallback from '../../hooks/useLastCallback';
+import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
 import ListItem from '../ui/ListItem';
 import Switcher from '../ui/Switcher';
@@ -55,6 +56,7 @@ type StateProps =
     topicId?: number;
     description?: string;
     chatInviteLink?: string;
+    topicLink?: string;
   };
 
 const runDebounced = debounce((cb) => cb(), 500, false);
@@ -69,12 +71,14 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
   topicId,
   description,
   chatInviteLink,
+  topicLink,
 }) => {
   const {
     loadFullUser,
     showNotification,
     updateChatMutedState,
     updateTopicMutedState,
+    loadPeerStories,
   } = getActions();
 
   const {
@@ -84,6 +88,7 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
     isSelf,
   } = user || {};
   const { id: chatId, usernames: chatUsernames } = chat || {};
+  const peerId = userId || chatId;
   const lang = useLang();
 
   const [areNotificationsEnabled, setAreNotificationsEnabled] = useState(!isMuted);
@@ -96,6 +101,13 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
     if (!userId) return;
     loadFullUser({ userId });
   }, [userId]);
+
+  useEffectWithPrevDeps(([prevPeerId]) => {
+    if (!peerId || prevPeerId === peerId) return;
+    if (user || (chat && isChatChannel(chat))) {
+      loadPeerStories({ peerId });
+    }
+  }, [peerId, chat, user]);
 
   const isTopicInfo = Boolean(topicId && topicId !== MAIN_THREAD_ID);
 
@@ -116,10 +128,8 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
       return undefined;
     }
 
-    return isTopicInfo
-      ? getTopicLink(chat.id, activeChatUsernames?.[0].username, topicId)
-      : getChatLink(chat) || chatInviteLink;
-  }, [chat, isTopicInfo, activeChatUsernames, topicId, chatInviteLink]);
+    return isTopicInfo ? topicLink! : getChatLink(chat) || chatInviteLink;
+  }, [chat, isTopicInfo, topicLink, chatInviteLink]);
 
   const handleNotificationChange = useLastCallback(() => {
     setAreNotificationsEnabled((current) => {
@@ -279,6 +289,8 @@ export default memo(withGlobal<OwnProps>(
       || getHasAdminRight(chat, 'inviteUsers')
     );
 
+    const topicLink = topicId ? selectTopicLink(global, chatOrUserId, topicId) : undefined;
+
     return {
       phoneCodeList,
       chat,
@@ -288,6 +300,7 @@ export default memo(withGlobal<OwnProps>(
       topicId,
       chatInviteLink,
       description,
+      topicLink,
     };
   },
 )(ChatExtra));

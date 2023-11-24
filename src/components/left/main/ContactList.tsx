@@ -1,28 +1,28 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, { useCallback, useMemo, memo } from '../../../lib/teact/teact';
+import React, { memo, useCallback, useMemo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiUser, ApiUserStatus } from '../../../api/types';
+import { StoryViewerOrigin } from '../../../types';
 
 import { filterUsersByName, sortUserIds } from '../../../global/helpers';
-import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
-import useHistoryBack from '../../../hooks/useHistoryBack';
-import useLang from '../../../hooks/useLang';
+
 import useAppLayout from '../../../hooks/useAppLayout';
+import useHistoryBack from '../../../hooks/useHistoryBack';
+import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
+import useLang from '../../../hooks/useLang';
 
 import PrivateChatInfo from '../../common/PrivateChatInfo';
+import FloatingActionButton from '../../ui/FloatingActionButton';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
-import FloatingActionButton from '../../ui/FloatingActionButton';
 
 export type OwnProps = {
   filter: string;
   isActive: boolean;
   onReset: () => void;
 };
-
-const PRELOAD_CONTACT = 10000;
 
 type StateProps = {
   usersById: Record<string, ApiUser>;
@@ -68,24 +68,23 @@ const ContactList: FC<OwnProps & StateProps> = ({
   const [viewportIds, getMore] = useInfiniteScroll(undefined, listIds, Boolean(filter));
 
   return (
-    <InfiniteScroll
-      items={viewportIds}
-      onLoadMore={getMore}
-      preloadBackwards={PRELOAD_CONTACT}
-      noScrollRestoreOnTop
-      noScrollRestore
-      className="chat-list custom-scroll"
-    >
+    <InfiniteScroll items={viewportIds} onLoadMore={getMore} className="chat-list custom-scroll">
       {viewportIds?.length ? (
         viewportIds.map((id) => (
           <ListItem
             key={id}
-            className="chat-item-clickable"
+            className="chat-item-clickable contact-list-item"
             // eslint-disable-next-line react/jsx-no-bind
             onClick={() => handleClick(id)}
-            ripple={!isMobile}
           >
-            <PrivateChatInfo userId={id} forceShowSelf avatarSize="large" />
+            <PrivateChatInfo
+              userId={id}
+              forceShowSelf
+              avatarSize="large"
+              withStory
+              storyViewerOrigin={StoryViewerOrigin.ChatList}
+              ripple={!isMobile}
+            />
           </ListItem>
         ))
       ) : viewportIds && !viewportIds.length ? (

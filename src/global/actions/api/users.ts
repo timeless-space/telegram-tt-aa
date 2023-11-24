@@ -1,19 +1,19 @@
+import type { ApiUser } from '../../../api/types';
+import type { ActionReturnType } from '../../types';
+import { ManagementProgress } from '../../../types';
+
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { buildCollectionByKey, unique } from '../../../util/iteratees';
+import * as langProvider from '../../../util/langProvider';
+import { throttle } from '../../../util/schedulers';
+import { getServerTime } from '../../../util/serverTime';
+import { callApi } from '../../../api/gramjs';
+import { isUserBot, isUserId } from '../../helpers';
 import {
   addActionHandler,
   getGlobal,
   setGlobal,
 } from '../../index';
-
-import type { ApiUser } from '../../../api/types';
-import { ManagementProgress } from '../../../types';
-
-import { throttle } from '../../../util/schedulers';
-import { buildCollectionByKey, unique } from '../../../util/iteratees';
-import { isUserBot, isUserId } from '../../helpers';
-import { callApi } from '../../../api/gramjs';
-import {
-  selectChat, selectCurrentMessageList, selectTabState, selectUser, selectUserFullInfo,
-} from '../../selectors';
 import {
   addChats,
   addUsers,
@@ -23,20 +23,20 @@ import {
   updateChat,
   updateManagementProgress,
   updateUser,
+  updateUserFullInfo,
   updateUsers,
   updateUserSearch,
   updateUserSearchFetchingStatus,
 } from '../../reducers';
-import { getServerTime } from '../../../util/serverTime';
-import * as langProvider from '../../../util/langProvider';
-import type { ActionReturnType } from '../../types';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import {
+  selectChat, selectCurrentMessageList, selectPeer, selectTabState, selectUser, selectUserFullInfo,
+} from '../../selectors';
 
 const TOP_PEERS_REQUEST_COOLDOWN = 60; // 1 min
 const runThrottledForSearch = throttle((cb) => cb(), 500, false);
 
 addActionHandler('loadFullUser', async (global, actions, payload): Promise<void> => {
-  const { userId } = payload!;
+  const { userId, withPhotos } = payload!;
   const user = selectUser(global, userId);
   if (!user) {
     return;
@@ -53,8 +53,15 @@ addActionHandler('loadFullUser', async (global, actions, payload): Promise<void>
   const hasChangedProfilePhoto = fullInfo?.profilePhoto?.id !== newFullInfo?.profilePhoto?.id;
   const hasChangedFallbackPhoto = fullInfo?.fallbackPhoto?.id !== newFullInfo?.fallbackPhoto?.id;
   const hasChangedPersonalPhoto = fullInfo?.personalPhoto?.id !== newFullInfo?.personalPhoto?.id;
-  if ((hasChangedAvatarHash || hasChangedProfilePhoto || hasChangedFallbackPhoto || hasChangedPersonalPhoto)
-    && user.photos?.length) {
+  const hasChangedPhoto = hasChangedAvatarHash
+    || hasChangedProfilePhoto
+    || hasChangedFallbackPhoto
+    || hasChangedPersonalPhoto;
+
+  global = updateUser(global, userId, result.user);
+  global = updateUserFullInfo(global, userId, result.fullInfo);
+  setGlobal(global);
+  if (withPhotos || (user.photos?.length && hasChangedPhoto)) {
     actions.loadProfilePhotos({ profileId: userId });
   }
 });
@@ -206,6 +213,7 @@ addActionHandler('updateContact', async (global, actions, payload): Promise<void
 
   if (result) {
     actions.loadChatSettings({ chatId: userId });
+    actions.loadPeerStories({ peerId: userId });
 
     global = getGlobal();
     global = updateUser(
@@ -270,11 +278,13 @@ addActionHandler('loadProfilePhotos', async (global, actions, payload): Promise<
 
   const userOrChat = user || chat;
   const { photos, users } = result;
-  photos.sort((a) => (a.id === userOrChat?.avatarHash ? -1 : 1));
+
   const fallbackPhoto = fullInfo?.fallbackPhoto;
   const personalPhoto = fullInfo?.personalPhoto;
   if (fallbackPhoto) photos.push(fallbackPhoto);
   if (personalPhoto) photos.unshift(personalPhoto);
+
+  photos.sort((a) => (a.id === userOrChat?.avatarHash ? -1 : 1));
 
   global = addUsers(global, buildCollectionByKey(users, 'id'));
 
@@ -349,16 +359,41 @@ addActionHandler('importContact', async (global, actions, payload): Promise<void
 
 addActionHandler('reportSpam', (global, actions, payload): ActionReturnType => {
   const { chatId } = payload!;
-  const userOrChat = isUserId(chatId) ? selectUser(global, chatId) : selectChat(global, chatId);
-  if (!userOrChat) {
+  const peer = selectPeer(global, chatId);
+  if (!peer) {
     return;
   }
 
-  void callApi('reportSpam', userOrChat);
+  void callApi('reportSpam', peer);
 });
 
 addActionHandler('setEmojiStatus', (global, actions, payload): ActionReturnType => {
   const { emojiStatus, expires } = payload!;
 
   void callApi('updateEmojiStatus', emojiStatus, expires);
+});
+
+addActionHandler('saveCloseFriends', async (global, actions, payload): Promise<void> => {
+  const { userIds } = payload!;
+
+  const result = await callApi('saveCloseFriends', userIds);
+  if (!result) {
+    return;
+  }
+
+  global = getGlobal();
+  global.contactList?.userIds.forEach((userId) => {
+    const { isCloseFriend } = global.users.byId[userId] || {};
+    if (isCloseFriend && !userIds.includes(userId)) {
+      global = updateUser(global, userId, {
+        isCloseFriend: undefined,
+      });
+    }
+  });
+  userIds.forEach((userId) => {
+    global = updateUser(global, userId, {
+      isCloseFriend: true,
+    });
+  });
+  setGlobal(global);
 });

@@ -1,12 +1,19 @@
-import type { Api as GramJs } from '../../../lib/gramjs';
+import { Api as GramJs } from '../../../lib/gramjs';
 
 import type {
-  ApiInvoice, ApiPaymentSavedInfo, ApiPremiumPromo, ApiPremiumSubscriptionOption,
-  ApiPaymentForm, ApiReceipt, ApiLabeledPrice, ApiPaymentCredentials,
+  ApiBoostsStatus,
+  ApiCheckedGiftCode,
+  ApiGiveawayInfo,
+  ApiInvoice, ApiLabeledPrice, ApiMyBoost, ApiPaymentCredentials,
+  ApiPaymentForm, ApiPaymentSavedInfo, ApiPremiumPromo, ApiPremiumSubscriptionOption,
+  ApiReceipt,
 } from '../../types';
 
-import { buildApiDocument, buildApiMessageEntity, buildApiWebDocument } from './messages';
+import { buildApiMessageEntity } from './common';
 import { omitVirtualClassFields } from './helpers';
+import { buildApiDocument, buildApiWebDocument } from './messageContent';
+import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
+import { buildStatisticsPercentage } from './statistics';
 
 export function buildShippingOptions(shippingOptions: GramJs.ShippingOption[] | undefined) {
   if (!shippingOptions) {
@@ -145,7 +152,7 @@ export function buildApiInvoiceFromForm(form: GramJs.payments.PaymentForm): ApiI
     invoice, description: text, title, photo,
   } = form;
   const {
-    test, currency, prices, recurring, recurringTermsUrl, maxTipAmount, suggestedTipAmounts,
+    test, currency, prices, recurring, termsUrl, maxTipAmount, suggestedTipAmounts,
   } = invoice;
 
   const totalAmount = prices.reduce((ac, cur) => ac + cur.amount.toJSNumber(), 0);
@@ -158,7 +165,7 @@ export function buildApiInvoiceFromForm(form: GramJs.payments.PaymentForm): ApiI
     currency,
     isTest: test,
     isRecurring: recurring,
-    recurringTermsUrl,
+    termsUrl,
     maxTipAmount: maxTipAmount?.toJSNumber(),
     ...(suggestedTipAmounts && { suggestedTipAmounts: suggestedTipAmounts.map((tip) => tip.toJSNumber()) }),
   };
@@ -195,4 +202,93 @@ function buildApiPremiumSubscriptionOption(option: GramJs.PremiumSubscriptionOpt
 
 export function buildApiPaymentCredentials(credentials: GramJs.PaymentSavedCredentialsCard[]): ApiPaymentCredentials[] {
   return credentials.map(({ id, title }) => ({ id, title }));
+}
+
+export function buildApiBoostsStatus(boostStatus: GramJs.premium.BoostsStatus): ApiBoostsStatus {
+  const {
+    level, boostUrl, boosts, myBoost, currentLevelBoosts, nextLevelBoosts, premiumAudience,
+  } = boostStatus;
+  return {
+    level,
+    currentLevelBoosts,
+    boosts,
+    hasMyBoost: Boolean(myBoost),
+    boostUrl,
+    nextLevelBoosts,
+    ...(premiumAudience && { premiumSubscribers: buildStatisticsPercentage(premiumAudience) }),
+  };
+}
+
+export function buildApiMyBoost(myBoost: GramJs.MyBoost): ApiMyBoost {
+  const {
+    date, expires, slot, cooldownUntilDate, peer,
+  } = myBoost;
+
+  return {
+    date,
+    expires,
+    slot,
+    cooldownUntil: cooldownUntilDate,
+    chatId: peer && getApiChatIdFromMtpPeer(peer),
+  };
+}
+
+export function buildApiGiveawayInfo(info: GramJs.payments.TypeGiveawayInfo): ApiGiveawayInfo | undefined {
+  if (info instanceof GramJs.payments.GiveawayInfo) {
+    const {
+      startDate,
+      adminDisallowedChatId,
+      disallowedCountry,
+      joinedTooEarlyDate,
+      participating,
+      preparingResults,
+    } = info;
+
+    return {
+      type: 'active',
+      startDate,
+      isParticipating: participating,
+      adminDisallowedChatId: adminDisallowedChatId?.toString(),
+      disallowedCountry,
+      joinedTooEarlyDate,
+      isPreparingResults: preparingResults,
+    };
+  } else {
+    const {
+      activatedCount,
+      finishDate,
+      giftCodeSlug,
+      winner,
+      refunded,
+      startDate,
+      winnersCount,
+    } = info;
+
+    return {
+      type: 'results',
+      startDate,
+      activatedCount,
+      finishDate,
+      winnersCount,
+      giftCodeSlug,
+      isRefunded: refunded,
+      isWinner: winner,
+    };
+  }
+}
+
+export function buildApiCheckedGiftCode(giftcode: GramJs.payments.TypeCheckedGiftCode): ApiCheckedGiftCode {
+  const {
+    date, fromId, months, giveawayMsgId, toId, usedDate, viaGiveaway,
+  } = giftcode;
+
+  return {
+    date,
+    months,
+    toId: toId && buildApiPeerId(toId, 'user'),
+    fromId: fromId && getApiChatIdFromMtpPeer(fromId),
+    usedAt: usedDate,
+    isFromGiveaway: viaGiveaway,
+    giveawayMessageId: giveawayMsgId,
+  };
 }

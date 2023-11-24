@@ -5,8 +5,8 @@ import { ProfileState } from '../../../types';
 import animateScroll from '../../../util/animateScroll';
 import { throttle } from '../../../util/schedulers';
 
-import useLastCallback from '../../../hooks/useLastCallback';
 import useEffectWithPrevDeps from '../../../hooks/useEffectWithPrevDeps';
+import useLastCallback from '../../../hooks/useLastCallback';
 
 const TRANSITION_DURATION = 300;
 const PROGRAMMATIC_SCROLL_TIMEOUT_MS = 350;
@@ -27,7 +27,11 @@ export default function useProfileState(
       const container = containerRef.current!;
       const tabsEl = container.querySelector<HTMLDivElement>('.TabList')!;
       if (container.scrollTop < tabsEl.offsetTop) {
-        onProfileStateChange(tabType === 'members' ? ProfileState.MemberList : ProfileState.SharedMedia);
+        onProfileStateChange(
+          tabType === 'members'
+            ? ProfileState.MemberList
+            : (tabType === 'stories' ? ProfileState.StoryList : ProfileState.SharedMedia),
+        );
         isScrollingProgrammatically = true;
         animateScroll(container, tabsEl, 'start', undefined, undefined, undefined, TRANSITION_DURATION);
         setTimeout(() => {
@@ -84,7 +88,7 @@ export default function useProfileState(
     if (container.scrollTop >= tabListEl.offsetTop) {
       state = tabType === 'members'
         ? ProfileState.MemberList
-        : ProfileState.SharedMedia;
+        : (tabType === 'stories' ? ProfileState.StoryList : ProfileState.SharedMedia);
     }
 
     onProfileStateChange(state);

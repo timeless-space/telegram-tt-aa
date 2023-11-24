@@ -1,59 +1,54 @@
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
-
-import type { ApiPrivacyKey } from '../../../types';
-
 import { generateRandomBytes, readBigIntFromBuffer } from '../../../lib/gramjs/Helpers';
+
+import type { ApiInputPrivacyRules, ApiPrivacyKey } from '../../../types';
 import type {
+  ApiBotApp,
   ApiChatAdminRights,
   ApiChatBannedRights,
   ApiChatFolder,
+  ApiChatReactions,
+  ApiFormattedText,
   ApiGroupCall,
+  ApiInputReplyInfo,
   ApiMessageEntity,
   ApiNewPoll,
-  ApiPhoto,
   ApiPhoneCall,
+  ApiPhoto,
+  ApiPoll,
+  ApiReaction,
   ApiReportReason,
+  ApiRequestInputInvoice,
   ApiSendMessageAction,
   ApiSticker,
-  ApiVideo,
+  ApiStory,
+  ApiStorySkipped,
   ApiThemeParameters,
-  ApiPoll,
-  ApiRequestInputInvoice,
-  ApiChatReactions,
-  ApiReaction,
-  ApiFormattedText,
-  ApiBotApp,
+  ApiVideo,
 } from '../../types';
 import {
   ApiMessageEntityTypes,
 } from '../../types';
-import localDb from '../localDb';
+
+import { CHANNEL_ID_LENGTH, DEFAULT_STATUS_ICON_ID } from '../../../config';
 import { pick } from '../../../util/iteratees';
 import { deserializeBytes } from '../helpers';
-import { DEFAULT_STATUS_ICON_ID } from '../../../config';
+import localDb from '../localDb';
 
-const CHANNEL_ID_MIN_LENGTH = 11; // Example: -1000000000
+const LEGACY_CHANNEL_ID_MIN_LENGTH = 11; // Example: -1234567890
 
-export function getEntityTypeById(chatOrUserId: string) {
-  if (typeof chatOrUserId === 'number') {
-    return getEntityTypeByDeprecatedId(chatOrUserId);
-  }
-
-  if (!chatOrUserId.startsWith('-')) {
-    return 'user';
-  } else if (chatOrUserId.length >= CHANNEL_ID_MIN_LENGTH) {
-    return 'channel';
-  } else {
-    return 'chat';
-  }
+function checkIfChannelId(id: string) {
+  if (id.length >= CHANNEL_ID_LENGTH) return id.startsWith('-100');
+  // LEGACY Unprefixed channel id
+  if (id.length === LEGACY_CHANNEL_ID_MIN_LENGTH && id.startsWith('-4')) return false;
+  return id.length >= LEGACY_CHANNEL_ID_MIN_LENGTH;
 }
 
-// Workaround for old-fashioned IDs stored locally
-export function getEntityTypeByDeprecatedId(chatOrUserId: number) {
-  if (chatOrUserId > 0) {
+export function getEntityTypeById(chatOrUserId: string) {
+  if (!chatOrUserId.startsWith('-')) {
     return 'user';
-  } else if (chatOrUserId <= -1000000000) {
+  } else if (checkIfChannelId(chatOrUserId)) {
     return 'channel';
   } else {
     return 'chat';
@@ -282,6 +277,14 @@ export function buildFilterFromApiFolder(folder: ApiChatFolder): GramJs.DialogFi
   });
 }
 
+export function buildInputStory(story: ApiStory | ApiStorySkipped) {
+  const peer = buildInputPeerFromLocalDb(story.peerId)!;
+  return new GramJs.InputMediaStory({
+    peer,
+    id: story.id,
+  });
+}
+
 export function generateRandomBigInt() {
   return readBigIntFromBuffer(generateRandomBytes(8), true, true);
 }
@@ -453,6 +456,9 @@ export function buildInputPrivacyKey(privacyKey: ApiPrivacyKey) {
     case 'phoneNumber':
       return new GramJs.InputPrivacyKeyPhoneNumber();
 
+    case 'addByPhone':
+      return new GramJs.InputPrivacyKeyAddedByPhone();
+
     case 'lastSeen':
       return new GramJs.InputPrivacyKeyStatusTimestamp();
 
@@ -473,6 +479,9 @@ export function buildInputPrivacyKey(privacyKey: ApiPrivacyKey) {
 
     case 'voiceMessages':
       return new GramJs.InputPrivacyKeyVoiceMessages();
+
+    case 'bio':
+      return new GramJs.InputPrivacyKeyAbout();
   }
 
   return undefined;
@@ -528,12 +537,20 @@ export function buildInputThemeParams(params: ApiThemeParameters) {
 }
 
 export function buildMtpPeerId(id: string, type: 'user' | 'chat' | 'channel') {
-  // Workaround for old-fashioned IDs stored locally
-  if (typeof id === 'number') {
-    return BigInt(Math.abs(id));
+  if (type === 'user') {
+    return BigInt(id);
   }
 
-  return type === 'user' ? BigInt(id) : BigInt(id.slice(1));
+  if (type === 'channel') {
+    if (id.length === CHANNEL_ID_LENGTH) {
+      return BigInt(id.slice(4));
+    }
+
+    // LEGACY Unprefixed channel id
+    return BigInt(id.slice(1));
+  }
+
+  return BigInt(id.slice(1));
 }
 
 export function buildInputGroupCall(groupCall: Partial<ApiGroupCall>) {
@@ -624,4 +641,81 @@ export function buildInputBotApp(app: ApiBotApp) {
     id: BigInt(app.id),
     accessHash: BigInt(app.accessHash),
   });
+}
+
+export function buildInputReplyTo(replyInfo: ApiInputReplyInfo) {
+  if (replyInfo.type === 'story') {
+    return new GramJs.InputReplyToStory({
+      userId: buildInputPeerFromLocalDb(replyInfo.userId)!,
+      storyId: replyInfo.storyId,
+    });
+  }
+
+  if (replyInfo.type === 'message') {
+    const {
+      replyToMsgId, replyToTopId, replyToPeerId, quoteText,
+    } = replyInfo;
+    return new GramJs.InputReplyToMessage({
+      replyToMsgId,
+      topMsgId: replyToTopId,
+      replyToPeerId: replyToPeerId ? buildInputPeerFromLocalDb(replyToPeerId)! : undefined,
+      quoteText: quoteText?.text,
+      quoteEntities: quoteText?.entities?.map(buildMtpMessageEntity),
+    });
+  }
+
+  return undefined;
+}
+
+export function buildInputPrivacyRules(
+  rules: ApiInputPrivacyRules,
+) {
+  const privacyRules: GramJs.TypeInputPrivacyRule[] = [];
+
+  if (rules.allowedUsers?.length) {
+    privacyRules.push(new GramJs.InputPrivacyValueAllowUsers({
+      users: rules.allowedUsers.map(({ id, accessHash }) => buildInputEntity(id, accessHash) as GramJs.InputUser),
+    }));
+  }
+  if (rules.allowedChats?.length) {
+    privacyRules.push(new GramJs.InputPrivacyValueAllowChatParticipants({
+      chats: rules.allowedChats.map(({ id, type }) => (
+        buildMtpPeerId(id, type === 'chatTypeBasicGroup' ? 'chat' : 'channel')
+      )),
+    }));
+  }
+  if (rules.blockedUsers?.length) {
+    privacyRules.push(new GramJs.InputPrivacyValueDisallowUsers({
+      users: rules.blockedUsers.map(({ id, accessHash }) => buildInputEntity(id, accessHash) as GramJs.InputUser),
+    }));
+  }
+  if (rules.blockedChats?.length) {
+    privacyRules.push(new GramJs.InputPrivacyValueDisallowChatParticipants({
+      chats: rules.blockedChats.map(({ id, type }) => (
+        buildMtpPeerId(id, type === 'chatTypeBasicGroup' ? 'chat' : 'channel')
+      )),
+    }));
+  }
+
+  if (!rules.isUnspecified) {
+    switch (rules.visibility) {
+      case 'everybody':
+        privacyRules.push(new GramJs.InputPrivacyValueAllowAll());
+        break;
+
+      case 'contacts':
+        privacyRules.push(new GramJs.InputPrivacyValueAllowContacts());
+        break;
+
+      case 'nonContacts':
+        privacyRules.push(new GramJs.InputPrivacyValueDisallowContacts());
+        break;
+
+      case 'nobody':
+        privacyRules.push(new GramJs.InputPrivacyValueDisallowAll());
+        break;
+    }
+  }
+
+  return privacyRules;
 }

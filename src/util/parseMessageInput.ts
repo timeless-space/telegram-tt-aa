@@ -1,5 +1,6 @@
-import type { ApiMessageEntity, ApiFormattedText } from '../api/types';
+import type { ApiFormattedText, ApiMessageEntity } from '../api/types';
 import { ApiMessageEntityTypes } from '../api/types';
+
 import { RE_LINK_TEMPLATE } from '../config';
 import { IS_EMOJI_SUPPORTED } from './windowEnvironment';
 
@@ -135,7 +136,7 @@ function parseMarkdown(html: string) {
 
 function parseMarkdownLinks(html: string) {
   return html.replace(new RegExp(`\\[([^\\]]+?)]\\((${RE_LINK_TEMPLATE}+?)\\)`, 'g'), (_, text, link) => {
-    const url = link.includes('://') ? link : link.includes('@') ? `mailto:${link}` : `http://${link}`;
+    const url = link.includes('://') ? link : link.includes('@') ? `mailto:${link}` : `https://${link}`;
     return `<a href="${url}">${text}</a>`;
   });
 }

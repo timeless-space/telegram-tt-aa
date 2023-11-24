@@ -1,30 +1,33 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { ApiMessage } from '../../../api/types';
+import type { ApiMessage, ApiTypeStory } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ISettings } from '../../../types';
 
 import { getMessageWebPage } from '../../../global/helpers';
+import buildClassName from '../../../util/buildClassName';
+import trimText from '../../../util/trimText';
+import renderText from '../../common/helpers/renderText';
 import { calculateMediaDimensions } from './helpers/mediaDimensions';
 import { getWebpageButtonText } from './helpers/webpageType';
-import renderText from '../../common/helpers/renderText';
-import trimText from '../../../util/trimText';
-import buildClassName from '../../../util/buildClassName';
 
-import useLastCallback from '../../../hooks/useLastCallback';
 import useAppLayout from '../../../hooks/useAppLayout';
+import useEnsureStory from '../../../hooks/useEnsureStory';
 import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 
 import SafeLink from '../../common/SafeLink';
+import Button from '../../ui/Button';
+import BaseStory from './BaseStory';
 import Photo from './Photo';
 import Video from './Video';
-import Button from '../../ui/Button';
 
 import './WebPage.scss';
 
 const MAX_TEXT_LENGTH = 170; // symbols
+const WEBPAGE_STORY_TYPE = 'telegram_story';
 
 type OwnProps = {
   message: ApiMessage;
@@ -36,7 +39,10 @@ type OwnProps = {
   asForwarded?: boolean;
   isDownloading?: boolean;
   isProtected?: boolean;
+  isConnected?: boolean;
+  noUserColors?: boolean;
   theme: ISettings['theme'];
+  story?: ApiTypeStory;
   onMediaClick?: () => void;
   onCancelMediaTransfer?: () => void;
 };
@@ -51,6 +57,8 @@ const WebPage: FC<OwnProps> = ({
   asForwarded,
   isDownloading = false,
   isProtected,
+  isConnected,
+  story,
   theme,
   onMediaClick,
   onCancelMediaTransfer,
@@ -72,6 +80,10 @@ const WebPage: FC<OwnProps> = ({
     });
   });
 
+  const { story: storyData } = webPage || {};
+
+  useEnsureStory(storyData?.peerId, storyData?.id, story);
+
   if (!webPage) {
     return undefined;
   }
@@ -86,7 +98,9 @@ const WebPage: FC<OwnProps> = ({
     video,
     type,
   } = webPage;
-  const quickButtonLangKey = !inPreview ? getWebpageButtonText(type) : undefined;
+  const isStory = type === WEBPAGE_STORY_TYPE;
+  const isExpiredStory = story && 'isDeleted' in story;
+  const quickButtonLangKey = !inPreview && !isExpiredStory ? getWebpageButtonText(type) : undefined;
   const truncatedDescription = trimText(description, MAX_TEXT_LENGTH);
   const isArticle = Boolean(truncatedDescription || title || siteName);
   let isSquarePhoto = false;
@@ -111,7 +125,8 @@ const WebPage: FC<OwnProps> = ({
       <Button
         className="WebPage--quick-button"
         size="tiny"
-        color="translucent-bordered"
+        color="translucent"
+        isRectangular
         onClick={handleQuickButtonClick}
       >
         {lang(langKey)}
@@ -125,7 +140,10 @@ const WebPage: FC<OwnProps> = ({
       data-initial={(siteName || displayUrl)[0]}
       dir="auto"
     >
-      <div className="WebPage--content">
+      <div className={buildClassName('WebPage--content', isStory && 'is-story')}>
+        {isStory && (
+          <BaseStory story={story} isProtected={isProtected} isConnected={isConnected} isPreview />
+        )}
         {photo && !video && (
           <Photo
             message={message}

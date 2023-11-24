@@ -1,22 +1,23 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo, useEffect } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type {
   ApiChat,
-  ApiFormattedText,
   ApiMessage,
   ApiMessageOutgoingStatus,
+  ApiPeer,
   ApiTopic,
   ApiTypingStatus,
   ApiUser,
   ApiUserStatus,
 } from '../../../api/types';
+import type { ApiDraft } from '../../../global/types';
+import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatAnimationTypes } from './hooks';
-
 import { MAIN_THREAD_ID } from '../../../api/types';
-import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/windowEnvironment';
+import { StoryViewerOrigin } from '../../../types';
+
 import {
   getMessageAction,
   getPrivateChatUserId,
@@ -24,6 +25,7 @@ import {
   isUserOnline,
   selectIsChatMuted,
 } from '../../../global/helpers';
+import { getMessageReplyInfo } from '../../../global/helpers/replies';
 import {
   selectCanAnimateInterface,
   selectChat,
@@ -43,26 +45,27 @@ import {
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { createLocationHash } from '../../../util/routing';
+import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/windowEnvironment';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import useSelectorSignal from '../../../hooks/useSelectorSignal';
+import useAppLayout from '../../../hooks/useAppLayout';
 import useChatContextActions from '../../../hooks/useChatContextActions';
 import useFlag from '../../../hooks/useFlag';
-import useChatListEntry from './hooks/useChatListEntry';
 import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
-import useAppLayout from '../../../hooks/useAppLayout';
+import useLastCallback from '../../../hooks/useLastCallback';
+import useSelectorSignal from '../../../hooks/useSelectorSignal';
 import useShowTransition from '../../../hooks/useShowTransition';
+import useChatListEntry from './hooks/useChatListEntry';
 
-import ListItem from '../../ui/ListItem';
 import Avatar from '../../common/Avatar';
-import LastMessageMeta from '../../common/LastMessageMeta';
 import DeleteChatModal from '../../common/DeleteChatModal';
-import ReportModal from '../../common/ReportModal';
 import FullNameTitle from '../../common/FullNameTitle';
+import LastMessageMeta from '../../common/LastMessageMeta';
+import ReportModal from '../../common/ReportModal';
+import ListItem from '../../ui/ListItem';
 import ChatFolderModal from '../ChatFolderModal.async';
 import MuteChatModal from '../MuteChatModal.async';
-import ChatCallStatus from './ChatCallStatus';
 import ChatBadge from './ChatBadge';
+import ChatCallStatus from './ChatCallStatus';
 
 import './Chat.scss';
 
@@ -85,9 +88,9 @@ type StateProps = {
   actionTargetUserIds?: string[];
   actionTargetMessage?: ApiMessage;
   actionTargetChatId?: string;
-  lastMessageSender?: ApiUser | ApiChat;
+  lastMessageSender?: ApiPeer;
   lastMessageOutgoingStatus?: ApiMessageOutgoingStatus;
-  draft?: ApiFormattedText;
+  draft?: ApiDraft;
   isSelected?: boolean;
   isSelectedForum?: boolean;
   isForumPanelOpen?: boolean;
@@ -259,10 +262,14 @@ const Chat: FC<OwnProps & StateProps> = ({
       onDragEnter={handleDragEnter}
       withPortalForMenu
     >
-      <div className="status">
+      <div className={buildClassName('status', 'status-clickable')}>
         <Avatar
           peer={peer}
           isSavedMessages={user?.isSelf}
+          withStory={!user?.isSelf}
+          withStoryGap={isAvatarOnlineShown}
+          storyViewerOrigin={StoryViewerOrigin.ChatList}
+          storyViewerMode="single-peer"
         />
         <div className="avatar-badge-wrapper">
           <div className={buildClassName('avatar-online', isAvatarOnlineShown && 'avatar-online-shown')} />
@@ -323,7 +330,7 @@ const Chat: FC<OwnProps & StateProps> = ({
           isOpen={isReportModalOpen}
           onClose={closeReportModal}
           onCloseAnimationEnd={unmarkRenderReportModal}
-          chatId={chatId}
+          peerId={chatId}
           subject="peer"
         />
       )}
@@ -338,10 +345,12 @@ export default memo(withGlobal<OwnProps>(
       return {};
     }
 
-    const { senderId, replyToMessageId, isOutgoing } = chat.lastMessage || {};
+    const { lastMessage } = chat;
+    const { senderId, isOutgoing } = lastMessage || {};
+    const replyToMessageId = lastMessage && getMessageReplyInfo(lastMessage)?.replyToMsgId;
     const lastMessageSender = senderId
       ? (selectUser(global, senderId) || selectChat(global, senderId)) : undefined;
-    const lastMessageAction = chat.lastMessage ? getMessageAction(chat.lastMessage) : undefined;
+    const lastMessageAction = lastMessage ? getMessageAction(lastMessage) : undefined;
     const actionTargetMessage = lastMessageAction && replyToMessageId
       ? selectChatMessage(global, chat.id, replyToMessageId)
       : undefined;
@@ -358,7 +367,7 @@ export default memo(withGlobal<OwnProps>(
 
     const user = privateChatUserId ? selectUser(global, privateChatUserId) : undefined;
     const userStatus = privateChatUserId ? selectUserStatus(global, privateChatUserId) : undefined;
-    const lastMessageTopic = chat.lastMessage && selectTopicFromMessage(global, chat.lastMessage);
+    const lastMessageTopic = lastMessage && selectTopicFromMessage(global, lastMessage);
 
     const typingStatus = selectThreadParam(global, chatId, MAIN_THREAD_ID, 'typingStatus');
 
@@ -375,8 +384,8 @@ export default memo(withGlobal<OwnProps>(
       isForumPanelOpen: selectIsForumPanelOpen(global),
       canScrollDown: isSelected && messageListType === 'thread',
       canChangeFolder: (global.chatFolders.orderedIds?.length || 0) > 1,
-      ...(isOutgoing && chat.lastMessage && {
-        lastMessageOutgoingStatus: selectOutgoingStatus(global, chat.lastMessage),
+      ...(isOutgoing && lastMessage && {
+        lastMessageOutgoingStatus: selectOutgoingStatus(global, lastMessage),
       }),
       user,
       userStatus,

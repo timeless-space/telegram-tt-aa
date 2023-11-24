@@ -1,23 +1,24 @@
+import type { FC, TeactNode } from '../../lib/teact/teact';
 import React, { memo, useRef, useState } from '../../lib/teact/teact';
 import { getGlobal } from '../../global';
 
-import type { FC, TeactNode } from '../../lib/teact/teact';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import { ApiMessageEntityTypes } from '../../api/types';
 
+import { selectIsAlwaysHighPriorityEmoji } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
 import safePlay from '../../util/safePlay';
-import { selectIsAlwaysHighPriorityEmoji } from '../../global/selectors';
 
+import useDynamicColorListener from '../../hooks/stickers/useDynamicColorListener';
 import useLastCallback from '../../hooks/useLastCallback';
 import useCustomEmoji from './hooks/useCustomEmoji';
-import useDynamicColorListener from '../../hooks/stickers/useDynamicColorListener';
 
 import StickerView from './StickerView';
 
 import styles from './CustomEmoji.module.scss';
-import svgPlaceholder from '../../assets/square.svg';
+
 import blankImg from '../../assets/blank.png';
+import svgPlaceholder from '../../assets/square.svg';
 
 type OwnProps = {
   ref?: React.RefObject<HTMLDivElement>;
@@ -36,9 +37,11 @@ type OwnProps = {
   withTranslucentThumb?: boolean;
   shouldPreloadPreview?: boolean;
   forceOnHeavyAnimation?: boolean;
+  forceAlways?: boolean;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
   onClick?: NoneToVoidFunction;
+  onAnimationEnd?: NoneToVoidFunction;
 };
 
 const STICKER_SIZE = 20;
@@ -58,10 +61,12 @@ const CustomEmoji: FC<OwnProps> = ({
   sharedCanvasHqRef,
   withTranslucentThumb,
   shouldPreloadPreview,
+  forceAlways,
   forceOnHeavyAnimation,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
   onClick,
+  onAnimationEnd,
 }) => {
   // eslint-disable-next-line no-null/no-null
   let containerRef = useRef<HTMLDivElement>(null);
@@ -116,6 +121,7 @@ const CustomEmoji: FC<OwnProps> = ({
         withGridFix && styles.withGridFix,
       )}
       onClick={onClick}
+      onAnimationEnd={onAnimationEnd}
       data-entity-type={ApiMessageEntityTypes.CustomEmoji}
       data-document-id={documentId}
       data-alt={customEmoji?.emoji}
@@ -123,7 +129,7 @@ const CustomEmoji: FC<OwnProps> = ({
     >
       <img className={styles.highlightCatch} src={blankImg} alt={customEmoji?.emoji} draggable={false} />
       {!customEmoji ? (
-        <img className={styles.thumb} src={svgPlaceholder} alt="Emoji" />
+        <img className={styles.thumb} src={svgPlaceholder} alt="Emoji" draggable={false} />
       ) : (
         <StickerView
           containerRef={containerRef}
@@ -137,6 +143,7 @@ const CustomEmoji: FC<OwnProps> = ({
           loopLimit={loopLimit}
           shouldPreloadPreview={shouldPreloadPreview || noPlay || !canPlay}
           forceOnHeavyAnimation={forceOnHeavyAnimation}
+          forceAlways={forceAlways}
           observeIntersectionForLoading={observeIntersectionForLoading}
           observeIntersectionForPlaying={observeIntersectionForPlaying}
           withSharedAnimation={withSharedAnimation}

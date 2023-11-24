@@ -5,19 +5,20 @@ import { getActions, withGlobal } from '../../../global';
 import type { ApiChat, ApiCountryCode, ApiUser } from '../../../api/types';
 
 import { CHAT_HEIGHT_PX } from '../../../config';
-import { formatPhoneNumberWithCode } from '../../../util/phoneNumber';
 import { getMainUsername, isUserId } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
-import useLang from '../../../hooks/useLang';
-import useHistoryBack from '../../../hooks/useHistoryBack';
-import useFlag from '../../../hooks/useFlag';
+import { formatPhoneNumberWithCode } from '../../../util/phoneNumber';
 
-import ListItem from '../../ui/ListItem';
-import FloatingActionButton from '../../ui/FloatingActionButton';
+import useFlag from '../../../hooks/useFlag';
+import useHistoryBack from '../../../hooks/useHistoryBack';
+import useLang from '../../../hooks/useLang';
+
 import Avatar from '../../common/Avatar';
+import FullNameTitle from '../../common/FullNameTitle';
+import FloatingActionButton from '../../ui/FloatingActionButton';
+import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
 import BlockUserModal from './BlockUserModal';
-import FullNameTitle from '../../common/FullNameTitle';
 
 type OwnProps = {
   isActive?: boolean;
@@ -39,13 +40,13 @@ const SettingsPrivacyBlockedUsers: FC<OwnProps & StateProps> = ({
   blockedIds,
   phoneCodeList,
 }) => {
-  const { unblockContact } = getActions();
+  const { unblockUser } = getActions();
 
   const lang = useLang();
   const [isBlockUserModalOpen, openBlockUserModal, closeBlockUserModal] = useFlag();
-  const handleUnblockClick = useCallback((contactId: string) => {
-    unblockContact({ contactId });
-  }, [unblockContact]);
+  const handleUnblockClick = useCallback((userId: string) => {
+    unblockUser({ userId });
+  }, [unblockUser]);
 
   useHistoryBack({
     isActive,
@@ -53,13 +54,13 @@ const SettingsPrivacyBlockedUsers: FC<OwnProps & StateProps> = ({
   });
 
   const blockedUsernamesById = useMemo(() => {
-    return blockedIds.reduce((acc, contactId) => {
-      const isPrivate = isUserId(contactId);
-      const user = isPrivate ? usersByIds[contactId] : undefined;
+    return blockedIds.reduce((acc, userId) => {
+      const isPrivate = isUserId(userId);
+      const user = isPrivate ? usersByIds[userId] : undefined;
       const mainUsername = user && !user.phoneNumber && getMainUsername(user);
 
       if (mainUsername) {
-        acc[contactId] = mainUsername;
+        acc[userId] = mainUsername;
       }
 
       return acc;

@@ -1,13 +1,4 @@
-import {
-  IS_TEST,
-  IS_ELECTRON,
-  SUPPORTED_VIDEO_CONTENT_TYPES,
-  VIDEO_MOV_TYPE,
-  CONTENT_TYPES_WITH_PREVIEW,
-  PRODUCTION_HOSTNAME,
-} from '../config';
-
-export * from './environmentWebp';
+import { IS_TEST, PRODUCTION_HOSTNAME } from '../config';
 
 export function getPlatform() {
   const { userAgent, platform } = window.navigator;
@@ -27,7 +18,7 @@ export function getPlatform() {
 
   if (/Android/.test(userAgent)) return 'Android';
 
-  if (/Linux/.test(platform)) return 'Linux';
+  if (/Linux/.test(platform)) return 'Android';
 
   return undefined;
 }
@@ -36,12 +27,16 @@ export const IS_PRODUCTION_HOST = window.location.host === PRODUCTION_HOSTNAME;
 export const PLATFORM_ENV = getPlatform();
 export const IS_MAC_OS = PLATFORM_ENV === 'macOS';
 export const IS_WINDOWS = PLATFORM_ENV === 'Windows';
-export const IS_LINUX = PLATFORM_ENV === 'Linux';
+export const IS_LINUX = false;
 export const IS_IOS = PLATFORM_ENV === 'iOS';
 export const IS_ANDROID = PLATFORM_ENV === 'Android';
-export const IS_MOBILE = IS_IOS || IS_ANDROID;
+export const IS_MOBILE = IS_IOS || IS_ANDROID || true;
 export const IS_SAFARI = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 export const IS_YA_BROWSER = navigator.userAgent.includes('YaBrowser');
+export const IS_FIREFOX = navigator.userAgent.toLowerCase().includes('firefox')
+  || navigator.userAgent.toLowerCase().includes('iceweasel')
+  || navigator.userAgent.toLowerCase().includes('icecat');
+export const IS_ELECTRON = Boolean(window.electron);
 
 export enum MouseButton {
   Main = 0,
@@ -76,19 +71,10 @@ export const IS_CANVAS_FILTER_SUPPORTED = (
   !IS_TEST && 'filter' in (document.createElement('canvas').getContext('2d') || {})
 );
 export const IS_REQUEST_FULLSCREEN_SUPPORTED = 'requestFullscreen' in document.createElement('div');
-export const ARE_CALLS_SUPPORTED = !navigator.userAgent.includes('Firefox');
+export const ARE_CALLS_SUPPORTED = !IS_FIREFOX;
 export const LAYERS_ANIMATION_NAME = IS_ANDROID ? 'slideFade' : IS_IOS ? 'slideLayers' : 'pushSlide';
 
 const TEST_VIDEO = document.createElement('video');
-// `canPlayType(VIDEO_MOV_TYPE)` returns false negative at least for macOS Chrome and iOS Safari
-export const IS_MOV_SUPPORTED = Boolean(
-  TEST_VIDEO.canPlayType(VIDEO_MOV_TYPE).replace('no', '') || IS_IOS || IS_MAC_OS,
-);
-
-if (IS_MOV_SUPPORTED) {
-  SUPPORTED_VIDEO_CONTENT_TYPES.add(VIDEO_MOV_TYPE);
-  CONTENT_TYPES_WITH_PREVIEW.add(VIDEO_MOV_TYPE);
-}
 
 export const IS_WEBM_SUPPORTED = Boolean(TEST_VIDEO.canPlayType('video/webm; codecs="vp9"').replace('no', ''));
 

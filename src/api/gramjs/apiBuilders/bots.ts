@@ -1,4 +1,5 @@
 import { Api as GramJs } from '../../../lib/gramjs';
+
 import type {
   ApiAttachBot,
   ApiAttachBotIcon,
@@ -15,12 +16,12 @@ import type {
 } from '../../types';
 
 import { pick } from '../../../util/iteratees';
-import { buildApiPhoto, buildApiThumbnailFromStripped } from './common';
-import { buildApiDocument, buildApiWebDocument, buildVideoFromDocument } from './messages';
-import { buildStickerFromDocument } from './symbols';
 import localDb from '../localDb';
-import { buildApiPeerId } from './peers';
+import { buildApiPhoto, buildApiThumbnailFromStripped } from './common';
 import { omitVirtualClassFields } from './helpers';
+import { buildApiDocument, buildApiWebDocument, buildVideoFromDocument } from './messageContent';
+import { buildApiPeerId } from './peers';
+import { buildStickerFromDocument } from './symbols';
 
 export function buildApiBotInlineResult(result: GramJs.BotInlineResult, queryId: string): ApiBotInlineResult {
   const {
@@ -71,11 +72,14 @@ export function buildBotSwitchWebview(switchWebview?: GramJs.InlineBotWebView) {
 export function buildApiAttachBot(bot: GramJs.AttachMenuBot): ApiAttachBot {
   return {
     id: bot.botId.toString(),
-    hasSettings: bot.hasSettings,
     shouldRequestWriteAccess: bot.requestWriteAccess,
     shortName: bot.shortName,
-    peerTypes: bot.peerTypes.map(buildApiAttachMenuPeerType),
+    isForAttachMenu: bot.showInAttachMenu!,
+    isForSideMenu: bot.showInSideMenu,
+    attachMenuPeerTypes: bot.peerTypes?.map(buildApiAttachMenuPeerType)!,
     icons: bot.icons.map(buildApiAttachMenuIcon).filter(Boolean),
+    isInactive: bot.inactive,
+    isDisclaimerNeeded: bot.sideMenuDisclaimerNeeded,
   };
 }
 

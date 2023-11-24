@@ -1,32 +1,32 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useLayoutEffect, useRef, useState,
 } from '../../../lib/teact/teact';
-import { requestMutation } from '../../../lib/fasterdom/fasterdom';
-import { getActions, withGlobal } from '../../../global';
+import { withGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import type { ApiSticker, ApiVideo } from '../../../api/types';
 import type { GlobalActions } from '../../../global';
 
-import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
+import { requestMutation } from '../../../lib/fasterdom/fasterdom';
+import { selectIsContextMenuTranslucent, selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import { selectTabState, selectIsCurrentUserPremium, selectIsContextMenuTranslucent } from '../../../global/selectors';
+import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import useShowTransition from '../../../hooks/useShowTransition';
-import useMouseInside from '../../../hooks/useMouseInside';
-import useLang from '../../../hooks/useLang';
 import useAppLayout from '../../../hooks/useAppLayout';
+import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
+import useMouseInside from '../../../hooks/useMouseInside';
+import useShowTransition from '../../../hooks/useShowTransition';
 
+import CustomEmojiPicker from '../../common/CustomEmojiPicker';
 import Button from '../../ui/Button';
 import Menu from '../../ui/Menu';
+import Portal from '../../ui/Portal';
 import Transition from '../../ui/Transition';
 import EmojiPicker from './EmojiPicker';
-import CustomEmojiPicker from '../../common/CustomEmojiPicker';
-import StickerPicker from './StickerPicker';
 import GifPicker from './GifPicker';
+import StickerPicker from './StickerPicker';
 import SymbolMenuFooter, { SYMBOL_MENU_TAB_TITLES, SymbolMenuTabs } from './SymbolMenuFooter';
-import Portal from '../../ui/Portal';
 
 import './SymbolMenu.scss';
 
@@ -39,6 +39,8 @@ export type OwnProps = {
   isOpen: boolean;
   canSendStickers?: boolean;
   canSendGifs?: boolean;
+  isMessageComposer?: boolean;
+  idPrefix: string;
   onLoad: () => void;
   onClose: () => void;
   onEmojiSelect: (emoji: string) => void;
@@ -67,7 +69,6 @@ export type OwnProps = {
 
 type StateProps = {
   isLeftColumnShown: boolean;
-  isCurrentUserPremium?: boolean;
   isBackgroundTranslucent?: boolean;
 };
 
@@ -79,29 +80,29 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
   isOpen,
   canSendStickers,
   canSendGifs,
+  isMessageComposer,
   isLeftColumnShown,
-  isCurrentUserPremium,
-  onLoad,
-  onClose,
-  onEmojiSelect,
+  idPrefix,
   isAttachmentModal,
   canSendPlainText,
-  onCustomEmojiSelect,
-  onStickerSelect,
   className,
-  onGifSelect,
-  onRemoveSymbol,
-  onSearchOpen,
-  addRecentEmoji,
-  addRecentCustomEmoji,
   positionX,
   positionY,
   transformOriginX,
   transformOriginY,
   style,
   isBackgroundTranslucent,
+  onLoad,
+  onClose,
+  onEmojiSelect,
+  onCustomEmojiSelect,
+  onStickerSelect,
+  onGifSelect,
+  onRemoveSymbol,
+  onSearchOpen,
+  addRecentEmoji,
+  addRecentCustomEmoji,
 }) => {
-  const { loadPremiumSetStickers } = getActions();
   const [activeTab, setActiveTab] = useState<number>(0);
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   const [recentCustomEmojis, setRecentCustomEmojis] = useState<string[]>([]);
@@ -125,12 +126,6 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
     if (canSendPlainText) return;
     setActiveTab(STICKERS_TAB_INDEX);
   }, [canSendPlainText]);
-
-  useEffect(() => {
-    if (isCurrentUserPremium) {
-      loadPremiumSetStickers();
-    }
-  }, [isCurrentUserPremium, loadPremiumSetStickers]);
 
   useLayoutEffect(() => {
     if (!isMobile || !isOpen || isAttachmentModal) {
@@ -218,6 +213,7 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
           <CustomEmojiPicker
             className="picker-tab"
             isHidden={!isOpen || !isActive}
+            idPrefix={idPrefix}
             loadAndPlay={isOpen && (isActive || isFrom)}
             chatId={chatId}
             isTranslucent={!isMobile && isBackgroundTranslucent}
@@ -230,7 +226,9 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
             className="picker-tab"
             isHidden={!isOpen || !isActive}
             loadAndPlay={canSendStickers ? isOpen && (isActive || isFrom) : false}
+            idPrefix={idPrefix}
             canSendStickers={canSendStickers}
+            noContextMenus={!isMessageComposer}
             chatId={chatId}
             threadId={threadId}
             isTranslucent={!isMobile && isBackgroundTranslucent}
@@ -285,6 +283,7 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
         activeTab={activeTab}
         onSwitchTab={setActiveTab}
         onRemoveSymbol={onRemoveSymbol}
+        canSearch={isMessageComposer}
         onSearchOpen={handleSearch}
         isAttachmentModal={isAttachmentModal}
         canSendPlainText={canSendPlainText}
@@ -302,6 +301,7 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
       transitionClassNames,
       isLeftColumnShown && 'left-column-open',
       isAttachmentModal && 'in-attachment-modal',
+      isMessageComposer && 'in-middle-column',
     );
 
     if (isAttachmentModal) {
@@ -347,7 +347,6 @@ export default memo(withGlobal<OwnProps>(
   (global): StateProps => {
     return {
       isLeftColumnShown: selectTabState(global).isLeftColumnShown,
-      isCurrentUserPremium: selectIsCurrentUserPremium(global),
       isBackgroundTranslucent: selectIsContextMenuTranslucent(global),
     };
   },

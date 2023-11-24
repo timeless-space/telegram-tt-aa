@@ -1,30 +1,29 @@
 import type { RefObject } from 'react';
 import type { FC } from '../../lib/teact/teact';
-import type RLottieInstance from '../../lib/rlottie/RLottie';
-import { requestMeasure } from '../../lib/fasterdom/fasterdom';
-import { ensureRLottie, getRLottie } from '../../lib/rlottie/RLottie.async';
-
 import React, {
-  useEffect, useRef, memo, useState,
+  memo, useEffect, useRef, useState,
 } from '../../lib/teact/teact';
 
-import { IS_ELECTRON } from '../../config';
+import type RLottieInstance from '../../lib/rlottie/RLottie';
 
+import { requestMeasure } from '../../lib/fasterdom/fasterdom';
+import { ensureRLottie, getRLottie } from '../../lib/rlottie/RLottie.async';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
 import generateUniqueId from '../../util/generateUniqueId';
 import { hexToRgb } from '../../util/switchTheme';
+import { IS_ELECTRON } from '../../util/windowEnvironment';
 
-import useLastCallback from '../../hooks/useLastCallback';
-import useHeavyAnimationCheck, { isHeavyAnimating } from '../../hooks/useHeavyAnimationCheck';
-import usePriorityPlaybackCheck, { isPriorityPlaybackActive } from '../../hooks/usePriorityPlaybackCheck';
+import useColorFilter from '../../hooks/stickers/useColorFilter';
 import useBackgroundMode, { isBackgroundModeActive } from '../../hooks/useBackgroundMode';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
-import { useStateRef } from '../../hooks/useStateRef';
+import useHeavyAnimationCheck, { isHeavyAnimating } from '../../hooks/useHeavyAnimationCheck';
+import useLastCallback from '../../hooks/useLastCallback';
+import usePriorityPlaybackCheck, { isPriorityPlaybackActive } from '../../hooks/usePriorityPlaybackCheck';
 import useSharedIntersectionObserver from '../../hooks/useSharedIntersectionObserver';
-import useThrottledCallback from '../../hooks/useThrottledCallback';
-import useColorFilter from '../../hooks/stickers/useColorFilter';
+import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
+import useThrottledCallback from '../../hooks/useThrottledCallback';
 import useUniqueId from '../../hooks/useUniqueId';
 
 export type OwnProps = {
@@ -41,8 +40,8 @@ export type OwnProps = {
   quality?: number;
   color?: string;
   isLowPriority?: boolean;
+  forceAlways?: boolean;
   forceOnHeavyAnimation?: boolean;
-  forceInBackground?: boolean;
   sharedCanvas?: HTMLCanvasElement;
   sharedCanvasCoords?: { x: number; y: number };
   onClick?: NoneToVoidFunction;
@@ -67,8 +66,8 @@ const AnimatedSticker: FC<OwnProps> = ({
   quality,
   isLowPriority,
   color,
+  forceAlways,
   forceOnHeavyAnimation,
-  forceInBackground,
   sharedCanvas,
   sharedCanvasCoords,
   onClick,
@@ -181,7 +180,7 @@ const AnimatedSticker: FC<OwnProps> = ({
     if (
       !animation
       || !(playRef.current || playSegmentRef.current)
-      || isFrozen(forceOnHeavyAnimation, forceInBackground)
+      || isFrozen(forceAlways)
     ) {
       return;
     }
@@ -221,13 +220,13 @@ const AnimatedSticker: FC<OwnProps> = ({
     }
 
     if (playKey) {
-      if (!isFrozen(forceOnHeavyAnimation, forceInBackground)) {
+      if (!isFrozen(forceAlways, forceOnHeavyAnimation)) {
         playAnimation(noLoop);
       }
     } else {
       pauseAnimation();
     }
-  }, [animation, playKey, noLoop, playAnimation, pauseAnimation, forceOnHeavyAnimation, forceInBackground]);
+  }, [animation, playKey, noLoop, playAnimation, pauseAnimation, forceAlways, forceOnHeavyAnimation]);
 
   useEffect(() => {
     if (animation) {
@@ -240,12 +239,12 @@ const AnimatedSticker: FC<OwnProps> = ({
     }
   }, [playAnimation, animation, tgsUrl]);
 
-  useHeavyAnimationCheck(pauseAnimation, playAnimation, !playKey || forceOnHeavyAnimation);
-  usePriorityPlaybackCheck(pauseAnimation, playAnimation, !playKey);
+  useHeavyAnimationCheck(pauseAnimation, playAnimation, !playKey || forceAlways || forceOnHeavyAnimation);
+  usePriorityPlaybackCheck(pauseAnimation, playAnimation, !playKey || forceAlways);
   // Pausing frame may not happen in background,
   // so we need to make sure it happens right after focusing,
   // then we can play again.
-  useBackgroundMode(pauseAnimation, playAnimationOnRaf, !playKey || forceInBackground);
+  useBackgroundMode(pauseAnimation, playAnimationOnRaf, !playKey || forceAlways);
 
   if (sharedCanvas) {
     return undefined;
@@ -268,8 +267,7 @@ const AnimatedSticker: FC<OwnProps> = ({
 
 export default memo(AnimatedSticker);
 
-function isFrozen(forceOnHeavyAnimation = false, forceInBackground = false) {
-  return (!forceOnHeavyAnimation && isHeavyAnimating())
-    || isPriorityPlaybackActive()
-    || (!forceInBackground && isBackgroundModeActive());
+function isFrozen(forceAlways = false, forceOnHeavyAnimation = false) {
+  if (forceAlways) return false;
+  return (!forceOnHeavyAnimation && isHeavyAnimating()) || isPriorityPlaybackActive() || isBackgroundModeActive();
 }

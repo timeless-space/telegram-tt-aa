@@ -6,14 +6,15 @@ import type { ApiSticker } from '../../../api/types';
 import type { ActiveEmojiInteraction } from '../../../global/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
-import { LIKE_STICKER_ID } from '../../common/helpers/mediaDimensions';
 import {
   selectAnimatedEmojiEffect,
   selectAnimatedEmojiSound,
   selectCanPlayAnimatedEmojis,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
+import { LIKE_STICKER_ID } from '../../common/helpers/mediaDimensions';
 import { getCustomEmojiSize } from '../composer/helpers/customEmoji';
+
 import useAnimatedEmoji from '../../common/hooks/useAnimatedEmoji';
 
 import CustomEmoji from '../../common/CustomEmoji';
@@ -69,7 +70,7 @@ const AnimatedCustomEmoji: FC<OwnProps & StateProps> = ({
       isBig
       noPlay={noPlay}
       withSharedAnimation
-      forceOnHeavyAnimation
+      forceOnHeavyAnimation={Boolean(effect && activeEmojiInteractions?.length)}
       observeIntersectionForLoading={observeIntersection}
       onClick={handleClick}
     />

@@ -3,24 +3,24 @@ import React, { memo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
 import type {
-  ApiChat, ApiDimensions, ApiMessage, ApiUser,
+  ApiDimensions, ApiMessage, ApiPeer,
 } from '../../api/types';
 import { MediaViewerOrigin } from '../../types';
 
-import { IS_TOUCH_ENV, ARE_WEBCODECS_SUPPORTED } from '../../util/windowEnvironment';
 import {
-  selectChat, selectChatMessage, selectTabState, selectIsMessageProtected, selectScheduledMessage, selectUser,
+  selectChat, selectChatMessage, selectIsMessageProtected, selectScheduledMessage, selectTabState, selectUser,
 } from '../../global/selectors';
+import buildClassName from '../../util/buildClassName';
+import stopEvent from '../../util/stopEvent';
+import { ARE_WEBCODECS_SUPPORTED, IS_TOUCH_ENV } from '../../util/windowEnvironment';
 import { calculateMediaViewerDimensions } from '../common/helpers/mediaDimensions';
 import { renderMessageText } from '../common/helpers/renderMessageText';
-import stopEvent from '../../util/stopEvent';
-import buildClassName from '../../util/buildClassName';
-import { useMediaProps } from './hooks/useMediaProps';
 
-import useLastCallback from '../../hooks/useLastCallback';
 import useAppLayout from '../../hooks/useAppLayout';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 import useControlsSignal from './hooks/useControlsSignal';
+import { useMediaProps } from './hooks/useMediaProps';
 
 import Spinner from '../ui/Spinner';
 import MediaViewerFooter from './MediaViewerFooter';
@@ -46,7 +46,7 @@ type StateProps = {
   mediaId?: number;
   senderId?: string;
   threadId?: number;
-  avatarOwner?: ApiChat | ApiUser;
+  avatarOwner?: ApiPeer;
   message?: ApiMessage;
   origin?: MediaViewerOrigin;
   isProtected?: boolean;
@@ -147,7 +147,7 @@ const MediaViewerContent: FC<OwnProps & StateProps> = (props) => {
   if (!message) return undefined;
   const textParts = message.content.action?.type === 'suggestProfilePhoto'
     ? lang('Conversation.SuggestedPhotoTitle')
-    : renderMessageText(message);
+    : renderMessageText({ message, forcePlayback: true, isForMediaViewer: true });
 
   const hasFooter = Boolean(textParts);
   const posterSize = message && calculateMediaViewerDimensions(dimensions!, hasFooter, isVideo);

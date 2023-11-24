@@ -1,22 +1,27 @@
 import { Api as GramJs } from '../../../lib/gramjs';
+
 import type {
   ApiAttachment,
   ApiChat,
+  ApiContact,
+  ApiFormattedText,
   ApiGlobalMessageSearchType,
+  ApiInputReplyInfo,
   ApiMessage,
   ApiMessageEntity,
   ApiMessageSearchType,
   ApiNewPoll,
   ApiOnProgress,
-  ApiReportReason,
-  ApiSticker,
-  ApiUser,
-  ApiVideo,
-  OnApiUpdate,
-  ApiSendMessageAction,
-  ApiContact,
+  ApiPeer,
   ApiPoll,
-  ApiFormattedText,
+  ApiReportReason,
+  ApiSendMessageAction,
+  ApiSticker,
+  ApiStory,
+  ApiStorySkipped,
+  ApiVideo,
+  MediaContent,
+  OnApiUpdate,
 } from '../../types';
 import {
   MAIN_THREAD_ID,
@@ -30,49 +35,51 @@ import {
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
-import { handleGramJsUpdate, invokeRequest, uploadFile } from './client';
+import { getEmojiOnlyCountForMessage } from '../../../global/helpers/getEmojiOnlyCountForMessage';
+import { fetchFile } from '../../../util/files';
+import { compact } from '../../../util/iteratees';
+import { getServerTimeOffset } from '../../../util/serverTime';
+import { interpolateArray } from '../../../util/waveform';
+import { buildApiChatFromPreview, buildApiSendAsPeerId } from '../apiBuilders/chats';
+import { buildApiFormattedText } from '../apiBuilders/common';
+import {
+  buildMessageMediaContent, buildMessageTextContent, buildWebPage,
+} from '../apiBuilders/messageContent';
 import {
   buildApiMessage,
+  buildApiSponsoredMessage,
   buildLocalForwardedMessage,
   buildLocalMessage,
-  buildWebPage,
-  buildApiSponsoredMessage,
-  buildApiFormattedText,
-  buildMessageTextContent,
-  buildMessageMediaContent,
 } from '../apiBuilders/messages';
+import { getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
 import { buildApiUser } from '../apiBuilders/users';
 import {
   buildInputEntity,
   buildInputMediaDocument,
   buildInputPeer,
   buildInputPoll,
+  buildInputPollFromExisting,
+  buildInputReplyTo,
   buildInputReportReason,
+  buildInputStory,
+  buildInputTextWithEntities,
+  buildMessageFromUpdate,
   buildMtpMessageEntity,
+  buildSendMessageAction,
   generateRandomBigInt,
   getEntityTypeById,
   isMessageWithMedia,
   isServiceMessageWithMedia,
-  buildSendMessageAction,
-  buildInputPollFromExisting,
-  buildInputTextWithEntities,
-  buildMessageFromUpdate,
 } from '../gramjsBuilders';
-import { buildApiChatFromPreview, buildApiSendAsPeerId } from '../apiBuilders/chats';
-import { fetchFile } from '../../../util/files';
 import {
   addEntitiesToLocalDb,
   addMessageToLocalDb,
   deserializeBytes,
   resolveMessageApiChatId,
 } from '../helpers';
-import { interpolateArray } from '../../../util/waveform';
-import { requestChatUpdate } from './chats';
-import { getEmojiOnlyCountForMessage } from '../../../global/helpers/getEmojiOnlyCountForMessage';
-import { getServerTimeOffset } from '../../../util/serverTime';
-import { getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
 import { updateChannelState } from '../updateManager';
-import { compact } from '../../../util/iteratees';
+import { requestChatUpdate } from './chats';
+import { handleGramJsUpdate, invokeRequest, uploadFile } from './client';
 
 const FAST_SEND_TIMEOUT = 1000;
 const INPUT_WAVEFORM_LENGTH = 63;
@@ -232,10 +239,10 @@ export function sendMessage(
     chat,
     text,
     entities,
-    replyingTo,
-    replyingToTopId,
+    replyInfo,
     attachment,
     sticker,
+    story,
     gif,
     poll,
     contact,
@@ -250,10 +257,10 @@ export function sendMessage(
     lastMessageId?: number;
     text?: string;
     entities?: ApiMessageEntity[];
-    replyingTo?: number;
-    replyingToTopId?: number;
+    replyInfo?: ApiInputReplyInfo;
     attachment?: ApiAttachment;
     sticker?: ApiSticker;
+    story?: ApiStory | ApiStorySkipped;
     gif?: ApiVideo;
     poll?: ApiNewPoll;
     contact?: ApiContact;
@@ -261,7 +268,7 @@ export function sendMessage(
     scheduledAt?: number;
     groupedId?: string;
     noWebPage?: boolean;
-    sendAs?: ApiUser | ApiChat;
+    sendAs?: ApiPeer;
     shouldUpdateStickerSetOrder?: boolean;
   },
   onProgress?: ApiOnProgress,
@@ -270,8 +277,7 @@ export function sendMessage(
     chat,
     text,
     entities,
-    replyingTo,
-    replyingToTopId,
+    replyInfo,
     attachment,
     sticker,
     gif,
@@ -280,6 +286,7 @@ export function sendMessage(
     groupedId,
     scheduledAt,
     sendAs,
+    story,
   );
 
   onUpdate({
@@ -309,8 +316,7 @@ export function sendMessage(
       chat,
       text,
       entities,
-      replyingTo,
-      replyingToTopId,
+      replyInfo,
       attachment: attachment!,
       groupedId,
       isSilent,
@@ -339,6 +345,8 @@ export function sendMessage(
       media = buildInputMediaDocument(gif);
     } else if (poll) {
       media = buildInputPoll(poll, randomId);
+    } else if (story) {
+      media = buildInputStory(story);
     } else if (contact) {
       media = new GramJs.InputMediaContact({
         phoneNumber: contact.phoneNumber,
@@ -357,10 +365,9 @@ export function sendMessage(
         entities: entities ? entities.map(buildMtpMessageEntity) : undefined,
         peer: buildInputPeer(chat.id, chat.accessHash),
         randomId,
+        replyTo: replyInfo && buildInputReplyTo(replyInfo),
         ...(isSilent && { silent: isSilent }),
         ...(scheduledAt && { scheduleDate: scheduledAt }),
-        ...(replyingTo && { replyToMsgId: replyingTo }),
-        ...(replyingToTopId && { topMsgId: replyingToTopId }),
         ...(media && { media }),
         ...(noWebPage && { noWebpage: noWebPage }),
         ...(sendAs && { sendAs: buildInputPeer(sendAs.id, sendAs.accessHash) }),
@@ -395,8 +402,7 @@ function sendGroupedMedia(
     chat,
     text,
     entities,
-    replyingTo,
-    replyingToTopId,
+    replyInfo,
     attachment,
     groupedId,
     isSilent,
@@ -406,13 +412,12 @@ function sendGroupedMedia(
     chat: ApiChat;
     text?: string;
     entities?: ApiMessageEntity[];
-    replyingTo?: number;
-    replyingToTopId?: number;
+    replyInfo?: ApiInputReplyInfo;
     attachment: ApiAttachment;
     groupedId: string;
     isSilent?: boolean;
     scheduledAt?: number;
-    sendAs?: ApiUser | ApiChat;
+    sendAs?: ApiPeer;
   },
   randomId: GramJs.long,
   localMessage: ApiMessage,
@@ -484,8 +489,7 @@ function sendGroupedMedia(
       clearDraft: true,
       peer: buildInputPeer(chat.id, chat.accessHash),
       multiMedia: Object.values(singleMediaByIndex), // Object keys are usually ordered
-      replyToMsgId: replyingTo,
-      ...(replyingToTopId && { topMsgId: replyingToTopId }),
+      replyTo: replyInfo && buildInputReplyTo(replyInfo),
       ...(isSilent && { silent: isSilent }),
       ...(scheduledAt && { scheduleDate: scheduledAt }),
       ...(sendAs && { sendAs: buildInputPeer(sendAs.id, sendAs.accessHash) }),
@@ -780,7 +784,7 @@ export async function deleteHistory({
 export async function reportMessages({
   peer, messageIds, reason, description,
 }: {
-  peer: ApiChat | ApiUser; messageIds: number[]; reason: ApiReportReason; description?: string;
+  peer: ApiPeer; messageIds: number[]; reason: ApiReportReason; description?: string;
 }) {
   const result = await invokeRequest(new GramJs.messages.Report({
     peer: buildInputPeer(peer.id, peer.accessHash),
@@ -795,7 +799,7 @@ export async function reportMessages({
 export async function sendMessageAction({
   peer, threadId, action,
 }: {
-  peer: ApiChat | ApiUser; threadId?: number; action: ApiSendMessageAction;
+  peer: ApiPeer; threadId?: number; action: ApiSendMessageAction;
 }) {
   const gramAction = buildSendMessageAction(action);
   if (!gramAction) {
@@ -1294,7 +1298,7 @@ export async function forwardMessages({
   messages: ApiMessage[];
   isSilent?: boolean;
   scheduledAt?: number;
-  sendAs?: ApiUser | ApiChat;
+  sendAs?: ApiPeer;
   withMyScore?: boolean;
   noAuthors?: boolean;
   noCaptions?: boolean;
@@ -1512,7 +1516,7 @@ export async function fetchSendAs({
 export function saveDefaultSendAs({
   sendAs, chat,
 }: {
-  sendAs: ApiChat | ApiUser; chat: ApiChat;
+  sendAs: ApiPeer; chat: ApiChat;
 }) {
   return invokeRequest(new GramJs.messages.SaveDefaultSendAs({
     peer: buildInputPeer(chat.id, chat.accessHash),
@@ -1733,7 +1737,7 @@ function handleLocalMessageUpdate(localMessage: ApiMessage, update: GramJs.TypeU
     return;
   }
 
-  let newContent: ApiMessage['content'] | undefined;
+  let newContent: MediaContent | undefined;
   if (messageUpdate instanceof GramJs.UpdateShortSentMessage) {
     if (localMessage.content.text && messageUpdate.entities) {
       newContent = {

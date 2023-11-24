@@ -1,14 +1,14 @@
 import type { FC } from '../../../lib/teact/teact';
 import React, { memo } from '../../../lib/teact/teact';
+import { getActions } from '../../../global';
 
 import type { ApiMessage } from '../../../api/types';
 
-import { getActions } from '../../../global';
 import { getGamePreviewPhotoHash, getGamePreviewVideoHash, getMessageText } from '../../../global/helpers';
 
 import useMedia from '../../../hooks/useMedia';
 
-import Skeleton from '../../ui/Skeleton';
+import Skeleton from '../../ui/placeholder/Skeleton';
 
 import './Game.scss';
 
@@ -59,6 +59,7 @@ const Game: FC<OwnProps> = ({
             className="preview-content"
             src={photoBlobUrl}
             alt={title}
+            draggable={false}
           />
         )}
         {videoBlobUrl && (

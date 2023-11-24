@@ -1,21 +1,21 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo, useCallback, useMemo } from '../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import type { GlobalState } from '../../../global/types';
 
 import { ARCHIVED_FOLDER_ID } from '../../../config';
+import { getChatTitle } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
 import { compact } from '../../../util/iteratees';
 import { formatIntegerCompact } from '../../../util/textFormat';
 import renderText from '../../common/helpers/renderText';
-import { getChatTitle } from '../../../global/helpers';
 
-import useLang from '../../../hooks/useLang';
 import { useFolderManagerForOrderedIds, useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManager';
+import useLang from '../../../hooks/useLang';
 
-import ListItem from '../../ui/ListItem';
 import Badge from '../../ui/Badge';
+import ListItem, { type MenuItemContextAction } from '../../ui/ListItem';
 
 import styles from './Archive.module.scss';
 
@@ -71,7 +71,7 @@ const Archive: FC<OwnProps> = ({
       handler: () => {
         updateArchiveSettings({ isMinimized: true });
       },
-    };
+    } satisfies MenuItemContextAction;
 
     const actionExpand = archiveSettings.isMinimized && {
       title: lang('lng_context_archive_expand'),
@@ -79,15 +79,7 @@ const Archive: FC<OwnProps> = ({
       handler: () => {
         updateArchiveSettings({ isMinimized: false });
       },
-    };
-
-    // const actionHide = {
-    //   title: lang('lng_context_archive_to_menu'),
-    //   icon: 'archive-to-main',
-    //   handler: () => {
-    //     updateArchiveSettings({ isHidden: true });
-    //   },
-    // };
+    } satisfies MenuItemContextAction;
 
     return compact([actionMinimize, actionExpand]);
   }, [archiveSettings.isMinimized, lang, updateArchiveSettings]);

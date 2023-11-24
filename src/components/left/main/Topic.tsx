@@ -1,16 +1,17 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import type {
-  ApiChat, ApiFormattedText, ApiTopic, ApiMessage, ApiMessageOutgoingStatus,
-  ApiTypingStatus,
-  ApiUser,
+  ApiChat, ApiMessage, ApiMessageOutgoingStatus,
+  ApiPeer, ApiTopic, ApiTypingStatus,
 } from '../../../api/types';
+import type { ApiDraft } from '../../../global/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatAnimationTypes } from './hooks';
 
-import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/windowEnvironment';
+import { getMessageAction } from '../../../global/helpers';
+import { getMessageReplyInfo } from '../../../global/helpers/replies';
 import {
   selectCanAnimateInterface,
   selectCanDeleteTopic,
@@ -25,21 +26,21 @@ import {
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { createLocationHash } from '../../../util/routing';
+import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../../../util/windowEnvironment';
 import renderText from '../../common/helpers/renderText';
-import { getMessageAction } from '../../../global/helpers';
 
+import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useChatListEntry from './hooks/useChatListEntry';
 import useTopicContextActions from './hooks/useTopicContextActions';
-import useFlag from '../../../hooks/useFlag';
-import useLang from '../../../hooks/useLang';
 
-import ListItem from '../../ui/ListItem';
 import LastMessageMeta from '../../common/LastMessageMeta';
-import ChatBadge from './ChatBadge';
-import MuteChatModal from '../MuteChatModal.async';
-import ConfirmDialog from '../../ui/ConfirmDialog';
 import TopicIcon from '../../common/TopicIcon';
+import ConfirmDialog from '../../ui/ConfirmDialog';
+import ListItem from '../../ui/ListItem';
+import MuteChatModal from '../MuteChatModal.async';
+import ChatBadge from './ChatBadge';
 
 import styles from './Topic.module.scss';
 
@@ -49,7 +50,6 @@ type OwnProps = {
   isSelected: boolean;
   style: string;
   observeIntersection?: ObserveFn;
-
   orderDiff: number;
   animationType: ChatAnimationTypes;
 };
@@ -61,10 +61,10 @@ type StateProps = {
   lastMessageOutgoingStatus?: ApiMessageOutgoingStatus;
   actionTargetMessage?: ApiMessage;
   actionTargetUserIds?: string[];
-  lastMessageSender?: ApiUser | ApiChat;
+  lastMessageSender?: ApiPeer;
   actionTargetChatId?: string;
   typingStatus?: ApiTypingStatus;
-  draft?: ApiFormattedText;
+  draft?: ApiDraft;
   canScrollDown?: boolean;
   wasTopicOpened?: boolean;
   withInterfaceAnimations?: boolean;
@@ -233,8 +233,9 @@ export default memo(withGlobal<OwnProps>(
   (global, { chatId, topic, isSelected }) => {
     const chat = selectChat(global, chatId);
 
-    const lastMessage = selectChatMessage(global, chatId, topic.lastMessageId)!;
-    const { senderId, replyToMessageId, isOutgoing } = lastMessage || {};
+    const lastMessage = selectChatMessage(global, chatId, topic.lastMessageId);
+    const { senderId, isOutgoing } = lastMessage || {};
+    const replyToMessageId = lastMessage && getMessageReplyInfo(lastMessage)?.replyToMsgId;
     const lastMessageSender = senderId
       ? (selectUser(global, senderId) || selectChat(global, senderId)) : undefined;
     const lastMessageAction = lastMessage ? getMessageAction(lastMessage) : undefined;

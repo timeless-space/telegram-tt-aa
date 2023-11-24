@@ -1,8 +1,8 @@
-import type { FC } from '../../lib/teact/teact';
 import React, { memo } from '../../lib/teact/teact';
 
-import Spinner from './Spinner';
 import buildClassName from '../../util/buildClassName';
+
+import Spinner from './Spinner';
 
 import './Loading.scss';
 
@@ -12,14 +12,14 @@ import './Loading.scss';
 type OwnProps = {
   color?: 'blue' | 'white' | 'black' | 'yellow' | 'gray';
   backgroundColor?: 'light' | 'dark';
+  className?: string;
   onClick?: NoneToVoidFunction;
   ref?: React.Ref<HTMLDivElement>;
-  className?: string;
 };
 
-const Loading: FC<OwnProps> = ({
-  color, backgroundColor, onClick, ref, className,
-}) => {
+const Loading = ({
+  color, backgroundColor, ref, className, onClick,
+}: OwnProps) => {
   return (
     <div ref={ref} className={buildClassName('Loading', onClick && 'interactive', className)} onClick={onClick}>
       <Spinner color={color} backgroundColor={backgroundColor} />

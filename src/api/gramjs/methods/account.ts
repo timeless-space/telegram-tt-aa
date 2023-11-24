@@ -1,17 +1,19 @@
 import BigInt from 'big-integer';
-import type {
-  ApiChat, ApiPhoto, ApiReportReason, ApiUser,
-} from '../../types';
-import { invokeRequest } from './client';
 import { Api as GramJs } from '../../../lib/gramjs';
-import { buildInputPeer, buildInputReportReason, buildInputPhoto } from '../gramjsBuilders';
+
+import type {
+  ApiPeer, ApiPhoto, ApiReportReason,
+} from '../../types';
+
+import { buildInputPeer, buildInputPhoto, buildInputReportReason } from '../gramjsBuilders';
+import { invokeRequest } from './client';
 
 export async function reportPeer({
   peer,
   reason,
   description,
 }: {
-  peer: ApiChat | ApiUser; reason: ApiReportReason; description?: string;
+  peer: ApiPeer; reason: ApiReportReason; description?: string;
 }) {
   const result = await invokeRequest(new GramJs.account.ReportPeer({
     peer: buildInputPeer(peer.id, peer.accessHash),
@@ -28,7 +30,7 @@ export async function reportProfilePhoto({
   reason,
   description,
 }: {
-  peer: ApiChat | ApiUser; photo: ApiPhoto; reason: ApiReportReason; description?: string;
+  peer: ApiPeer; photo: ApiPhoto; reason: ApiReportReason; description?: string;
 }) {
   const photoId = buildInputPhoto(photo);
   if (!photoId) return undefined;
@@ -44,14 +46,15 @@ export async function reportProfilePhoto({
 }
 
 export async function changeSessionSettings({
-  hash, areCallsEnabled, areSecretChatsEnabled,
+  hash, areCallsEnabled, areSecretChatsEnabled, isConfirmed,
 }: {
-  hash: string; areCallsEnabled?: boolean; areSecretChatsEnabled?: boolean;
+  hash: string; areCallsEnabled?: boolean; areSecretChatsEnabled?: boolean; isConfirmed?: boolean;
 }) {
   const result = await invokeRequest(new GramJs.account.ChangeAuthorizationSettings({
     hash: BigInt(hash),
     ...(areCallsEnabled !== undefined ? { callRequestsDisabled: !areCallsEnabled } : undefined),
     ...(areSecretChatsEnabled !== undefined ? { encryptedRequestsDisabled: !areSecretChatsEnabled } : undefined),
+    ...(isConfirmed && { confirmed: isConfirmed }),
   }));
 
   return result;

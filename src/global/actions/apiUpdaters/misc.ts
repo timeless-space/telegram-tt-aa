@@ -1,19 +1,30 @@
-import { addActionHandler, setGlobal } from '../../index';
-
 import type { ActionReturnType } from '../../types';
 import { PaymentStep } from '../../../types';
 
+import { addActionHandler, setGlobal } from '../../index';
 import {
-  addBlockedContact, removeBlockedContact, setConfirmPaymentUrl, setPaymentStep,
+  addBlockedUser,
+  addStoriesForPeer,
+  removeBlockedUser,
+  removePeerStory,
+  setConfirmPaymentUrl,
+  setPaymentStep,
+  updateLastReadStoryForPeer,
+  updatePeerStory,
+  updatePeersWithStories,
+  updateStealthMode,
 } from '../../reducers';
+import { selectPeerStories, selectPeerStory } from '../../selectors';
 
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   switch (update['@type']) {
     case 'updatePeerBlocked':
       if (update.isBlocked) {
-        return addBlockedContact(global, update.id);
+        return addBlockedUser(global, update.id);
+      } else if (update.isBlockedFromStories) {
+        return global; // Unsupported
       } else {
-        return removeBlockedContact(global, update.id);
+        return removeBlockedUser(global, update.id);
       }
 
     case 'updateResetContactList':
@@ -29,6 +40,12 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     case 'updateConfig':
       actions.loadConfig();
       break;
+
+    case 'updateNewAuthorization': {
+      // Load more info about this session
+      actions.loadAuthorizations();
+      break;
+    }
 
     case 'updateFavoriteStickers':
       actions.loadFavoriteStickers();
@@ -95,10 +112,44 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     case 'updateWebViewResultSent':
       Object.values(global.byTabId).forEach((tabState) => {
         if (tabState.webApp?.queryId === update.queryId) {
-          actions.setReplyingToId({ messageId: undefined, tabId: tabState.id });
+          actions.resetDraftReplyInfo({ tabId: tabState.id });
           actions.closeWebApp({ tabId: tabState.id });
         }
       });
+      break;
+
+    case 'updateStory':
+      global = addStoriesForPeer(global, update.peerId, { [update.story.id]: update.story });
+      global = updatePeersWithStories(global, { [update.peerId]: selectPeerStories(global, update.peerId)! });
+      setGlobal(global);
+      break;
+
+    case 'deleteStory':
+      global = removePeerStory(global, update.peerId, update.storyId);
+      setGlobal(global);
+      break;
+
+    case 'updateReadStories':
+      global = updateLastReadStoryForPeer(global, update.peerId, update.lastReadId);
+      setGlobal(global);
+      break;
+
+    case 'updateSentStoryReaction': {
+      const { peerId, storyId, reaction } = update;
+      const story = selectPeerStory(global, peerId, storyId);
+      if (!story) return global;
+      global = updatePeerStory(global, peerId, storyId, { sentReaction: reaction });
+      setGlobal(global);
+      break;
+    }
+
+    case 'updateStealthMode':
+      global = updateStealthMode(global, update.stealthMode);
+      setGlobal(global);
+      break;
+
+    case 'updateAttachMenuBots':
+      actions.loadAttachBots({ hash: global.attachMenu.hash });
       break;
   }
 

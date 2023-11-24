@@ -1,29 +1,32 @@
 import type { RefObject } from 'react';
 import type { FC, TeactNode } from '../../lib/teact/teact';
 import React, { useRef } from '../../lib/teact/teact';
+
+import type { IconName } from '../../types/icons';
+
 import { requestMeasure } from '../../lib/fasterdom/fasterdom';
-
-import { IS_TOUCH_ENV, MouseButton } from '../../util/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
+import { IS_TOUCH_ENV, MouseButton } from '../../util/windowEnvironment';
+import renderText from '../common/helpers/renderText';
 
-import useLastCallback from '../../hooks/useLastCallback';
 import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
-import useMenuPosition from '../../hooks/useMenuPosition';
+import { useFastClick } from '../../hooks/useFastClick';
 import useFlag from '../../hooks/useFlag';
 import useLang from '../../hooks/useLang';
-import { useFastClick } from '../../hooks/useFastClick';
+import useLastCallback from '../../hooks/useLastCallback';
+import useMenuPosition from '../../hooks/useMenuPosition';
 
-import RippleEffect from './RippleEffect';
+import Button from './Button';
 import Menu from './Menu';
 import MenuItem from './MenuItem';
 import MenuSeparator from './MenuSeparator';
-import Button from './Button';
+import RippleEffect from './RippleEffect';
 
 import './ListItem.scss';
 
 type MenuItemContextActionItem = {
   title: string;
-  icon: string;
+  icon: IconName;
   destructive?: boolean;
   handler?: () => void;
 };
@@ -40,9 +43,10 @@ export type MenuItemContextAction =
 interface OwnProps {
   ref?: RefObject<HTMLDivElement>;
   buttonRef?: RefObject<HTMLDivElement | HTMLAnchorElement>;
-  icon?: string;
+  icon?: IconName;
+  iconClassName?: string;
   leftElement?: TeactNode;
-  secondaryIcon?: string;
+  secondaryIcon?: IconName;
   rightElement?: TeactNode;
   buttonClassName?: string;
   className?: string;
@@ -59,6 +63,7 @@ interface OwnProps {
   isStatic?: boolean;
   contextActions?: MenuItemContextAction[];
   withPortalForMenu?: boolean;
+  menuBubbleClassName?: string;
   href?: string;
   onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onClick?: (e: React.MouseEvent<HTMLElement>, arg?: any) => void;
@@ -72,8 +77,10 @@ const ListItem: FC<OwnProps> = ({
   ref,
   buttonRef,
   icon,
+  iconClassName,
   leftElement,
   buttonClassName,
+  menuBubbleClassName,
   secondaryIcon,
   rightElement,
   className,
@@ -231,7 +238,7 @@ const ListItem: FC<OwnProps> = ({
       >
         {leftElement}
         {icon && (
-          <i className={`icon icon-${icon}`} />
+          <i className={buildClassName('icon', `icon-${icon}`, iconClassName)} />
         )}
         {multiline && (<div className="multiline-item">{children}</div>)}
         {!multiline && children}
@@ -260,11 +267,12 @@ const ListItem: FC<OwnProps> = ({
           positionX={positionX}
           positionY={positionY}
           style={menuStyle}
-          className="ListItem-context-menu"
+          className="ListItem-context-menu with-menu-transitions"
           autoClose
           onClose={handleContextMenuClose}
           onCloseAnimationEnd={handleContextMenuHide}
           withPortal={withPortalForMenu}
+          bubbleClassName={menuBubbleClassName}
         >
           {contextActions.map((action) => (
             ('isSeparator' in action) ? (
@@ -277,7 +285,9 @@ const ListItem: FC<OwnProps> = ({
                 disabled={!action.handler}
                 onClick={action.handler}
               >
-                {action.title}
+                <span className="list-item-ellipsis">
+                  {renderText(action.title)}
+                </span>
               </MenuItem>
             )
           ))}

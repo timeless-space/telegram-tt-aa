@@ -1,20 +1,20 @@
 import { addCallback } from '../lib/teact/teactn';
 import { addActionHandler, getGlobal } from '../global';
 
+import type { ApiChat, ApiChatFolder, ApiUser } from '../api/types';
 import type { GlobalState } from '../global/types';
 import type { NotifyException, NotifySettings } from '../types';
-import type { ApiChat, ApiChatFolder, ApiUser } from '../api/types';
+import type { CallbackManager } from './callbacks';
 
 import {
   ALL_FOLDER_ID, ARCHIVED_FOLDER_ID, DEBUG, SERVICE_NOTIFICATIONS_USER_ID,
 } from '../config';
-import { selectNotifySettings, selectNotifyExceptions, selectTabState } from '../global/selectors';
 import { selectIsChatMuted } from '../global/helpers';
-import { onIdle, throttle } from './schedulers';
-import { areSortedArraysEqual, unique } from './iteratees';
+import { selectNotifyExceptions, selectNotifySettings, selectTabState } from '../global/selectors';
 import arePropsShallowEqual from './arePropsShallowEqual';
-import type { CallbackManager } from './callbacks';
 import { createCallbackManager } from './callbacks';
+import { areSortedArraysEqual, unique } from './iteratees';
+import { onIdle, throttle } from './schedulers';
 
 interface FolderSummary {
   id: number;
@@ -89,6 +89,13 @@ let callbacks: {
   chatsCountByFolderId: CallbackManager;
   unreadCountersByFolderId: CallbackManager;
 } = initials.callbacks;
+
+if (DEBUG) {
+  (window as any).DEBUG_getFolderManager = () => ({
+    prepared,
+    results,
+  });
+}
 
 const updateFolderManagerThrottled = throttle(() => {
   onIdle(() => {
@@ -434,7 +441,7 @@ function buildChatSummary(
   const {
     id, type, lastMessage, isRestricted, isNotJoined, migratedTo, folderId,
     unreadCount: chatUnreadCount, unreadMentionsCount: chatUnreadMentionsCount, hasUnreadMark,
-    joinDate, draftDate, isForum, topics,
+    creationDate, draftDate, isForum, topics,
   } = chat;
 
   const { unreadCount, unreadMentionsCount } = isForum
@@ -460,7 +467,7 @@ function buildChatSummary(
     isUnread: Boolean(unreadCount || unreadMentionsCount || hasUnreadMark),
     unreadCount,
     unreadMentionsCount,
-    order: Math.max(joinDate || 0, draftDate || 0, lastMessage?.date || 0),
+    order: Math.max(creationDate || 0, draftDate || 0, lastMessage?.date || 0),
     isUserBot: userInfo ? userInfo.type === 'userTypeBot' : undefined,
     isUserContact: userInfo ? userInfo.isContact : undefined,
   };

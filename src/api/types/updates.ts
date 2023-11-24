@@ -1,16 +1,22 @@
+import type { ApiDraft } from '../../global/types';
 import type {
   GroupCallConnectionData,
-  GroupCallParticipant,
   GroupCallConnectionState,
-  VideoState,
+  GroupCallParticipant,
   VideoRotation,
+  VideoState,
 } from '../../lib/secret-sauce';
+import type { ApiPrivacyKey, PrivacyVisibility } from '../../types';
+import type { ApiBotMenuButton } from './bots';
+import type {
+  ApiGroupCall, ApiPhoneCall,
+} from './calls';
 import type {
   ApiChat,
-  ApiChatFullInfo,
-  ApiTypingStatus,
-  ApiChatMember,
   ApiChatFolder,
+  ApiChatFullInfo,
+  ApiChatMember,
+  ApiTypingStatus,
 } from './chats';
 import type {
   ApiFormattedText,
@@ -18,21 +24,19 @@ import type {
   ApiMessageExtendedMediaPreview,
   ApiPhoto,
   ApiPoll,
+  ApiReaction,
   ApiReactions,
   ApiStickerSet,
   ApiThreadInfo,
+  MediaContent,
 } from './messages';
-import type {
-  ApiEmojiStatus, ApiUser, ApiUserFullInfo, ApiUserStatus,
-} from './users';
 import type {
   ApiEmojiInteraction, ApiError, ApiInviteInfo, ApiNotifyException, ApiSessionData,
 } from './misc';
+import type { ApiStealthMode, ApiStory, ApiStorySkipped } from './stories';
 import type {
-  ApiGroupCall, ApiPhoneCall,
-} from './calls';
-import type { ApiBotMenuButton } from './bots';
-import type { ApiPrivacyKey, PrivacyVisibility } from '../../types';
+  ApiEmojiStatus, ApiUser, ApiUserFullInfo, ApiUserStatus,
+} from './users';
 
 export type ApiUpdateReady = {
   '@type': 'updateApiReady';
@@ -310,9 +314,7 @@ export type ApiUpdateDraftMessage = {
   '@type': 'draftMessage';
   chatId: string;
   threadId?: number;
-  formattedText?: ApiFormattedText;
-  date?: number;
-  replyingToId?: number;
+  draft?: ApiDraft;
 };
 
 export type ApiUpdateMessageReactions = {
@@ -326,7 +328,7 @@ export type ApiUpdateMessageExtendedMedia = {
   '@type': 'updateMessageExtendedMedia';
   id: number;
   chatId: string;
-  media?: ApiMessage['content'];
+  media?: MediaContent;
   preview?: ApiMessageExtendedMediaPreview;
 };
 
@@ -461,7 +463,8 @@ export type ApiUpdateTwoFaStateWaitCode = {
 export type ApiUpdatePeerBlocked = {
   '@type': 'updatePeerBlocked';
   id: string;
-  isBlocked: boolean;
+  isBlocked?: boolean;
+  isBlockedFromStories?: boolean;
 };
 
 export type ApiUpdatePaymentVerificationNeeded = {
@@ -624,8 +627,51 @@ export type ApiRequestReconnectApi = {
   '@type': 'requestReconnectApi';
 };
 
+export type ApiUpdateStory = {
+  '@type': 'updateStory';
+  peerId: string;
+  story: ApiStory | ApiStorySkipped;
+};
+
+export type ApiUpdateDeleteStory = {
+  '@type': 'deleteStory';
+  peerId: string;
+  storyId: number;
+};
+
+export type ApiUpdateReadStories = {
+  '@type': 'updateReadStories';
+  peerId: string;
+  lastReadId: number;
+};
+
+export type ApiUpdateSentStoryReaction = {
+  '@type': 'updateSentStoryReaction';
+  peerId: string;
+  storyId: number;
+  reaction?: ApiReaction;
+};
+
+export type ApiUpdateStealthMode = {
+  '@type': 'updateStealthMode';
+  stealthMode: ApiStealthMode;
+};
+
 export type ApiRequestSync = {
   '@type': 'requestSync';
+};
+
+export type ApiUpdateAttachMenuBots = {
+  '@type': 'updateAttachMenuBots';
+};
+
+export type ApiUpdateNewAuthorization = {
+  '@type': 'updateNewAuthorization';
+  hash: string;
+  isUnconfirmed?: true;
+  date?: number;
+  device?: string;
+  location?: string;
 };
 
 export type ApiUpdate = (
@@ -654,7 +700,9 @@ export type ApiUpdate = (
   ApiUpdatePhoneCallConnectionState | ApiUpdateBotMenuButton | ApiUpdateTranscribedAudio | ApiUpdateUserEmojiStatus |
   ApiUpdateMessageExtendedMedia | ApiUpdateConfig | ApiUpdateTopicNotifyExceptions | ApiUpdatePinnedTopic |
   ApiUpdatePinnedTopicsOrder | ApiUpdateTopic | ApiUpdateTopics | ApiUpdateRecentEmojiStatuses |
-  ApiUpdateRecentReactions | ApiRequestReconnectApi | ApiRequestSync | ApiUpdateFetchingDifference
+  ApiUpdateRecentReactions | ApiUpdateStory | ApiUpdateReadStories | ApiUpdateDeleteStory | ApiUpdateSentStoryReaction |
+  ApiRequestReconnectApi | ApiRequestSync | ApiUpdateFetchingDifference | ApiUpdateChannelMessages |
+  ApiUpdateStealthMode | ApiUpdateAttachMenuBots | ApiUpdateNewAuthorization
 );
 
 export type OnApiUpdate = (update: ApiUpdate) => void;

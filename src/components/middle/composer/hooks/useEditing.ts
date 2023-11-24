@@ -1,24 +1,24 @@
 import { useEffect, useState } from '../../../../lib/teact/teact';
 import { getActions } from '../../../../global';
-import { requestMeasure, requestNextMutation } from '../../../../lib/fasterdom/fasterdom';
 
 import type { ApiFormattedText, ApiMessage } from '../../../../api/types';
-import type { MessageListType } from '../../../../global/types';
+import type { ApiDraft, MessageListType } from '../../../../global/types';
 import type { Signal } from '../../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../../api/types';
 
 import { EDITABLE_INPUT_CSS_SELECTOR } from '../../../../config';
-import useEffectWithPrevDeps from '../../../../hooks/useEffectWithPrevDeps';
-import parseMessageInput from '../../../../util/parseMessageInput';
-import focusEditableElement from '../../../../util/focusEditableElement';
+import { requestMeasure, requestNextMutation } from '../../../../lib/fasterdom/fasterdom';
 import { hasMessageMedia } from '../../../../global/helpers';
+import focusEditableElement from '../../../../util/focusEditableElement';
+import parseMessageInput from '../../../../util/parseMessageInput';
 import { getTextWithEntitiesAsHtml } from '../../../common/helpers/renderTextWithEntities';
 
-import useLastCallback from '../../../../hooks/useLastCallback';
+import { useDebouncedResolver } from '../../../../hooks/useAsyncResolvers';
 import useBackgroundMode from '../../../../hooks/useBackgroundMode';
 import useBeforeUnload from '../../../../hooks/useBeforeUnload';
-import { useDebouncedResolver } from '../../../../hooks/useAsyncResolvers';
 import useDerivedSignal from '../../../../hooks/useDerivedSignal';
+import useEffectWithPrevDeps from '../../../../hooks/useEffectWithPrevDeps';
+import useLastCallback from '../../../../hooks/useLastCallback';
 
 const URL_ENTITIES = new Set<string>([ApiMessageEntityTypes.TextUrl, ApiMessageEntityTypes.Url]);
 const DEBOUNCE_MS = 300;
@@ -32,12 +32,13 @@ const useEditing = (
   chatId: string,
   threadId: number,
   type: MessageListType,
-  draft?: ApiFormattedText,
+  draft?: ApiDraft,
   editingDraft?: ApiFormattedText,
-  replyingToId?: number,
 ): [VoidFunction, VoidFunction, boolean] => {
   const { editMessage, setEditingDraft, toggleMessageWebPage } = getActions();
   const [shouldForceShowEditing, setShouldForceShowEditing] = useState(false);
+
+  const replyingToId = draft?.replyInfo?.replyToMsgId;
 
   useEffectWithPrevDeps(([prevEditedMessage, prevReplyingToId]) => {
     if (!editedMessage) {
@@ -125,7 +126,7 @@ const useEditing = (
 
     // Run one frame after editing draft reset
     requestMeasure(() => {
-      setHtml(getTextWithEntitiesAsHtml(draft));
+      setHtml(getTextWithEntitiesAsHtml(draft.text));
 
       // Wait one more frame until new HTML is rendered
       requestNextMutation(() => {

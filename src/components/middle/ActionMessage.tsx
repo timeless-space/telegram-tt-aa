@@ -7,35 +7,39 @@ import { getActions, getGlobal, withGlobal } from '../../global';
 import type {
   ApiChat, ApiMessage, ApiSticker, ApiTopic, ApiUser,
 } from '../../api/types';
+import type { MessageListType } from '../../global/types';
+import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { FocusDirection } from '../../types';
 import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
-import type { MessageListType } from '../../global/types';
 
+import { getChatTitle, getMessageHtmlId, isChatChannel } from '../../global/helpers';
+import { getMessageReplyInfo } from '../../global/helpers/replies';
 import {
   selectCanPlayAnimatedEmojis,
   selectChat,
   selectChatMessage,
+  selectGiftStickerForDuration,
   selectIsMessageFocused,
   selectTabState,
   selectTopicFromMessage,
   selectUser,
 } from '../../global/selectors';
-import { getMessageHtmlId, isChatChannel } from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { renderActionMessageText } from '../common/helpers/renderActionMessageText';
+import renderText from '../common/helpers/renderText';
 import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
-import useEnsureMessage from '../../hooks/useEnsureMessage';
-import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
-import type { ObserveFn } from '../../hooks/useIntersectionObserver';
-import { useIsIntersecting, useOnIntersect } from '../../hooks/useIntersectionObserver';
-import useFocusMessage from './message/hooks/useFocusMessage';
-import useLang from '../../hooks/useLang';
-import useFlag from '../../hooks/useFlag';
-import useShowTransition from '../../hooks/useShowTransition';
 
-import ContextMenuContainer from './message/ContextMenuContainer.async';
+import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
+import useEnsureMessage from '../../hooks/useEnsureMessage';
+import useFlag from '../../hooks/useFlag';
+import { useIsIntersecting, useOnIntersect } from '../../hooks/useIntersectionObserver';
+import useLang from '../../hooks/useLang';
+import useShowTransition from '../../hooks/useShowTransition';
+import useFocusMessage from './message/hooks/useFocusMessage';
+
 import AnimatedIconFromSticker from '../common/AnimatedIconFromSticker';
 import ActionMessageSuggestedAvatar from './ActionMessageSuggestedAvatar';
+import ContextMenuContainer from './message/ContextMenuContainer.async';
 
 type OwnProps = {
   message: ApiMessage;
@@ -59,6 +63,7 @@ type StateProps = {
   targetUserIds?: string[];
   targetMessage?: ApiMessage;
   targetChatId?: string;
+  targetChat?: ApiChat;
   isFocused: boolean;
   topic?: ApiTopic;
   focusDirection?: FocusDirection;
@@ -80,6 +85,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   targetUserIds,
   targetMessage,
   targetChatId,
+  targetChat,
   isFocused,
   focusDirection,
   noFocusHighlight,
@@ -93,7 +99,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   observeIntersectionForPlaying,
   onPinnedIntersectionChange,
 }) => {
-  const { openPremiumModal, requestConfetti } = getActions();
+  const { openPremiumModal, requestConfetti, checkGiftCode } = getActions();
 
   const lang = useLang();
 
@@ -101,7 +107,11 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   const ref = useRef<HTMLDivElement>(null);
 
   useOnIntersect(ref, observeIntersectionForReading);
-  useEnsureMessage(message.chatId, message.replyToMessageId, targetMessage);
+  useEnsureMessage(
+    message.chatId,
+    message.replyInfo?.type === 'message' ? message.replyInfo.replyToMsgId : undefined,
+    targetMessage,
+  );
   useFocusMessage(ref, message.chatId, isFocused, focusDirection, noFocusHighlight, isJustAdded);
 
   useEffect(() => {
@@ -115,6 +125,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   const noAppearanceAnimation = appearanceOrder <= 0;
   const [isShown, markShown] = useFlag(noAppearanceAnimation);
   const isGift = Boolean(message.content.action?.text.startsWith('ActionGift'));
+  const isGiftCode = Boolean(message.content.action?.text.startsWith('BoostingReceivedGift'));
   const isSuggestedAvatar = message.content.action?.type === 'suggestProfilePhoto' && message.content.action!.photo;
 
   useEffect(() => {
@@ -135,7 +146,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (isVisible && shouldShowConfettiRef.current) {
       shouldShowConfettiRef.current = false;
-      requestConfetti();
+      requestConfetti({});
     }
   }, [isVisible, requestConfetti]);
 
@@ -189,6 +200,12 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
     });
   };
 
+  const handleGiftCodeClick = () => {
+    const slug = message.content.action?.slug;
+    if (!slug) return;
+    checkGiftCode({ slug });
+  };
+
   // TODO Refactoring for action rendering
   const shouldSkipRender = isInsideTopic && message.content.action?.text === 'TopicWasCreatedAction';
   if (shouldSkipRender) {
@@ -217,13 +234,49 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
     );
   }
 
+  function renderGiftCode() {
+    const isFromGiveaway = message.content.action?.isGiveaway;
+    const isUnclaimed = message.content.action?.isUnclaimed;
+    return (
+      <span
+        className="action-message-gift action-message-gift-code"
+        tabIndex={0}
+        role="button"
+        onClick={handleGiftCodeClick}
+      >
+        <AnimatedIconFromSticker
+          key={message.id}
+          sticker={premiumGiftSticker}
+          play={canPlayAnimatedEmojis}
+          noLoop
+          nonInteractive
+        />
+        <strong>{lang(isUnclaimed ? 'BoostingUnclaimedPrize' : 'BoostingCongratulations')}</strong>
+        <span className="action-message-subtitle">
+          {renderText(lang(isFromGiveaway ? 'BoostingReceivedGiftFrom' : isUnclaimed
+            ? 'BoostingReceivedPrizeFrom' : 'BoostingYouHaveUnclaimedPrize',
+          getChatTitle(lang, targetChat!)),
+          ['simple_markdown'])}
+        </span>
+        <span className="action-message-subtitle">
+          {renderText(lang(
+            'BoostingUnclaimedPrizeDuration',
+            lang('Months', message.content.action?.months, 'i'),
+          ), ['simple_markdown'])}
+        </span>
+
+        <span className="action-message-button">{lang('BoostingReceivedGiftOpenBtn')}</span>
+      </span>
+    );
+  }
+
   const className = buildClassName(
     'ActionMessage message-list-item',
     isFocused && !noFocusHighlight && 'focused',
     (isGift || isSuggestedAvatar) && 'centered-action',
     isContextMenuShown && 'has-menu-open',
     isLastInList && 'last-in-list',
-    !isGift && !isSuggestedAvatar && 'in-one-row',
+    !isGift && !isSuggestedAvatar && !isGiftCode && 'in-one-row',
     transitionClassNames,
   );
 
@@ -237,8 +290,9 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
       onMouseDown={handleMouseDown}
       onContextMenu={handleContextMenu}
     >
-      {!isSuggestedAvatar && <span className="action-message-content">{renderContent()}</span>}
+      {!isSuggestedAvatar && !isGiftCode && <span className="action-message-content">{renderContent()}</span>}
       {isGift && renderGift()}
+      {isGiftCode && renderGiftCode()}
       {isSuggestedAvatar && (
         <ActionMessageSuggestedAvatar
           message={message}
@@ -262,12 +316,12 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal<OwnProps>(
   (global, { message, threadId }): StateProps => {
     const {
-      chatId, senderId, replyToMessageId, content,
+      chatId, senderId, content,
     } = message;
 
     const userId = senderId;
     const { targetUserIds, targetChatId } = content.action || {};
-    const targetMessageId = replyToMessageId;
+    const targetMessageId = getMessageReplyInfo(message)?.replyToMsgId;
     const targetMessage = targetMessageId
       ? selectChatMessage(global, chatId, targetMessageId)
       : undefined;
@@ -282,12 +336,17 @@ export default memo(withGlobal<OwnProps>(
     const isChat = chat && (isChatChannel(chat) || userId === chatId);
     const senderUser = !isChat && userId ? selectUser(global, userId) : undefined;
     const senderChat = isChat ? chat : undefined;
-    const premiumGiftSticker = global.premiumGifts?.stickers?.[0];
+
+    const targetChat = targetChatId ? selectChat(global, targetChatId) : undefined;
+
+    const giftDuration = content.action?.months;
+    const premiumGiftSticker = selectGiftStickerForDuration(global, giftDuration);
     const topic = selectTopicFromMessage(global, message);
 
     return {
       senderUser,
       senderChat,
+      targetChat,
       targetChatId,
       targetUserIds,
       targetMessage,

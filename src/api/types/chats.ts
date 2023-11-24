@@ -1,15 +1,17 @@
+import type { ApiBotCommand } from './bots';
 import type {
   ApiChatReactions, ApiMessage, ApiPhoto, ApiStickerSet,
 } from './messages';
-import type { ApiBotCommand } from './bots';
 import type { ApiChatInviteImporter } from './misc';
-import type { ApiFakeType, ApiUsername } from './users';
+import type { ApiFakeType, ApiUser, ApiUsername } from './users';
 
 type ApiChatType = (
   'chatTypePrivate' | 'chatTypeSecret' |
   'chatTypeBasicGroup' | 'chatTypeSuperGroup' |
   'chatTypeChannel'
 );
+
+export type ApiPeer = ApiChat | ApiUser;
 
 export interface ApiChat {
   id: string;
@@ -23,7 +25,7 @@ export interface ApiChat {
   unreadCount?: number;
   unreadMentionsCount?: number;
   unreadReactionsCount?: number;
-  isVerified?: boolean;
+  isVerified?: true;
   isMuted?: boolean;
   muteUntil?: number;
   isSignaturesShown?: boolean;
@@ -34,12 +36,14 @@ export interface ApiChat {
   avatarHash?: string;
   usernames?: ApiUsername[];
   membersCount?: number;
-  joinDate?: number;
-  isSupport?: boolean;
+  creationDate?: number;
+  isSupport?: true;
   photos?: ApiPhoto[];
   draftDate?: number;
   isProtected?: boolean;
   fakeType?: ApiFakeType;
+  color?: number;
+  backgroundEmojiId?: string;
   isForum?: boolean;
   topics?: Record<number, ApiTopic>;
   listedTopicIds?: number[];
@@ -76,6 +80,12 @@ export interface ApiChat {
 
   unreadReactions?: number[];
   unreadMentions?: number[];
+
+  // Stories
+  areStoriesHidden?: boolean;
+  hasStories?: boolean;
+  hasUnreadStories?: boolean;
+  maxStoryId?: number;
 
   // Locally determined field
   detectedLanguage?: string;
@@ -118,6 +128,7 @@ export interface ApiChatFullInfo {
   profilePhoto?: ApiPhoto;
   areParticipantsHidden?: boolean;
   isTranslationDisabled?: true;
+  hasPinnedStories?: boolean;
 }
 
 export interface ApiChatMember {
@@ -145,6 +156,9 @@ export interface ApiChatAdminRights {
   anonymous?: true;
   manageCall?: true;
   manageTopics?: true;
+  postStories?: true;
+  editStories?: true;
+  deleteStories?: true;
 }
 
 export interface ApiChatBannedRights {

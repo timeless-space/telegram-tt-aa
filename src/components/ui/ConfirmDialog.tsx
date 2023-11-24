@@ -3,40 +3,48 @@ import React, { memo, useCallback, useRef } from '../../lib/teact/teact';
 
 import type { TextPart } from '../../types';
 
-import useLang from '../../hooks/useLang';
-import useKeyboardListNavigation from '../../hooks/useKeyboardListNavigation';
+import buildClassName from '../../util/buildClassName';
 
-import Modal from './Modal';
+import useKeyboardListNavigation from '../../hooks/useKeyboardListNavigation';
+import useLang from '../../hooks/useLang';
+
 import Button from './Button';
+import Modal from './Modal';
 
 type OwnProps = {
   isOpen: boolean;
-  onClose: () => void;
-  onCloseAnimationEnd?: () => void;
   title?: string;
   header?: TeactNode;
   textParts?: TextPart;
   text?: string;
   confirmLabel?: string;
-  confirmHandler: () => void;
   confirmIsDestructive?: boolean;
+  isConfirmDisabled?: boolean;
+  isOnlyConfirm?: boolean;
   areButtonsInColumn?: boolean;
+  className?: string;
   children?: React.ReactNode;
+  confirmHandler: NoneToVoidFunction;
+  onClose: NoneToVoidFunction;
+  onCloseAnimationEnd?: NoneToVoidFunction;
 };
 
 const ConfirmDialog: FC<OwnProps> = ({
   isOpen,
-  onClose,
-  onCloseAnimationEnd,
   title,
   header,
   text,
   textParts,
   confirmLabel = 'Confirm',
-  confirmHandler,
   confirmIsDestructive,
+  isConfirmDisabled,
+  isOnlyConfirm,
   areButtonsInColumn,
+  className,
   children,
+  confirmHandler,
+  onClose,
+  onCloseAnimationEnd,
 }) => {
   const lang = useLang();
 
@@ -51,7 +59,7 @@ const ConfirmDialog: FC<OwnProps> = ({
 
   return (
     <Modal
-      className="confirm"
+      className={buildClassName('confirm', className)}
       title={title || lang('Telegram')}
       header={header}
       isOpen={isOpen}
@@ -72,10 +80,11 @@ const ConfirmDialog: FC<OwnProps> = ({
           isText
           onClick={confirmHandler}
           color={confirmIsDestructive ? 'danger' : 'primary'}
+          disabled={isConfirmDisabled}
         >
           {confirmLabel}
         </Button>
-        <Button className="confirm-dialog-button" isText onClick={onClose}>{lang('Cancel')}</Button>
+        {!isOnlyConfirm && <Button className="confirm-dialog-button" isText onClick={onClose}>{lang('Cancel')}</Button>}
       </div>
     </Modal>
   );

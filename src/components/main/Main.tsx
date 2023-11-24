@@ -1,99 +1,106 @@
-import React, {
-  useEffect, memo, useState, useRef, useLayoutEffect,
-} from '../../lib/teact/teact';
-import { addExtraClass } from '../../lib/teact/teact-dom';
-import { requestNextMutation } from '../../lib/fasterdom/fasterdom';
-import { getActions, getGlobal, withGlobal } from '../../global';
+import '../../global/actions/all';
 
 import type { FC } from '../../lib/teact/teact';
-import type { LangCode } from '../../types';
+import React, {
+  memo, useEffect, useLayoutEffect,
+  useRef, useState,
+} from '../../lib/teact/teact';
+import { addExtraClass } from '../../lib/teact/teact-dom';
+import { getActions, getGlobal, withGlobal } from '../../global';
+
 import type {
   ApiAttachBot,
   ApiChat,
   ApiChatFolder,
+  ApiGeoPoint,
   ApiMessage,
   ApiUser,
 } from '../../api/types';
 import type { ApiLimitTypeWithModal, TabState } from '../../global/types';
+import type { LangCode } from '../../types';
 import { ElectronEvent } from '../../types/electron';
 
-import '../../global/actions/all';
 import {
-  BASE_EMOJI_KEYWORD_LANG, DEBUG, INACTIVE_MARKER, IS_ELECTRON,
+  BASE_EMOJI_KEYWORD_LANG, DEBUG, INACTIVE_MARKER,
 } from '../../config';
-import { IS_ANDROID } from '../../util/windowEnvironment';
+import { requestNextMutation } from '../../lib/fasterdom/fasterdom';
+import { getUserFullName } from '../../global/helpers';
 import {
+  selectCanAnimateInterface,
+  selectChatFolder,
   selectChatMessage,
-  selectTabState,
   selectCurrentMessageList,
   selectIsCurrentUserPremium,
   selectIsForwardModalOpen,
   selectIsMediaViewerOpen,
+  selectIsReactionPickerOpen,
   selectIsRightColumnShown,
   selectIsServiceChatReady,
-  selectUser,
-  selectIsReactionPickerOpen,
+  selectIsStoryViewerOpen,
   selectPerformanceSettingsValue,
-  selectCanAnimateInterface,
-  selectChatFolder,
+  selectTabState,
+  selectUser,
 } from '../../global/selectors';
-import { getUserFullName } from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { waitForTransitionEnd } from '../../util/cssAnimationEndListeners';
 import { processDeepLink } from '../../util/deeplink';
-import { parseInitialLocationHash, parseLocationHash } from '../../util/routing';
 import { Bundles, loadBundle } from '../../util/moduleLoader';
+import { parseInitialLocationHash, parseLocationHash } from '../../util/routing';
 import updateIcon from '../../util/updateIcon';
+import { IS_ANDROID, IS_ELECTRON } from '../../util/windowEnvironment';
 
-import useLastCallback from '../../hooks/useLastCallback';
+import useAppLayout from '../../hooks/useAppLayout';
 import useBackgroundMode from '../../hooks/useBackgroundMode';
 import useBeforeUnload from '../../hooks/useBeforeUnload';
-import useSyncEffect from '../../hooks/useSyncEffect';
-import usePreventPinchZoomGesture from '../../hooks/usePreventPinchZoomGesture';
 import useForceUpdate from '../../hooks/useForceUpdate';
-import useShowTransition from '../../hooks/useShowTransition';
+import { useFullscreenStatus } from '../../hooks/useFullscreen';
 import { dispatchHeavyAnimationEvent } from '../../hooks/useHeavyAnimationCheck';
 import useInterval from '../../hooks/useInterval';
-import { useFullscreenStatus } from '../../hooks/useFullscreen';
-import useAppLayout from '../../hooks/useAppLayout';
+import useLastCallback from '../../hooks/useLastCallback';
+import usePreventPinchZoomGesture from '../../hooks/usePreventPinchZoomGesture';
+import useShowTransition from '../../hooks/useShowTransition';
+import useSyncEffect from '../../hooks/useSyncEffect';
 import useTimeout from '../../hooks/useTimeout';
-import useFlag from '../../hooks/useFlag';
 
+import ActiveCallHeader from '../calls/ActiveCallHeader.async';
+import GroupCall from '../calls/group/GroupCall.async';
+import PhoneCall from '../calls/phone/PhoneCall.async';
+import RatePhoneCallModal from '../calls/phone/RatePhoneCallModal.async';
+import CustomEmojiSetsModal from '../common/CustomEmojiSetsModal.async';
 import StickerSetModal from '../common/StickerSetModal.async';
 import UnreadCount from '../common/UnreadCounter';
 import LeftColumn from '../left/LeftColumn';
-import MiddleColumn from '../middle/MiddleColumn';
-import RightColumn from '../right/RightColumn';
 import MediaViewer from '../mediaViewer/MediaViewer.async';
 import AudioPlayer from '../middle/AudioPlayer';
-import DownloadManager from './DownloadManager';
-import GameModal from './GameModal';
-import Notifications from './Notifications.async';
-import Dialogs from './Dialogs.async';
-import ForwardRecipientPicker from './ForwardRecipientPicker.async';
-import SafeLinkModal from './SafeLinkModal.async';
-import HistoryCalendar from './HistoryCalendar.async';
-import GroupCall from '../calls/group/GroupCall.async';
-import ActiveCallHeader from '../calls/ActiveCallHeader.async';
-import PhoneCall from '../calls/phone/PhoneCall.async';
+import ReactionPicker from '../middle/message/ReactionPicker.async';
 import MessageListHistoryHandler from '../middle/MessageListHistoryHandler';
-import NewContactModal from './NewContactModal.async';
-import RatePhoneCallModal from '../calls/phone/RatePhoneCallModal.async';
-import WebAppModal from './WebAppModal.async';
-import BotTrustModal from './BotTrustModal.async';
-import AttachBotInstallModal from './AttachBotInstallModal.async';
-import ConfettiContainer from './ConfettiContainer';
-import UrlAuthModal from './UrlAuthModal.async';
-import PremiumMainModal from './premium/PremiumMainModal.async';
+import MiddleColumn from '../middle/MiddleColumn';
+import AttachBotInstallModal from '../modals/attachBotInstall/AttachBotInstallModal.async';
+import BoostModal from '../modals/boost/BoostModal.async';
+import ChatlistModal from '../modals/chatlist/ChatlistModal.async';
+import GiftCodeModal from '../modals/giftcode/GiftCodeModal.async';
+import MapModal from '../modals/map/MapModal.async';
+import UrlAuthModal from '../modals/urlAuth/UrlAuthModal.async';
+import WebAppModal from '../modals/webApp/WebAppModal.async';
 import PaymentModal from '../payment/PaymentModal.async';
 import ReceiptModal from '../payment/ReceiptModal.async';
-import PremiumLimitReachedModal from './premium/common/PremiumLimitReachedModal.async';
-import DeleteFolderDialog from './DeleteFolderDialog.async';
-import CustomEmojiSetsModal from '../common/CustomEmojiSetsModal.async';
-import DraftRecipientPicker from './DraftRecipientPicker.async';
+import RightColumn from '../right/RightColumn';
+import StoryViewer from '../story/StoryViewer.async';
 import AttachBotRecipientPicker from './AttachBotRecipientPicker.async';
-import ReactionPicker from '../middle/message/ReactionPicker.async';
-import ChatlistModal from '../modals/chatlist/ChatlistModal.async';
+import BotTrustModal from './BotTrustModal.async';
+import ConfettiContainer from './ConfettiContainer';
+import DeleteFolderDialog from './DeleteFolderDialog.async';
+import Dialogs from './Dialogs.async';
+import DownloadManager from './DownloadManager';
+import DraftRecipientPicker from './DraftRecipientPicker.async';
+import ForwardRecipientPicker from './ForwardRecipientPicker.async';
+import GameModal from './GameModal';
+import HistoryCalendar from './HistoryCalendar.async';
+import NewContactModal from './NewContactModal.async';
+import Notifications from './Notifications.async';
+import PremiumLimitReachedModal from './premium/common/PremiumLimitReachedModal.async';
+import PremiumMainModal from './premium/PremiumMainModal.async';
+import SafeLinkModal from './SafeLinkModal.async';
 
 import './Main.scss';
 import { handleGetContacts, sendScreenName } from '../../util/tlCustomFunction';
@@ -105,15 +112,19 @@ export interface OwnProps {
 type StateProps = {
   isMasterTab?: boolean;
   chat?: ApiChat;
+  currentUserId?: string;
   isLeftColumnOpen: boolean;
   isMiddleColumnOpen: boolean;
   isRightColumnOpen: boolean;
   isMediaViewerOpen: boolean;
+  isStoryViewerOpen: boolean;
   isForwardModalOpen: boolean;
   hasNotifications: boolean;
   hasDialogs: boolean;
   audioMessage?: ApiMessage;
   safeLinkModalUrl?: string;
+  mapModalGeoPoint?: ApiGeoPoint;
+  mapModalZoom?: number;
   isHistoryCalendarOpen: boolean;
   shouldSkipHistoryAnimations?: boolean;
   openedStickerSetShortName?: string;
@@ -146,6 +157,8 @@ type StateProps = {
   isReactionPickerOpen: boolean;
   isCurrentUserPremium?: boolean;
   chatlistModal?: TabState['chatlistModal'];
+  boostModal?: TabState['boostModal'];
+  giftCodeModal?: TabState['giftCodeModal'];
   noRightColumnAnimation?: boolean;
   withInterfaceAnimations?: boolean;
   isSynced?: boolean;
@@ -153,7 +166,6 @@ type StateProps = {
 
 const APP_OUTDATED_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 const CALL_BUNDLE_LOADING_DELAY_MS = 5000; // 5 sec
-const REACTION_PICKER_LOADING_DELAY_MS = 7000; // 7 sec
 
 // eslint-disable-next-line @typescript-eslint/naming-convention
 let DEBUG_isLogged = false;
@@ -164,12 +176,16 @@ const Main: FC<OwnProps & StateProps> = ({
   isMiddleColumnOpen,
   isRightColumnOpen,
   isMediaViewerOpen,
+  isStoryViewerOpen,
   isForwardModalOpen,
+  currentUserId,
   hasNotifications,
   hasDialogs,
   audioMessage,
   activeGroupCallId,
   safeLinkModalUrl,
+  mapModalGeoPoint,
+  mapModalZoom,
   isHistoryCalendarOpen,
   shouldSkipHistoryAnimations,
   limitReached,
@@ -203,6 +219,8 @@ const Main: FC<OwnProps & StateProps> = ({
   deleteFolderDialog,
   isMasterTab,
   chatlistModal,
+  giftCodeModal,
+  boostModal,
   noRightColumnAnimation,
   isSynced,
 }) => {
@@ -243,7 +261,9 @@ const Main: FC<OwnProps & StateProps> = ({
     loadTopReactions,
     loadRecentReactions,
     loadFeaturedEmojiStickers,
-    setIsAppUpdateAvailable,
+    setIsElectronUpdateAvailable,
+    loadPremiumSetStickers,
+    loadAuthorizations,
   } = getActions();
 
   if (DEBUG && !DEBUG_isLogged) {
@@ -256,9 +276,6 @@ const Main: FC<OwnProps & StateProps> = ({
   useTimeout(() => {
     void loadBundle(Bundles.Calls);
   }, CALL_BUNDLE_LOADING_DELAY_MS);
-
-  const [shouldLoadReactionPicker, markShouldLoadReactionPicker] = useFlag(false);
-  useTimeout(markShouldLoadReactionPicker, REACTION_PICKER_LOADING_DELAY_MS);
 
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
@@ -294,25 +311,33 @@ const Main: FC<OwnProps & StateProps> = ({
     }
   }, [isMobile, isLeftColumnOpen, isMiddleColumnOpen, isRightColumnOpen]);
 
-  useInterval(checkAppVersion, (isMasterTab && !IS_ELECTRON) ? APP_OUTDATED_TIMEOUT_MS : undefined, true);
+  useEffect(() => {
+    if (isMobile) {
+      if ((!isLeftColumnOpen && !isRightColumnOpen) || isRightColumnOpen) {
+        sendScreenName('tl_navigation_otherScreen');
+      }
+    }
+  }, [isMobile, isLeftColumnOpen, isMiddleColumnOpen, isRightColumnOpen]);
+
+  useInterval(checkAppVersion, isMasterTab ? APP_OUTDATED_TIMEOUT_MS : undefined, true);
 
   useEffect(() => {
     if (!IS_ELECTRON) {
       return undefined;
     }
 
-    const removeUpdateDownloadedListener = window.electron!.on(ElectronEvent.UPDATE_DOWNLOADED, () => {
-      setIsAppUpdateAvailable(true);
+    const removeUpdateAvailableListener = window.electron!.on(ElectronEvent.UPDATE_AVAILABLE, () => {
+      setIsElectronUpdateAvailable(true);
     });
 
     const removeUpdateErrorListener = window.electron!.on(ElectronEvent.UPDATE_ERROR, () => {
-      setIsAppUpdateAvailable(false);
-      removeUpdateDownloadedListener?.();
+      setIsElectronUpdateAvailable(false);
+      removeUpdateAvailableListener?.();
     });
 
     return () => {
       removeUpdateErrorListener?.();
-      removeUpdateDownloadedListener?.();
+      removeUpdateAvailableListener?.();
     };
   }, []);
 
@@ -338,6 +363,7 @@ const Main: FC<OwnProps & StateProps> = ({
       loadTopReactions();
       loadRecentReactions();
       loadFeaturedEmojiStickers();
+      loadAuthorizations();
     }
   }, [isMasterTab, isSynced]);
 
@@ -346,6 +372,7 @@ const Main: FC<OwnProps & StateProps> = ({
     if (isMasterTab && isCurrentUserPremium) {
       loadDefaultStatusIcons();
       loadRecentEmojiStatuses();
+      loadPremiumSetStickers();
     }
   }, [isCurrentUserPremium, isMasterTab]);
 
@@ -404,6 +431,12 @@ const Main: FC<OwnProps & StateProps> = ({
     if (parsedInitialLocationHash?.tgaddr) {
       processDeepLink(decodeURIComponent(parsedInitialLocationHash.tgaddr));
     }
+  }, []);
+
+  useEffect(() => {
+    return window.electron?.on(ElectronEvent.DEEPLINK, (link: string) => {
+      processDeepLink(decodeURIComponent(link));
+    });
   }, []);
 
   useEffect(() => {
@@ -522,7 +555,7 @@ const Main: FC<OwnProps & StateProps> = ({
   // Online status and browser tab indicators
   useBackgroundMode(handleBlur, handleFocus, !!IS_ELECTRON);
   useBeforeUnload(handleBlur);
-  usePreventPinchZoomGesture(isMediaViewerOpen);
+  usePreventPinchZoomGesture(isMediaViewerOpen || isStoryViewerOpen);
 
   return (
     <div ref={containerRef} id="Main" className={className}>
@@ -530,12 +563,14 @@ const Main: FC<OwnProps & StateProps> = ({
       <MiddleColumn leftColumnRef={leftColumnRef} isMobile={isMobile} />
       <RightColumn isMobile={isMobile} />
       <MediaViewer isOpen={isMediaViewerOpen} />
+      <StoryViewer isOpen={isStoryViewerOpen} />
       <ForwardRecipientPicker isOpen={isForwardModalOpen} />
       <DraftRecipientPicker requestedDraft={requestedDraft} />
       <Notifications isOpen={hasNotifications} />
       <Dialogs isOpen={hasDialogs} />
       {audioMessage && <AudioPlayer key={audioMessage.id} message={audioMessage} noUi />}
       <SafeLinkModal url={safeLinkModalUrl} />
+      <MapModal geoPoint={mapModalGeoPoint} zoom={mapModalZoom} />
       <UrlAuthModal urlAuth={urlAuth} currentUserName={currentUserName} />
       <HistoryCalendar isOpen={isHistoryCalendarOpen} />
       <StickerSetModal
@@ -554,6 +589,8 @@ const Main: FC<OwnProps & StateProps> = ({
         userId={newContactUserId}
         isByPhoneNumber={newContactByPhoneNumber}
       />
+      <BoostModal info={boostModal} />
+      <GiftCodeModal modal={giftCodeModal} currentUserId={currentUserId} />
       <ChatlistModal info={chatlistModal} />
       <GameModal openedGame={openedGame} gameTitle={gameTitle} />
       <WebAppModal webApp={webApp} />
@@ -575,7 +612,7 @@ const Main: FC<OwnProps & StateProps> = ({
       <PaymentModal isOpen={isPaymentModalOpen} onClose={closePaymentModal} />
       <ReceiptModal isOpen={isReceiptModalOpen} onClose={clearReceipt} />
       <DeleteFolderDialog folder={deleteFolderDialog} />
-      <ReactionPicker isOpen={isReactionPickerOpen} shouldLoad={shouldLoadReactionPicker} />
+      <ReactionPicker isOpen={isReactionPickerOpen} />
     </div>
   );
 };
@@ -588,6 +625,7 @@ export default memo(withGlobal<OwnProps>(
           language, wasTimeFormatSetManually,
         },
       },
+      currentUserId,
     } = global;
 
     const {
@@ -598,6 +636,7 @@ export default memo(withGlobal<OwnProps>(
       urlAuth,
       webApp,
       safeLinkModalUrl,
+      mapModal,
       openedStickerSetShortName,
       openedCustomEmojiSetIds,
       shouldSkipHistoryAnimations,
@@ -615,6 +654,8 @@ export default memo(withGlobal<OwnProps>(
       limitReachedModal,
       deleteFolderDialogModal,
       chatlistModal,
+      boostModal,
+      giftCodeModal,
     } = selectTabState(global);
 
     const { chatId: audioChatId, messageId: audioMessageId } = audioPlayer;
@@ -631,16 +672,20 @@ export default memo(withGlobal<OwnProps>(
     const deleteFolderDialog = deleteFolderDialogModal ? selectChatFolder(global, deleteFolderDialogModal) : undefined;
 
     return {
+      currentUserId,
       isLeftColumnOpen: isLeftColumnShown,
       isMiddleColumnOpen: Boolean(chatId),
       isRightColumnOpen: selectIsRightColumnShown(global, isMobile),
       isMediaViewerOpen: selectIsMediaViewerOpen(global),
+      isStoryViewerOpen: selectIsStoryViewerOpen(global),
       isForwardModalOpen: selectIsForwardModalOpen(global),
       isReactionPickerOpen: selectIsReactionPickerOpen(global),
       hasNotifications: Boolean(notifications.length),
       hasDialogs: Boolean(dialogs.length),
       audioMessage,
       safeLinkModalUrl,
+      mapModalGeoPoint: mapModal?.point,
+      mapModalZoom: mapModal?.zoom,
       isHistoryCalendarOpen: Boolean(historyCalendarSelectedAt),
       shouldSkipHistoryAnimations,
       openedStickerSetShortName,
@@ -674,6 +719,8 @@ export default memo(withGlobal<OwnProps>(
       isMasterTab,
       requestedDraft,
       chatlistModal,
+      boostModal,
+      giftCodeModal,
       noRightColumnAnimation,
       isSynced: global.isSynced,
     };

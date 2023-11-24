@@ -1,16 +1,18 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo, useMemo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { GroupCallParticipant as TypeGroupCallParticipant } from '../../../lib/secret-sauce';
-import type { FC } from '../../../lib/teact/teact';
 
-import buildClassName from '../../../util/buildClassName';
 import { selectActiveGroupCall } from '../../../global/selectors/calls';
+import buildClassName from '../../../util/buildClassName';
+import { compareFields } from '../../../util/iteratees';
+
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import GroupCallParticipant from './GroupCallParticipant';
 import InfiniteScroll from '../../ui/InfiniteScroll';
+import GroupCallParticipant from './GroupCallParticipant';
 
 import styles from './GroupCallParticipantList.module.scss';
 
@@ -70,10 +72,6 @@ const GroupCallParticipantList: FC<OwnProps & StateProps> = ({
     </InfiniteScroll>
   );
 };
-
-function compareFields<T>(a: T, b: T) {
-  return Number(b) - Number(a);
-}
 
 function compareParticipants(a: TypeGroupCallParticipant, b: TypeGroupCallParticipant) {
   return compareFields(!a.isMuted, !b.isMuted)

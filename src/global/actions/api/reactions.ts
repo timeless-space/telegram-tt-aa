@@ -1,9 +1,25 @@
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
-import { callApi } from '../../../api/gramjs';
-
 import type { ActionReturnType } from '../../types';
 import { ApiMediaFormat } from '../../../api/types';
 
+import { GENERAL_REFETCH_INTERVAL } from '../../../config';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { buildCollectionByKey, omit } from '../../../util/iteratees';
+import * as mediaLoader from '../../../util/mediaLoader';
+import requestActionTimeout from '../../../util/requestActionTimeout';
+import { callApi } from '../../../api/gramjs';
+import {
+  getDocumentMediaHash,
+  getMessageKey,
+  getUserReactions,
+  isMessageLocal,
+  isSameReaction,
+} from '../../helpers';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import {
+  addChatMessagesById, addChats, addUsers, updateChatMessage,
+} from '../../reducers';
+import { addMessageReaction, subtractXForEmojiInteraction, updateUnreadReactions } from '../../reducers/reactions';
+import { updateTabState } from '../../reducers/tabs';
 import {
   selectChat,
   selectChatMessage,
@@ -14,17 +30,6 @@ import {
   selectPerformanceSettingsValue,
   selectTabState,
 } from '../../selectors';
-import { addMessageReaction, subtractXForEmojiInteraction, updateUnreadReactions } from '../../reducers/reactions';
-import {
-  addChatMessagesById, addChats, addUsers, updateChatMessage,
-} from '../../reducers';
-import { updateTabState } from '../../reducers/tabs';
-import * as mediaLoader from '../../../util/mediaLoader';
-import { buildCollectionByKey, omit } from '../../../util/iteratees';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import {
-  isSameReaction, getUserReactions, isMessageLocal, getDocumentMediaHash,
-} from '../../helpers';
 
 const INTERACTION_RANDOM_OFFSET = 40;
 
@@ -58,6 +63,11 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
     availableReactions: result,
   };
   setGlobal(global);
+
+  requestActionTimeout({
+    action: 'loadAvailableReactions',
+    payload: undefined,
+  }, GENERAL_REFETCH_INTERVAL);
 });
 
 addActionHandler('interactWithAnimatedEmoji', (global, actions, payload): ActionReturnType => {
@@ -150,22 +160,14 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
 
   const limit = selectMaxUserReactions(global);
   const reactions = newUserReactions.slice(-limit);
-  const tabState = selectTabState(global, tabId);
+  const messageKey = getMessageKey(message);
 
   if (selectPerformanceSettingsValue(global, 'reactionEffects')) {
-    const newActiveReactions = hasReaction ? omit(tabState.activeReactions, [messageId]) : {
-      ...tabState.activeReactions,
-      [messageId]: [
-        ...(tabState.activeReactions[messageId] || []),
-        {
-          messageId,
-          reaction,
-        },
-      ],
-    };
-    global = updateTabState(global, {
-      activeReactions: newActiveReactions,
-    }, tabId);
+    if (hasReaction) {
+      actions.stopActiveReaction({ containerId: messageKey, reaction, tabId });
+    } else {
+      actions.startActiveReaction({ containerId: messageKey, reaction, tabId });
+    }
   }
 
   global = addMessageReaction(global, message, reactions);
@@ -185,21 +187,41 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
   }
 });
 
-addActionHandler('stopActiveReaction', (global, actions, payload): ActionReturnType => {
-  const { messageId, reaction, tabId = getCurrentTabId() } = payload;
-
+addActionHandler('startActiveReaction', (global, actions, payload): ActionReturnType => {
+  const { containerId, reaction, tabId = getCurrentTabId() } = payload;
   const tabState = selectTabState(global, tabId);
-  if (!tabState.activeReactions[messageId]?.some((active) => isSameReaction(active.reaction, reaction))) {
-    return global;
+
+  if (!selectPerformanceSettingsValue(global, 'reactionEffects')) return undefined;
+
+  const currentActiveReactions = tabState.activeReactions[containerId] || [];
+  if (currentActiveReactions.some((active) => isSameReaction(active, reaction))) {
+    return undefined;
   }
 
-  const newMessageActiveReactions = tabState.activeReactions[messageId]
-    .filter((active) => !isSameReaction(active.reaction, reaction));
+  const newActiveReactions = currentActiveReactions.concat(reaction);
+
+  return updateTabState(global, {
+    activeReactions: {
+      ...tabState.activeReactions,
+      [containerId]: newActiveReactions,
+    },
+  }, tabId);
+});
+
+addActionHandler('stopActiveReaction', (global, actions, payload): ActionReturnType => {
+  const { containerId, reaction, tabId = getCurrentTabId() } = payload;
+
+  const tabState = selectTabState(global, tabId);
+
+  const currentActiveReactions = tabState.activeReactions[containerId] || [];
+  // Remove all reactions if reaction is not specified
+  const newMessageActiveReactions = reaction
+    ? currentActiveReactions.filter((active) => !isSameReaction(active, reaction)) : [];
 
   const newActiveReactions = newMessageActiveReactions.length ? {
     ...tabState.activeReactions,
-    [messageId]: newMessageActiveReactions,
-  } : omit(tabState.activeReactions, [messageId]);
+    [containerId]: newMessageActiveReactions,
+  } : omit(tabState.activeReactions, [containerId]);
 
   return updateTabState(global, {
     activeReactions: newActiveReactions,

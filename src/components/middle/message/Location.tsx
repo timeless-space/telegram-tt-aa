@@ -1,35 +1,35 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
-import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { getActions } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { ApiChat, ApiMessage, ApiUser } from '../../../api/types';
+import type { ApiMessage, ApiPeer } from '../../../api/types';
 import type { ISettings } from '../../../types';
 
+import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import {
-  getMessageLocation,
   buildStaticMapHash,
+  getMessageLocation,
   isGeoLiveExpired,
 } from '../../../global/helpers';
+import buildClassName from '../../../util/buildClassName';
 import { formatCountdownShort, formatLastUpdated } from '../../../util/dateFormat';
 import {
-  getMetersPerPixel, getVenueColor, getVenueIconUrl, prepareMapUrl,
+  getMetersPerPixel, getVenueColor, getVenueIconUrl,
 } from '../../../util/map';
 import { getServerTime } from '../../../util/serverTime';
 
+import useForceUpdate from '../../../hooks/useForceUpdate';
+import useInterval from '../../../hooks/useInterval';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
-import useLang from '../../../hooks/useLang';
-import useForceUpdate from '../../../hooks/useForceUpdate';
-import useTimeout from '../../../hooks/useTimeout';
-import buildClassName from '../../../util/buildClassName';
 import usePrevious from '../../../hooks/usePrevious';
-import useInterval from '../../../hooks/useInterval';
+import useTimeout from '../../../hooks/useTimeout';
 
 import Avatar from '../../common/Avatar';
-import Skeleton from '../../ui/Skeleton';
+import Skeleton from '../../ui/placeholder/Skeleton';
 
 import './Location.scss';
 
@@ -47,7 +47,7 @@ const DEFAULT_MAP_CONFIG = {
 
 type OwnProps = {
   message: ApiMessage;
-  peer?: ApiUser | ApiChat;
+  peer?: ApiPeer;
   isInSelectMode?: boolean;
   isSelected?: boolean;
   theme: ISettings['theme'];
@@ -57,7 +57,7 @@ const Location: FC<OwnProps> = ({
   message,
   peer,
 }) => {
-  const { openUrl } = getActions();
+  const { openMapModal } = getActions();
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line no-null/no-null
@@ -95,8 +95,7 @@ const Location: FC<OwnProps> = ({
   }, [type, point, zoom]);
 
   const handleClick = () => {
-    const url = prepareMapUrl(point.lat, point.long, zoom);
-    openUrl({ url });
+    openMapModal({ geoPoint: point, zoom });
   };
 
   const updateCountdown = useLastCallback((countdownEl: HTMLDivElement) => {
@@ -194,6 +193,7 @@ const Location: FC<OwnProps> = ({
         className="full-media map"
         src={mapBlobUrl}
         alt="Location on a map"
+        draggable={false}
         style={`width: ${DEFAULT_MAP_CONFIG.width}px; height: ${DEFAULT_MAP_CONFIG.height}px;`}
       />
     );
@@ -224,14 +224,14 @@ const Location: FC<OwnProps> = ({
         return (
           <div className={pinClassName} style={`--pin-color: ${color}`}>
             <PinSvg />
-            <img src={iconSrc} className="venue-icon" alt="" />
+            <img src={iconSrc} draggable={false} className="venue-icon" alt="" />
           </div>
         );
       }
     }
 
     return (
-      <img className={pinClassName} src={mapPin} alt="" />
+      <img className={pinClassName} draggable={false} src={mapPin} alt="" />
     );
   }
 

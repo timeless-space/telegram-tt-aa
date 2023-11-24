@@ -8,6 +8,7 @@
   max-width: calc(var(--max-width) + 2.25rem);
 
   .Button {
+    --custom-emoji-size: 1.25rem;
     --reaction-background: var(--color-reaction);
     --reaction-background-hover: var(--hover-color-reaction);
     --reaction-text-color: var(--text-color-reaction);
@@ -34,9 +35,7 @@
     overflow: visible;
     line-height: 1.75rem;
 
-    .ReactionStaticEmoji {
-      width: 1.25rem;
-    }
+    transition: background-color 150ms, color 150ms, backdrop-filter 150ms, filter 150ms;
 
     .avatars {
       display: flex;
@@ -52,6 +51,14 @@
           margin: 0;
         }
       }
+    }
+
+    &.message-reaction {
+      gap: 0.125rem;
+    }
+
+    .reaction-animated-emoji {
+      margin: 0.25rem;
     }
 
     &.chosen {
@@ -79,6 +86,12 @@
 
     &:hover {
       --reaction-background: var(--reaction-background-hover) !important;
+
+      backdrop-filter: var(--reaction-background-hover-filter);
+
+      @supports not (backdrop-filter: var(--reaction-background-hover-filter)) {
+        filter: var(--reaction-background-hover-filter);
+      }
     }
 
     &:first-of-type {
@@ -111,8 +124,9 @@
   }
 
   .theme-light &.is-outside .Button {
-    --reaction-background: rgb(0, 0, 0, 0.15);
-    --reaction-background-hover: rgba(0, 0, 0, 0.2);
+    --reaction-background: var(--pattern-color);
+    --reaction-background-hover: var(--pattern-color);
+    --reaction-background-hover-filter: brightness(115%);
     --reaction-text-color: white;
 
     &.chosen {

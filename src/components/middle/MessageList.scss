@@ -216,11 +216,6 @@
       max-width: 80%;
       text-align: left;
     }
-
-    .text-entity-link {
-      color: inherit !important;
-      text-decoration: underline !important;
-    }
   }
 
   .sticky-date,
@@ -281,6 +276,17 @@
     margin-top: 0.5rem;
     cursor: var(--custom-cursor, pointer);
     outline: none;
+  }
+
+  .action-message-gift-code {
+    width: 20rem;
+    margin-inline: auto;
+  }
+
+  .action-message-subtitle {
+    margin-top: 1rem;
+    font-weight: normal;
+    text-wrap: balance;
   }
 
   .action-message-suggested-avatar {

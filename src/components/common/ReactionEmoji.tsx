@@ -1,22 +1,22 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
   memo, useMemo, useRef,
 } from '../../lib/teact/teact';
 
-import type { FC } from '../../lib/teact/teact';
 import type { ApiAvailableReaction, ApiReaction } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 
 import { EMOJI_SIZE_PICKER } from '../../config';
-import buildClassName from '../../util/buildClassName';
 import { getDocumentMediaHash, isSameReaction } from '../../global/helpers';
+import buildClassName from '../../util/buildClassName';
 
-import useLastCallback from '../../hooks/useLastCallback';
 import useCoordsInSharedCanvas from '../../hooks/useCoordsInSharedCanvas';
-import useMediaTransition from '../../hooks/useMediaTransition';
+import useLastCallback from '../../hooks/useLastCallback';
 import useMedia from '../../hooks/useMedia';
+import useMediaTransition from '../../hooks/useMediaTransition';
 
-import CustomEmoji from './CustomEmoji';
 import AnimatedIconWithPreview from './AnimatedIconWithPreview';
+import CustomEmoji from './CustomEmoji';
 
 import styles from './ReactionEmoji.module.scss';
 
@@ -29,6 +29,7 @@ type OwnProps = {
   observeIntersection?: ObserveFn;
   sharedCanvasRef?: React.RefObject<HTMLCanvasElement>;
   sharedCanvasHqRef?: React.RefObject<HTMLCanvasElement>;
+  forcePlayback?: boolean;
   onClick: (reaction: ApiReaction) => void;
 };
 
@@ -40,6 +41,7 @@ const ReactionEmoji: FC<OwnProps> = ({
   observeIntersection,
   sharedCanvasRef,
   sharedCanvasHqRef,
+  forcePlayback,
   onClick,
 }) => {
   // eslint-disable-next-line no-null/no-null
@@ -84,6 +86,7 @@ const ReactionEmoji: FC<OwnProps> = ({
           sharedCanvasRef={sharedCanvasRef}
           sharedCanvasHqRef={sharedCanvasHqRef}
           withTranslucentThumb
+          forceAlways={forcePlayback}
         />
       ) : (
         <AnimatedIconWithPreview
@@ -96,6 +99,7 @@ const ReactionEmoji: FC<OwnProps> = ({
           className={transitionClassNames}
           sharedCanvas={sharedCanvasRef!.current || undefined}
           sharedCanvasCoords={coords}
+          forceAlways={forcePlayback}
         />
       )}
     </div>

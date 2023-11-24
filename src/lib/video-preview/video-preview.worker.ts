@@ -1,12 +1,14 @@
-import { createWorkerInterface } from '../../util/createPostMessageInterface';
 import type { CancellableCallback } from '../../util/PostMessageConnector';
+
+import { createWorkerInterface } from '../../util/createPostMessageInterface';
+
 import { MP4Demuxer } from './MP4Demuxer';
 
 let decoder: any;
 let demuxer: any;
 let onDestroy: VoidFunction | undefined;
 
-async function init(
+function init(
   url: string,
   maxFrames: number,
   workerIndex: number,

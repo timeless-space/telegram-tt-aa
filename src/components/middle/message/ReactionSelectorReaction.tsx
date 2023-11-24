@@ -1,12 +1,13 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo } from '../../../lib/teact/teact';
 
-import type { FC } from '../../../lib/teact/teact';
 import type { ApiAvailableReaction, ApiReaction } from '../../../api/types';
 
-import { REM } from '../../common/helpers/mediaDimensions';
 import { createClassNameBuilder } from '../../../util/buildClassName';
-import useMedia from '../../../hooks/useMedia';
+import { REM } from '../../common/helpers/mediaDimensions';
+
 import useFlag from '../../../hooks/useFlag';
+import useMedia from '../../../hooks/useMedia';
 
 import AnimatedSticker from '../../common/AnimatedSticker';
 
@@ -54,6 +55,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
           className={cn('static-icon')}
           src={staticIconData}
           alt=""
+          draggable={false}
         />
       )}
       {!isAnimationLoaded && !noAppearAnimation && (
@@ -64,6 +66,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
           noLoop
           size={REACTION_SIZE}
           onEnded={unmarkIsFirstPlay}
+          forceAlways
         />
       )}
       {!isFirstPlay && !noAppearAnimation && (
@@ -75,6 +78,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
           size={REACTION_SIZE}
           onLoad={markAnimationLoaded}
           onEnded={deactivate}
+          forceAlways
         />
       )}
     </div>

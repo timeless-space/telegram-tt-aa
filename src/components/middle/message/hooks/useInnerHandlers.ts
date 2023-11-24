@@ -1,13 +1,15 @@
 import type React from '../../../../lib/teact/teact';
 import { getActions } from '../../../../global';
 
-import type { IAlbum } from '../../../../types';
-import { MediaViewerOrigin } from '../../../../types';
 import type {
-  ApiChat, ApiTopic, ApiMessage, ApiUser,
+  ApiMessage, ApiPeer, ApiStory, ApiTopic, ApiUser,
 } from '../../../../api/types';
-import { MAIN_THREAD_ID } from '../../../../api/types';
 import type { LangFn } from '../../../../hooks/useLang';
+import type { IAlbum } from '../../../../types';
+import { MAIN_THREAD_ID } from '../../../../api/types';
+import { MediaViewerOrigin } from '../../../../types';
+
+import { getMessageReplyInfo } from '../../../../global/helpers/replies';
 
 import useLastCallback from '../../../../hooks/useLastCallback';
 
@@ -20,23 +22,29 @@ export default function useInnerHandlers(
   isInDocumentGroup: boolean,
   asForwarded?: boolean,
   isScheduled?: boolean,
-  isChatWithRepliesBot?: boolean,
   album?: IAlbum,
-  avatarPeer?: ApiUser | ApiChat,
-  senderPeer?: ApiUser | ApiChat,
+  avatarPeer?: ApiPeer,
+  senderPeer?: ApiPeer,
   botSender?: ApiUser,
   messageTopic?: ApiTopic,
   isTranslatingChat?: boolean,
+  story?: ApiStory,
+  isReplyPrivate?: boolean,
+  isRepliesChat?: boolean,
 ) {
   const {
     openChat, showNotification, focusMessage, openMediaViewer, openAudioPlayer,
-    markMessagesRead, cancelSendingMessage, sendPollVote, openForwardMenu, focusMessageInComments,
-    openChatLanguageModal,
+    markMessagesRead, cancelSendingMessage, sendPollVote, openForwardMenu,
+    openChatLanguageModal, openStoryViewer, focusMessageInComments,
   } = getActions();
 
   const {
-    id: messageId, forwardInfo, replyToMessageId, replyToChatId, replyToTopMessageId, groupedId,
+    id: messageId, forwardInfo, groupedId,
   } = message;
+
+  const {
+    replyToMsgId, replyToPeerId, replyToTopId, isQuote,
+  } = getMessageReplyInfo(message) || {};
 
   const handleAvatarClick = useLastCallback(() => {
     if (!avatarPeer) {
@@ -69,12 +77,19 @@ export default function useInnerHandlers(
   });
 
   const handleReplyClick = useLastCallback((): void => {
+    if (!replyToMsgId || isReplyPrivate) {
+      showNotification({
+        message: isQuote ? lang('QuotePrivate') : lang('ReplyPrivate'),
+      });
+      return;
+    }
+
     focusMessage({
-      chatId: isChatWithRepliesBot && replyToChatId ? replyToChatId : chatId,
-      threadId,
-      messageId: replyToMessageId!,
-      replyMessageId: isChatWithRepliesBot && replyToChatId ? undefined : messageId,
-      noForumTopicPanel: true,
+      chatId: replyToPeerId || chatId,
+      threadId: isRepliesChat ? replyToTopId : threadId, // Open comments from Replies bot, otherwise, keep current thread
+      messageId: replyToMsgId,
+      replyMessageId: replyToPeerId ? undefined : messageId,
+      noForumTopicPanel: !replyToPeerId, // Open topic panel for cross-chat replies
     });
   });
 
@@ -139,10 +154,10 @@ export default function useInnerHandlers(
       return;
     }
 
-    if (isChatWithRepliesBot && replyToChatId) {
+    if (replyToPeerId && replyToTopId) {
       focusMessageInComments({
-        chatId: replyToChatId,
-        threadId: replyToTopMessageId!,
+        chatId: replyToPeerId,
+        threadId: replyToTopId,
         messageId: forwardInfo!.fromMessageId!,
       });
     } else {
@@ -174,9 +189,18 @@ export default function useInnerHandlers(
   const handleTopicChipClick = useLastCallback(() => {
     if (!messageTopic) return;
     focusMessage({
-      chatId: isChatWithRepliesBot && replyToChatId ? replyToChatId : chatId,
+      chatId: replyToPeerId || chatId,
       threadId: messageTopic.id,
       messageId,
+    });
+  });
+
+  const handleStoryClick = useLastCallback(() => {
+    if (!story) return;
+    openStoryViewer({
+      peerId: story.peerId,
+      storyId: story.id,
+      isSingleStory: true,
     });
   });
 
@@ -200,5 +224,6 @@ export default function useInnerHandlers(
     handleFocusForwarded,
     handleDocumentGroupSelectAll: selectWithGroupedId,
     handleTopicChipClick,
+    handleStoryClick,
   };
 }

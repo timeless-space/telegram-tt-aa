@@ -6,19 +6,21 @@ import React, {
 import type { ApiPremiumPromo } from '../../../api/types';
 import type { ApiLimitType, GlobalState } from '../../../global/types';
 
-import buildClassName from '../../../util/buildClassName';
-import useLang from '../../../hooks/useLang';
 import animateHorizontalScroll from '../../../util/animateHorizontalScroll';
-import useFlag from '../../../hooks/useFlag';
-import renderText from '../../common/helpers/renderText';
-import usePrevious from '../../../hooks/usePrevious';
+import buildClassName from '../../../util/buildClassName';
 import { formatCurrency } from '../../../util/formatCurrency';
+import renderText from '../../common/helpers/renderText';
 
+import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
+import usePrevious from '../../../hooks/usePrevious';
+
+import SliderDots from '../../common/SliderDots';
 import Button from '../../ui/Button';
 import PremiumLimitPreview from './common/PremiumLimitPreview';
-import PremiumFeaturePreviewVideo from './previews/PremiumFeaturePreviewVideo';
-import SliderDots from '../../common/SliderDots';
 import PremiumFeaturePreviewStickers from './previews/PremiumFeaturePreviewStickers';
+import PremiumFeaturePreviewStories from './previews/PremiumFeaturePreviewStories';
+import PremiumFeaturePreviewVideo from './previews/PremiumFeaturePreviewVideo';
 
 import styles from './PremiumFeatureModal.module.scss';
 
@@ -36,6 +38,7 @@ export const PREMIUM_FEATURE_TITLES: Record<string, string> = {
   animated_userpics: 'PremiumPreviewAnimatedProfiles',
   emoji_status: 'PremiumPreviewEmojiStatus',
   translations: 'PremiumPreviewTranslations',
+  stories: 'PremiumPreviewStories',
 };
 
 export const PREMIUM_FEATURE_DESCRIPTIONS: Record<string, string> = {
@@ -52,9 +55,11 @@ export const PREMIUM_FEATURE_DESCRIPTIONS: Record<string, string> = {
   animated_userpics: 'PremiumPreviewAnimatedProfilesDescription',
   emoji_status: 'PremiumPreviewEmojiStatusDescription',
   translations: 'PremiumPreviewTranslationsDescription',
+  stories: 'PremiumPreviewStoriesDescription',
 };
 
 export const PREMIUM_FEATURE_SECTIONS = [
+  'stories',
   'double_limits',
   'more_upload',
   'faster_download',
@@ -263,6 +268,14 @@ const PremiumFeatureModal: FC<OwnProps> = ({
                 <div className={styles.description}>
                   {renderText(lang(PREMIUM_FEATURE_DESCRIPTIONS.premium_stickers), ['br'])}
                 </div>
+              </div>
+            );
+          }
+
+          if (section === 'stories') {
+            return (
+              <div className={buildClassName(styles.slide, styles.stories)}>
+                <PremiumFeaturePreviewStories />
               </div>
             );
           }

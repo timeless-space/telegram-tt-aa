@@ -1,16 +1,17 @@
 import BigInt from 'big-integer';
-import Api from '../tl/api';
+
 import type TelegramClient from './TelegramClient';
-import { sleep } from '../Helpers';
-import { getDownloadPartSize } from '../Utils';
-import errors from '../errors';
+
 import Deferred from '../../../util/Deferred';
 import { Foreman } from '../../../util/foreman';
+import errors from '../errors';
+import Api from '../tl/api';
+
+import { sleep } from '../Helpers';
+import { getDownloadPartSize } from '../Utils';
 
 interface OnProgress {
     isCanceled?: boolean;
-    acceptsBuffer?: boolean;
-
     (
         progress: number, // Float between 0 and 1.
         ...args: any[]
@@ -268,7 +269,7 @@ async function downloadFile2(
                     isDone2 = true;
                     if (progressCallback) {
                         if (progressCallback.isCanceled) {
-                            throw new Error('USER_CANCELED');
+                            // throw new Error('USER_CANCELED');
                         }
 
                         progress += (1 / partsCount);

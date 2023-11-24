@@ -1,12 +1,14 @@
 import type { RefObject } from 'react';
-import type { Signal } from '../util/signals';
-import { useState, useEffect } from '../lib/teact/teact';
+import { useEffect, useState } from '../lib/teact/teact';
 import { addExtraClass, removeExtraClass } from '../lib/teact/teact-dom';
-import { requestMutation } from '../lib/fasterdom/fasterdom';
 
 import type { IAnchorPosition } from '../types';
+import type { Signal } from '../util/signals';
+
+import { requestMutation } from '../lib/fasterdom/fasterdom';
 import {
-  IS_TOUCH_ENV, IS_PWA, IS_IOS,
+  IS_IOS,
+  IS_PWA, IS_TOUCH_ENV,
 } from '../util/windowEnvironment';
 import useLastCallback from './useLastCallback';
 
@@ -33,14 +35,14 @@ const useContextMenuHandlers = (
   const handleBeforeContextMenu = useLastCallback((e: React.MouseEvent) => {
     if (!isMenuDisabled && e.button === 2) {
       requestMutation(() => {
-        removeExtraClass(e.target as HTMLElement, 'allow-selection');
+        addExtraClass(e.target as HTMLElement, 'no-selection');
       });
     }
   });
 
   const handleContextMenu = useLastCallback((e: React.MouseEvent) => {
     requestMutation(() => {
-      addExtraClass(e.target as HTMLElement, 'allow-selection');
+      removeExtraClass(e.target as HTMLElement, 'no-selection');
     });
 
     if (isMenuDisabled || (shouldDisableOnLink && (e.target as HTMLElement).matches('a[href]'))) {

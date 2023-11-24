@@ -2,9 +2,12 @@ import type { ChangeEvent } from 'react';
 import type { FC, TeactNode } from '../../lib/teact/teact';
 import React, { memo, useCallback, useRef } from '../../lib/teact/teact';
 
+import type { IconName } from '../../types/icons';
+
 import buildClassName from '../../util/buildClassName';
-import useLang from '../../hooks/useLang';
 import renderText from '../common/helpers/renderText';
+
+import useLang from '../../hooks/useLang';
 
 import Spinner from './Spinner';
 
@@ -17,7 +20,7 @@ type OwnProps = {
   label: TeactNode;
   subLabel?: string;
   checked: boolean;
-  rightIcon?: string;
+  rightIcon?: IconName;
   disabled?: boolean;
   tabIndex?: number;
   round?: boolean;

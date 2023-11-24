@@ -1,15 +1,28 @@
+import { addCallback } from '../../../lib/teact/teactn';
+
+import type { ApiError, ApiNotification } from '../../../api/types';
+import type { ActionReturnType, GlobalState } from '../../types';
+import { MAIN_THREAD_ID } from '../../../api/types';
+
+import {
+  DEBUG, GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT, INACTIVE_MARKER,
+  PAGE_TITLE,
+} from '../../../config';
+import { getAllMultitabTokens, getCurrentTabId, reestablishMasterToSelf } from '../../../util/establishMultitabRole';
+import { getAllNotificationsCount } from '../../../util/folderManager';
+import generateUniqueId from '../../../util/generateUniqueId';
+import getIsAppUpdateNeeded from '../../../util/getIsAppUpdateNeeded';
+import getReadableErrorText from '../../../util/getReadableErrorText';
+import { compact, unique } from '../../../util/iteratees';
+import * as langProvider from '../../../util/langProvider';
+import updateIcon from '../../../util/updateIcon';
+import { setPageTitle, setPageTitleInstant } from '../../../util/updatePageTitle';
+import { IS_ELECTRON } from '../../../util/windowEnvironment';
+import { getAllowedAttachmentOptions, getChatTitle } from '../../helpers';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
 } from '../../index';
-
-import type { ApiError, ApiNotification } from '../../../api/types';
-import { MAIN_THREAD_ID } from '../../../api/types';
-import type { ActionReturnType, GlobalState } from '../../types';
-
-import {
-  DEBUG, GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT, INACTIVE_MARKER, PAGE_TITLE, IS_ELECTRON,
-} from '../../../config';
-import getReadableErrorText from '../../../util/getReadableErrorText';
+import { updateTabState } from '../../reducers/tabs';
 import {
   selectCanAnimateInterface,
   selectChat,
@@ -19,17 +32,8 @@ import {
   selectIsTrustedBot,
   selectTabState,
 } from '../../selectors';
-import generateUniqueId from '../../../util/generateUniqueId';
-import { compact, unique } from '../../../util/iteratees';
-import { getAllMultitabTokens, getCurrentTabId, reestablishMasterToSelf } from '../../../util/establishMultitabRole';
-import { getAllNotificationsCount } from '../../../util/folderManager';
-import updateIcon from '../../../util/updateIcon';
-import { setPageTitle, setPageTitleInstant } from '../../../util/updatePageTitle';
-import { updateTabState } from '../../reducers/tabs';
+
 import { getIsMobile, getIsTablet } from '../../../hooks/useAppLayout';
-import * as langProvider from '../../../util/langProvider';
-import { getAllowedAttachmentOptions, getChatTitle } from '../../helpers';
-import { addCallback } from '../../../lib/teact/teactn';
 import { sendPushNotification } from '../../../util/tlCustomFunction';
 
 export const APP_VERSION_URL = 'version.txt';
@@ -140,6 +144,17 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
   return updateTabState(global, {
     isLeftColumnShown: selectTabState(global, tabId).messageLists.length === 0,
   }, tabId);
+});
+
+addActionHandler('resetNextProfileTab', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const { chatId } = selectCurrentMessageList(global, tabId) || {};
+
+  if (!chatId) {
+    return undefined;
+  }
+
+  return updateTabState(global, { nextProfileTab: undefined }, tabId);
 });
 
 addActionHandler('toggleStatistics', (global, actions, payload): ActionReturnType => {
@@ -443,17 +458,15 @@ addActionHandler('closeGame', (global, actions, payload): ActionReturnType => {
 
 addActionHandler('requestConfetti', (global, actions, payload): ActionReturnType => {
   const {
-    top, left, width, height, tabId = getCurrentTabId(),
-  } = payload || {};
+    tabId = getCurrentTabId(), ...rest
+  } = payload;
+
   if (!selectCanAnimateInterface(global)) return undefined;
 
   return updateTabState(global, {
     confetti: {
       lastConfettiTime: Date.now(),
-      top,
-      left,
-      width,
-      height,
+      ...rest,
     },
   }, tabId);
 });
@@ -582,23 +595,36 @@ addActionHandler('updateArchiveSettings', (global, actions, payload): ActionRetu
   };
 });
 
+addActionHandler('openMapModal', (global, actions, payload): ActionReturnType => {
+  const { geoPoint, zoom, tabId = getCurrentTabId() } = payload;
+
+  return updateTabState(global, {
+    mapModal: {
+      point: geoPoint,
+      zoom,
+    },
+  }, tabId);
+});
+
+addActionHandler('closeMapModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    mapModal: undefined,
+  }, tabId);
+});
+
 addActionHandler('checkAppVersion', (global): ActionReturnType => {
-  if (IS_ELECTRON) {
-    return;
-  }
-
-  const APP_VERSION_REGEX = /^\d+\.\d+(\.\d+)?$/;
-
   fetch(`${APP_VERSION_URL}?${Date.now()}`)
     .then((response) => response.text())
     .then((version) => {
       version = version.trim();
 
-      if (APP_VERSION_REGEX.test(version) && version !== APP_VERSION) {
+      if (getIsAppUpdateNeeded(version, APP_VERSION)) {
         global = getGlobal();
         global = {
           ...global,
-          isUpdateAvailable: true,
+          isAppUpdateAvailable: true,
         };
         setGlobal(global);
       }
@@ -611,11 +637,11 @@ addActionHandler('checkAppVersion', (global): ActionReturnType => {
     });
 });
 
-addActionHandler('setIsAppUpdateAvailable', (global, action, payload): ActionReturnType => {
+addActionHandler('setIsElectronUpdateAvailable', (global, action, payload): ActionReturnType => {
   global = getGlobal();
   global = {
     ...global,
-    isUpdateAvailable: Boolean(payload),
+    isElectronUpdateAvailable: Boolean(payload),
   };
   setGlobal(global);
 });

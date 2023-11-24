@@ -1,27 +1,29 @@
 import './util/handleError';
 import './util/setupServiceWorker';
+import './global/init';
 
 import React from './lib/teact/teact';
 import TeactDOM from './lib/teact/teact-dom';
-import { enableStrict, requestMutation } from './lib/fasterdom/fasterdom';
-
 import {
   getActions, getGlobal,
 } from './global';
-import updateWebmanifest from './util/updateWebmanifest';
-import { IS_MULTITAB_SUPPORTED } from './util/windowEnvironment';
-import './global/init';
 
 import {
   DEBUG, MULTITAB_LOCALSTORAGE_KEY, STRICTERDOM_ENABLED,
 } from './config';
+import { enableStrict, requestMutation } from './lib/fasterdom/fasterdom';
+import { selectTabState } from './global/selectors';
+import { betterView } from './util/betterView';
 import { establishMultitabRole, subscribeToMasterChange } from './util/establishMultitabRole';
 import { requestGlobal, subscribeToMultitabBroadcastChannel } from './util/multitab';
+import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
-import { selectTabState } from './global/selectors';
+import updateWebmanifest from './util/updateWebmanifest';
+import { IS_MULTITAB_SUPPORTED } from './util/windowEnvironment';
 
 import App from './components/App';
 
+import './assets/fonts/roboto.css';
 import './styles/index.scss';
 
 if (STRICTERDOM_ENABLED) {
@@ -37,6 +39,10 @@ async function init() {
   }
 
   if (!(window as any).isCompatTestPassed) return;
+
+  checkAndAssignPermanentWebVersion();
+
+  await window.electron?.restoreLocalStorage();
 
   if (IS_MULTITAB_SUPPORTED) {
     subscribeToMultitabBroadcastChannel();
@@ -77,6 +83,8 @@ async function init() {
       <App />,
       document.getElementById('root')!,
     );
+
+    betterView();
   });
 
   if (DEBUG) {

@@ -1,32 +1,33 @@
 import type {
-  GlobalState, MessageListType, TabArgs, Thread, TabThread, ChatTranslatedMessages,
-} from '../types';
-import type {
   ApiChat,
+  ApiInputMessageReplyInfo,
   ApiMessage,
   ApiMessageEntityCustomEmoji,
+  ApiMessageForwardInfo,
   ApiMessageOutgoingStatus,
+  ApiPeer,
   ApiStickerSetInfo,
-  ApiUser,
 } from '../../api/types';
+import type {
+  ChatTranslatedMessages,
+  GlobalState, MessageListType, TabArgs, TabThread, Thread,
+} from '../types';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../../api/types';
 
 import {
-  GENERAL_TOPIC_ID, REPLIES_USER_ID, SERVICE_NOTIFICATIONS_USER_ID,
+  GENERAL_TOPIC_ID, REPLIES_USER_ID, SERVICE_NOTIFICATIONS_USER_ID, TME_LINK_PREFIX,
 } from '../../config';
+import { getCurrentTabId } from '../../util/establishMultitabRole';
+import { findLast } from '../../util/iteratees';
+import { MEMO_EMPTY_ARRAY } from '../../util/memo';
+import { getServerTime } from '../../util/serverTime';
+import { IS_TRANSLATION_SUPPORTED } from '../../util/windowEnvironment';
 import {
-  selectChat, selectChatFullInfo, selectIsChatWithSelf, selectRequestedChatTranslationLanguage,
-} from './chats';
-import {
-  selectBot,
-  selectIsCurrentUserPremium,
-  selectIsUserOrChatContact,
-  selectUser,
-  selectUserStatus,
-} from './users';
-import {
+  canSendReaction,
+  getAllowedAttachmentOptions,
   getCanPostInChat,
   getHasAdminRight,
+  getMainUsername,
   getMessageAudio,
   getMessageDocument,
   getMessageOriginalId,
@@ -43,22 +44,27 @@ import {
   isChatSuperGroup,
   isCommonBoxChat,
   isForwardedMessage,
-  isMessageLocal,
+  isLocalMessageId, isMessageFailed, isMessageLocal,
+  isMessageTranslatable,
   isOwnMessage,
   isServiceNotificationMessage,
   isUserId,
   isUserRightBanned,
-  canSendReaction,
-  getAllowedAttachmentOptions,
-  isLocalMessageId, isMessageFailed, isMessageTranslatable,
 } from '../helpers';
-import { findLast } from '../../util/iteratees';
+import { getMessageReplyInfo } from '../helpers/replies';
+import {
+  selectChat, selectChatFullInfo, selectIsChatWithSelf, selectPeer, selectRequestedChatTranslationLanguage,
+} from './chats';
+import { selectPeerStory } from './stories';
 import { selectIsStickerFavorite } from './symbols';
-import { getServerTime } from '../../util/serverTime';
-import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import { selectTabState } from './tabs';
-import { getCurrentTabId } from '../../util/establishMultitabRole';
-import { IS_TRANSLATION_SUPPORTED } from '../../util/windowEnvironment';
+import {
+  selectBot,
+  selectIsCurrentUserPremium,
+  selectIsUserOrChatContact,
+  selectUser,
+  selectUserStatus,
+} from './users';
 
 const MESSAGE_EDIT_ALLOWED_TIME = 172800; // 48 hours
 
@@ -192,10 +198,6 @@ export function selectScrollOffset<T extends GlobalState>(
 
 export function selectLastScrollOffset<T extends GlobalState>(global: T, chatId: string, threadId: number) {
   return selectThreadParam(global, chatId, threadId, 'lastScrollOffset');
-}
-
-export function selectReplyingToId<T extends GlobalState>(global: T, chatId: string, threadId: number) {
-  return selectThreadParam(global, chatId, threadId, 'replyingToId');
 }
 
 export function selectEditingId<T extends GlobalState>(global: T, chatId: string, threadId: number) {
@@ -413,35 +415,50 @@ export function selectOutgoingStatus<T extends GlobalState>(
   return getSendingState(message);
 }
 
-export function selectSender<T extends GlobalState>(global: T, message: ApiMessage): ApiUser | ApiChat | undefined {
+export function selectSender<T extends GlobalState>(global: T, message: ApiMessage): ApiPeer | undefined {
   const { senderId } = message;
   if (!senderId) {
     return undefined;
   }
 
-  return isUserId(senderId) ? selectUser(global, senderId) : selectChat(global, senderId);
+  const chat = selectChat(global, message.chatId);
+  if (chat && isChatChannel(chat)) return chat;
+
+  return selectPeer(global, senderId);
 }
 
-export function selectReplySender<T extends GlobalState>(global: T, message: ApiMessage, isForwarded = false) {
-  if (isForwarded) {
-    const { senderUserId, hiddenUserName } = message.forwardInfo || {};
-    if (senderUserId) {
-      return isUserId(senderUserId) ? selectUser(global, senderUserId) : selectChat(global, senderUserId);
-    }
-    if (hiddenUserName) return undefined;
-  }
-
+export function selectReplySender<T extends GlobalState>(
+  global: T, message: ApiMessage,
+) {
   const { senderId } = message;
   if (!senderId) {
     return undefined;
   }
 
-  return isUserId(senderId) ? selectUser(global, senderId) : selectChat(global, senderId);
+  return selectPeer(global, senderId);
+}
+
+export function selectSenderFromHeader<T extends GlobalState>(
+  global: T,
+  header: ApiMessageForwardInfo,
+) {
+  const { senderUserId } = header;
+  if (senderUserId) {
+    return selectPeer(global, senderUserId);
+  }
+
+  return undefined;
 }
 
 export function selectForwardedSender<T extends GlobalState>(
   global: T, message: ApiMessage,
-): ApiUser | ApiChat | undefined {
+): ApiPeer | undefined {
+  const isStoryForward = Boolean(message.content.storyData);
+  if (isStoryForward) {
+    const peerId = message.content.storyData!.peerId;
+    return selectPeer(global, peerId);
+  }
+
   const { forwardInfo } = message;
   if (!forwardInfo) {
     return undefined;
@@ -450,7 +467,7 @@ export function selectForwardedSender<T extends GlobalState>(
   if (forwardInfo.isChannelPost && forwardInfo.fromChatId) {
     return selectChat(global, forwardInfo.fromChatId);
   } else if (forwardInfo.senderUserId) {
-    return selectUser(global, forwardInfo.senderUserId) || selectChat(global, forwardInfo.senderUserId);
+    return selectPeer(global, forwardInfo.senderUserId);
   }
 
   return undefined;
@@ -498,9 +515,8 @@ export function selectCanDeleteTopic<T extends GlobalState>(global: T, chatId: s
 
 export function selectThreadIdFromMessage<T extends GlobalState>(global: T, message: ApiMessage): number {
   const chat = selectChat(global, message.chatId);
-  const {
-    replyToMessageId, replyToTopMessageId, isTopicReply, content,
-  } = message;
+  const { content } = message;
+  const { replyToMsgId, replyToTopId, isForumTopic } = getMessageReplyInfo(message) || {};
   if ('action' in content && content.action?.type === 'topicCreate') {
     return message.id;
   }
@@ -509,12 +525,12 @@ export function selectThreadIdFromMessage<T extends GlobalState>(global: T, mess
     if (chat && isChatBasicGroup(chat)) return MAIN_THREAD_ID;
 
     if (chat && isChatSuperGroup(chat)) {
-      return replyToTopMessageId || replyToMessageId || MAIN_THREAD_ID;
+      return replyToTopId || replyToMsgId || MAIN_THREAD_ID;
     }
     return MAIN_THREAD_ID;
   }
-  if (!isTopicReply) return GENERAL_TOPIC_ID;
-  return replyToTopMessageId || replyToMessageId || GENERAL_TOPIC_ID;
+  if (!isForumTopic) return GENERAL_TOPIC_ID;
+  return replyToTopId || replyToMsgId || GENERAL_TOPIC_ID;
 }
 
 export function selectTopicFromMessage<T extends GlobalState>(global: T, message: ApiMessage) {
@@ -556,7 +572,7 @@ export function selectAllowedMessageActions<T extends GlobalState>(global: T, me
       || getServerTime() - message.date < MESSAGE_EDIT_ALLOWED_TIME
     ) && !(
       content.sticker || content.contact || content.poll || content.action || content.audio
-      || (content.video?.isRound) || content.location || content.invoice
+      || (content.video?.isRound) || content.location || content.invoice || content.giveaway
     )
     && !isForwarded
     && !message.viaBotId
@@ -606,9 +622,18 @@ export function selectAllowedMessageActions<T extends GlobalState>(global: T, me
 
   const canEdit = !isLocal && !isAction && isMessageEditable && hasMessageEditRight;
 
+  const story = content.storyData
+    ? selectPeerStory(global, content.storyData.peerId, content.storyData.id)
+    : (content.webPage?.story
+      ? selectPeerStory(global, content.webPage.story.peerId, content.webPage.story.id)
+      : undefined
+    );
+
   const isChatProtected = selectIsChatProtected(global, message.chatId);
+  const isStoryForwardForbidden = story && ('isDeleted' in story || ('noForwards' in story && story.noForwards));
   const canForward = (
-    !isLocal && !isAction && !isChatProtected && (message.isForwardingAllowed || isServiceNotification)
+    !isLocal && !isAction && !isChatProtected && !isStoryForwardForbidden
+    && (message.isForwardingAllowed || isServiceNotification)
   );
 
   const hasSticker = Boolean(message.content.sticker);
@@ -967,10 +992,11 @@ function selectShouldHideReplyKeyboard<T extends GlobalState>(global: T, message
   const {
     shouldHideKeyboardButtons,
     isHideKeyboardSelective,
-    replyToMessageId,
     isMentioned,
   } = message;
   if (!shouldHideKeyboardButtons) return false;
+
+  const replyToMessageId = getMessageReplyInfo(message)?.replyToMsgId;
 
   if (isHideKeyboardSelective) {
     if (isMentioned) return true;
@@ -988,9 +1014,10 @@ function selectShouldDisplayReplyKeyboard<T extends GlobalState>(global: T, mess
     shouldHideKeyboardButtons,
     isKeyboardSelective,
     isMentioned,
-    replyToMessageId,
   } = message;
   if (!keyboardButtons || shouldHideKeyboardButtons) return false;
+
+  const replyToMessageId = getMessageReplyInfo(message)?.replyToMsgId;
 
   if (isKeyboardSelective) {
     if (isMentioned) return true;
@@ -1084,7 +1111,7 @@ function canAutoLoadMedia<T extends GlobalState>({
   canAutoLoadMediaInPrivateChats: boolean;
   canAutoLoadMediaInGroups: boolean;
   canAutoLoadMediaInChannels: boolean;
-  sender?: ApiChat | ApiUser;
+  sender?: ApiPeer;
 }) {
   const isMediaFromContact = Boolean(sender && (
     sender.id === global.currentUserId || selectIsUserOrChatContact(global, sender)
@@ -1284,16 +1311,20 @@ export function selectForwardsCanBeSentToChat<T extends GlobalState>(
   toChatId: string,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  const { messageIds, fromChatId } = selectTabState(global, tabId).forwardMessages;
+  const { messageIds, storyId, fromChatId } = selectTabState(global, tabId).forwardMessages;
   const chat = selectChat(global, toChatId);
-  if (!messageIds || !chat) return false;
+  if ((!messageIds && !storyId) || !chat) return false;
+
+  if (storyId) {
+    return true;
+  }
 
   const chatMessages = selectChatMessages(global, fromChatId!);
   const {
     canSendVoices, canSendRoundVideos, canSendStickers, canSendDocuments, canSendAudios, canSendVideos,
     canSendPhotos, canSendGifs, canSendPlainText,
   } = getAllowedAttachmentOptions(chat);
-  return !messageIds.some((messageId) => {
+  return !messageIds!.some((messageId) => {
     const message = chatMessages[messageId];
     const isVoice = message.content.voice;
     const isRoundVideo = message.content.video?.isRound;
@@ -1332,4 +1363,49 @@ export function selectCanTranslateMessage<T extends GlobalState>(
 
   return IS_TRANSLATION_SUPPORTED && isTranslationEnabled && canTranslateLanguage && isTranslatable
     && !chatRequestedLanguage;
+}
+
+export function selectMessageLink<T extends GlobalState>(
+  global: T, chatId: string, threadId?: number, messageId?: number,
+) {
+  const chat = selectChat(global, chatId);
+  if (!chat) {
+    return undefined;
+  }
+
+  const chatUsername = getMainUsername(chat);
+
+  const isChannelId = isChatChannel(chat) || isChatSuperGroup(chat);
+  const normalizedId = isChannelId ? chatId.replace('-100', '') : chatId.replace('-', '');
+
+  const chatPart = chatUsername || `c/${normalizedId}`;
+  const threadPart = threadId && threadId !== MAIN_THREAD_ID ? `/${threadId}` : '';
+  const messagePart = messageId ? `/${messageId}` : '';
+  return `${TME_LINK_PREFIX}${chatPart}${threadPart}${messagePart}`;
+}
+
+export function selectTopicLink<T extends GlobalState>(
+  global: T, chatId: string, topicId?: number,
+) {
+  return selectMessageLink(global, chatId, topicId);
+}
+
+export function selectMessageReplyInfo<T extends GlobalState>(
+  global: T, chatId: string, threadId: number = MAIN_THREAD_ID, additionalReplyInfo?: ApiInputMessageReplyInfo,
+) {
+  const chat = selectChat(global, chatId);
+  if (!chat) return undefined;
+
+  const replyingToTopId = selectThreadTopMessageId(global, chatId, threadId);
+
+  if (!additionalReplyInfo && !replyingToTopId) return undefined;
+
+  const replyInfo: ApiInputMessageReplyInfo = {
+    type: 'message',
+    ...additionalReplyInfo,
+    replyToMsgId: additionalReplyInfo?.replyToMsgId || replyingToTopId!,
+    replyToTopId: additionalReplyInfo?.replyToTopId || replyingToTopId,
+  };
+
+  return replyInfo;
 }

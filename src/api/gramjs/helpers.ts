@@ -1,6 +1,9 @@
 import { Api as GramJs } from '../../lib/gramjs';
-import localDb from './localDb';
+
+import type { StoryRepairInfo } from './localDb';
+
 import { buildApiPeerId, getApiChatIdFromMtpPeer } from './apiBuilders/peers';
+import localDb from './localDb';
 
 const LOG_BACKGROUND = '#111111DD';
 const LOG_PREFIX_COLOR = '#E4D00A';
@@ -47,34 +50,72 @@ export function addMessageToLocalDb(message: GramJs.Message | GramJs.MessageServ
   localDb.messages[messageFullId] = mockMessage;
 
   if (mockMessage instanceof GramJs.Message) {
-    if (mockMessage.media instanceof GramJs.MessageMediaDocument
-      && mockMessage.media.document instanceof GramJs.Document
-    ) {
-      localDb.documents[String(mockMessage.media.document.id)] = mockMessage.media.document;
-    }
+    if (mockMessage.media) addMediaToLocalDb(mockMessage.media);
 
-    if (mockMessage.media instanceof GramJs.MessageMediaWebPage
-      && mockMessage.media.webpage instanceof GramJs.WebPage
-      && mockMessage.media.webpage.document instanceof GramJs.Document
-    ) {
-      localDb.documents[String(mockMessage.media.webpage.document.id)] = mockMessage.media.webpage.document;
-    }
-
-    if (mockMessage.media instanceof GramJs.MessageMediaGame) {
-      if (mockMessage.media.game.document instanceof GramJs.Document) {
-        localDb.documents[String(mockMessage.media.game.document.id)] = mockMessage.media.game.document;
-      }
-      addPhotoToLocalDb(mockMessage.media.game.photo);
-    }
-
-    if (mockMessage.media instanceof GramJs.MessageMediaInvoice
-      && mockMessage.media.photo) {
-      localDb.webDocuments[String(mockMessage.media.photo.url)] = mockMessage.media.photo;
+    if (mockMessage.replyTo instanceof GramJs.MessageReplyHeader && mockMessage.replyTo.replyMedia) {
+      addMediaToLocalDb(mockMessage.replyTo.replyMedia);
     }
   }
 
   if (mockMessage instanceof GramJs.MessageService && 'photo' in mockMessage.action) {
     addPhotoToLocalDb(mockMessage.action.photo);
+  }
+}
+
+function addMediaToLocalDb(media: GramJs.TypeMessageMedia) {
+  if (media instanceof GramJs.MessageMediaDocument
+    && media.document instanceof GramJs.Document
+  ) {
+    localDb.documents[String(media.document.id)] = media.document;
+  }
+
+  if (media instanceof GramJs.MessageMediaWebPage
+    && media.webpage instanceof GramJs.WebPage
+    && media.webpage.document instanceof GramJs.Document
+  ) {
+    localDb.documents[String(media.webpage.document.id)] = media.webpage.document;
+  }
+
+  if (media instanceof GramJs.MessageMediaGame) {
+    if (media.game.document instanceof GramJs.Document) {
+      localDb.documents[String(media.game.document.id)] = media.game.document;
+    }
+    addPhotoToLocalDb(media.game.photo);
+  }
+
+  if (media instanceof GramJs.MessageMediaInvoice
+    && media.photo) {
+    localDb.webDocuments[String(media.photo.url)] = media.photo;
+  }
+}
+
+export function addStoryToLocalDb(story: GramJs.TypeStoryItem, peerId: string) {
+  if (!(story instanceof GramJs.StoryItem)) {
+    return;
+  }
+
+  const storyData = {
+    id: story.id,
+    peerId,
+  };
+
+  if (story.media instanceof GramJs.MessageMediaPhoto) {
+    const photo = story.media.photo as GramJs.Photo & StoryRepairInfo;
+    photo.storyData = storyData;
+    addPhotoToLocalDb(photo);
+  }
+  if (story.media instanceof GramJs.MessageMediaDocument) {
+    if (story.media.document instanceof GramJs.Document) {
+      const doc = story.media.document as GramJs.Document & StoryRepairInfo;
+      doc.storyData = storyData;
+      localDb.documents[String(story.media.document.id)] = doc;
+    }
+
+    if (story.media.altDocument instanceof GramJs.Document) {
+      const doc = story.media.altDocument as GramJs.Document & StoryRepairInfo;
+      doc.storyData = storyData;
+      localDb.documents[String(story.media.altDocument.id)] = doc;
+    }
   }
 }
 
@@ -145,12 +186,12 @@ export function log(suffix: keyof typeof LOG_SUFFIX, ...data: any) {
   const func = suffix === 'UNEXPECTED RESPONSE' ? console.error
     : suffix === 'INVOKE ERROR' || suffix === 'UNEXPECTED UPDATE' ? console.warn : console.log;
   /* eslint-enable no-console */
-  // func(
-  //   `%cGramJS%c${suffix}`,
-  //   `color: ${LOG_PREFIX_COLOR}; background: ${LOG_BACKGROUND}; padding: 0.25rem; border-radius: 0.25rem;`,
-  //   `color: ${LOG_SUFFIX[suffix]}; background: ${LOG_BACKGROUND}; padding: 0.25rem; border-radius: 0.25rem; margin-left: 0.25rem;`,
-  //   ...data,
-  // );
+  func(
+    `%cGramJS%c${suffix}`,
+    `color: ${LOG_PREFIX_COLOR}; background: ${LOG_BACKGROUND}; padding: 0.25rem; border-radius: 0.25rem;`,
+    `color: ${LOG_SUFFIX[suffix]}; background: ${LOG_BACKGROUND}; padding: 0.25rem; border-radius: 0.25rem; margin-left: 0.25rem;`,
+    ...data,
+  );
   /* eslint-enable max-len */
 }
 

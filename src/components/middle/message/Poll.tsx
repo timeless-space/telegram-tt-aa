@@ -1,32 +1,32 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
+  memo,
   useEffect,
   useLayoutEffect,
-  useState,
-  memo,
   useMemo,
   useRef,
+  useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { LangFn } from '../../../hooks/useLang';
 import type {
-  ApiMessage, ApiPoll, ApiPollAnswer, ApiChat, ApiUser,
+  ApiMessage, ApiPeer, ApiPoll, ApiPollAnswer,
 } from '../../../api/types';
+import type { LangFn } from '../../../hooks/useLang';
 
+import { formatMediaDuration } from '../../../util/dateFormat';
+import { getServerTime } from '../../../util/serverTime';
 import renderText from '../../common/helpers/renderText';
 import { renderTextWithEntities } from '../../common/helpers/renderTextWithEntities';
-import { formatMediaDuration } from '../../../util/dateFormat';
-import useLang from '../../../hooks/useLang';
-import { getServerTime } from '../../../util/serverTime';
 
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import CheckboxGroup from '../../ui/CheckboxGroup';
-import RadioGroup from '../../ui/RadioGroup';
 import Avatar from '../../common/Avatar';
 import Button from '../../ui/Button';
+import CheckboxGroup from '../../ui/CheckboxGroup';
 import Notification from '../../ui/Notification';
+import RadioGroup from '../../ui/RadioGroup';
 import PollOption from './PollOption';
 
 import './Poll.scss';
@@ -90,7 +90,7 @@ const Poll: FC<OwnProps & StateProps> = ({
     const chosen = poll.results.results?.find((result) => result.isChosen);
     if (isSubmitting && chosen) {
       if (chosen.isCorrect) {
-        requestConfetti();
+        requestConfetti({});
       }
       setIsSubmitting(false);
     }
@@ -137,7 +137,7 @@ const Poll: FC<OwnProps & StateProps> = ({
     // No need for expensive global updates on chats or users, so we avoid them
     const chatsById = getGlobal().chats.byId;
     const usersById = getGlobal().users.byId;
-    return recentVoterIds ? recentVoterIds.reduce((result: (ApiChat | ApiUser)[], id) => {
+    return recentVoterIds ? recentVoterIds.reduce((result: ApiPeer[], id) => {
       const chat = chatsById[id];
       const user = usersById[id];
       if (user) {

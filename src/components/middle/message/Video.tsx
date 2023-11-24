@@ -1,15 +1,11 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { useRef, useState } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
 import type { ApiMessage } from '../../../api/types';
-import type { IMediaDimensions } from './helpers/calculateAlbumLayout';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
+import type { IMediaDimensions } from './helpers/calculateAlbumLayout';
 
-import { MIN_MEDIA_HEIGHT } from './helpers/mediaDimensions';
-import { formatMediaDuration } from '../../../util/dateFormat';
-import buildClassName from '../../../util/buildClassName';
-import { calculateVideoDimensions } from '../../common/helpers/mediaDimensions';
 import {
   getMediaTransferState,
   getMessageMediaFormat,
@@ -19,22 +15,27 @@ import {
   getMessageWebPageVideo,
   isOwnMessage,
 } from '../../../global/helpers';
+import buildClassName from '../../../util/buildClassName';
+import { formatMediaDuration } from '../../../util/dateFormat';
 import * as mediaLoader from '../../../util/mediaLoader';
+import { calculateVideoDimensions } from '../../common/helpers/mediaDimensions';
+import { MIN_MEDIA_HEIGHT } from './helpers/mediaDimensions';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
-import useMediaWithLoadProgress from '../../../hooks/useMediaWithLoadProgress';
-import useMedia from '../../../hooks/useMedia';
-import useShowTransition from '../../../hooks/useShowTransition';
-import usePrevious from '../../../hooks/usePrevious';
-import useMediaTransition from '../../../hooks/useMediaTransition';
-import useBlurredMediaThumbRef from './hooks/useBlurredMediaThumbRef';
-import useFlag from '../../../hooks/useFlag';
+import useUnsupportedMedia from '../../../hooks/media/useUnsupportedMedia';
 import useAppLayout from '../../../hooks/useAppLayout';
+import useFlag from '../../../hooks/useFlag';
+import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
+import useLastCallback from '../../../hooks/useLastCallback';
+import useMedia from '../../../hooks/useMedia';
+import useMediaTransition from '../../../hooks/useMediaTransition';
+import useMediaWithLoadProgress from '../../../hooks/useMediaWithLoadProgress';
+import usePrevious from '../../../hooks/usePrevious';
+import useShowTransition from '../../../hooks/useShowTransition';
+import useBlurredMediaThumbRef from './hooks/useBlurredMediaThumbRef';
 
-import ProgressSpinner from '../../ui/ProgressSpinner';
-import OptimizedVideo from '../../ui/OptimizedVideo';
 import MediaSpoiler from '../../common/MediaSpoiler';
+import OptimizedVideo from '../../ui/OptimizedVideo';
+import ProgressSpinner from '../../ui/ProgressSpinner';
 
 export type OwnProps = {
   id?: string;
@@ -121,6 +122,7 @@ const Video: FC<OwnProps> = ({
 
   const isInline = fullMediaData && wasIntersectedRef.current;
 
+  const isUnsupported = useUnsupportedMedia(videoRef, true, !isInline);
   const { loadProgress: downloadProgress } = useMediaWithLoadProgress(
     getMessageMediaHash(message, 'download'),
     !isDownloading,
@@ -137,7 +139,7 @@ const Video: FC<OwnProps> = ({
   const {
     shouldRender: shouldRenderSpinner,
     transitionClassNames: spinnerClassNames,
-  } = useShowTransition(isTransferring, undefined, wasLoadDisabled);
+  } = useShowTransition(isTransferring && !isUnsupported, undefined, wasLoadDisabled);
   const {
     transitionClassNames: playButtonClassNames,
   } = useShowTransition(Boolean((isLoadAllowed || fullMediaData) && !isPlayAllowed && !shouldRenderSpinner));
@@ -147,7 +149,7 @@ const Video: FC<OwnProps> = ({
     setPlayProgress(Math.max(0, e.currentTarget.currentTime - 1));
   });
 
-  const duration = videoRef.current?.duration || video.duration || 0;
+  const duration = (Number.isFinite(videoRef.current?.duration) ? videoRef.current?.duration : video.duration) || 0;
 
   const isOwn = isOwnMessage(message);
   const isWebPageVideo = Boolean(getMessageWebPageVideo(message));
@@ -206,7 +208,7 @@ const Video: FC<OwnProps> = ({
           ref={videoRef}
           src={fullMediaData}
           className={buildClassName('full-media', withBlurredBackground && 'with-blurred-bg')}
-          canPlay={isPlayAllowed && isIntersectingForPlaying}
+          canPlay={isPlayAllowed && isIntersectingForPlaying && !isUnsupported}
           muted
           loop
           playsInline
@@ -247,13 +249,14 @@ const Video: FC<OwnProps> = ({
       {!isLoadAllowed && !fullMediaData && (
         <i className="icon icon-download" />
       )}
-      {isTransferring ? (
+      {isTransferring && (!isUnsupported || isDownloading) ? (
         <span className="message-transfer-progress">
           {(isUploading || isDownloading) ? `${Math.round(transferProgress * 100)}%` : '...'}
         </span>
       ) : (
         <div className="message-media-duration">
           {video.isGif ? 'GIF' : formatMediaDuration(Math.max(duration - playProgress, 0))}
+          {isUnsupported && <i className="icon icon-message-failed playback-failed" />}
         </div>
       )}
     </div>

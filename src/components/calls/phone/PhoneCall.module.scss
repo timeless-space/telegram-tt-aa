@@ -11,6 +11,8 @@
   }
 
   :global(.Avatar) {
+    --radius: 0;
+
     position: absolute;
     top: 0;
     left: 0;
@@ -54,6 +56,10 @@
 
   :global(.Button) {
     color: #fff;
+  }
+
+  :global(body.is-electron) .root.single-column & {
+    padding-left: 5rem;
   }
 }
 

@@ -1,27 +1,25 @@
-import React, {
-  useRef, useEffect, memo, useMemo,
-} from '../../lib/teact/teact';
-import { requestMutation } from '../../lib/fasterdom/fasterdom';
-
 import type { FC } from '../../lib/teact/teact';
+import React, {
+  memo, useEffect, useMemo, useRef,
+} from '../../lib/teact/teact';
 
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import { isUserId } from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 
-import useLastCallback from '../../hooks/useLastCallback';
 import useInfiniteScroll from '../../hooks/useInfiniteScroll';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
-import InfiniteScroll from '../ui/InfiniteScroll';
 import Checkbox from '../ui/Checkbox';
+import InfiniteScroll from '../ui/InfiniteScroll';
 import InputText from '../ui/InputText';
 import ListItem from '../ui/ListItem';
-import PrivateChatInfo from './PrivateChatInfo';
+import Loading from '../ui/Loading';
 import GroupChatInfo from './GroupChatInfo';
 import PickerSelectedItem from './PickerSelectedItem';
-
-import Loading from '../ui/Loading';
+import PrivateChatInfo from './PrivateChatInfo';
 
 import './Picker.scss';
 
@@ -37,6 +35,7 @@ type OwnProps = {
   isSearchable?: boolean;
   isRoundCheckbox?: boolean;
   lockedIds?: string[];
+  forceShowSelf?: boolean;
   onSelectedIdsChange?: (ids: string[]) => void;
   onFilterChange?: (value: string) => void;
   onDisabledClick?: (id: string) => void;
@@ -61,6 +60,7 @@ const Picker: FC<OwnProps> = ({
   isSearchable,
   isRoundCheckbox,
   lockedIds,
+  forceShowSelf,
   onSelectedIdsChange,
   onFilterChange,
   onDisabledClick,
@@ -132,15 +132,16 @@ const Picker: FC<OwnProps> = ({
         <div className="picker-header custom-scroll" dir={lang.isRtl ? 'rtl' : undefined}>
           {lockedSelectedIds.map((id, i) => (
             <PickerSelectedItem
-              chatOrUserId={id}
+              peerId={id}
               isMinimized={shouldMinimize && i < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT}
+              forceShowSelf={forceShowSelf}
               onClick={handleItemClick}
               clickArg={id}
             />
           ))}
           {unlockedSelectedIds.map((id, i) => (
             <PickerSelectedItem
-              chatOrUserId={id}
+              peerId={id}
               isMinimized={
                 shouldMinimize && i + lockedSelectedIds.length < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT
               }
@@ -189,7 +190,7 @@ const Picker: FC<OwnProps> = ({
               >
                 {!isRoundCheckbox ? renderCheckbox() : undefined}
                 {isUserId(id) ? (
-                  <PrivateChatInfo userId={id} />
+                  <PrivateChatInfo forceShowSelf={forceShowSelf} userId={id} />
                 ) : (
                   <GroupChatInfo chatId={id} />
                 )}

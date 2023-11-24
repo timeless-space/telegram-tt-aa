@@ -1,10 +1,11 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
-  memo, useMemo, useEffect,
+  memo, useEffect,
+  useMemo,
 } from '../../../lib/teact/teact';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { GlobalState } from '../../../global/types';
 import type { ApiAttachMenuPeerType } from '../../../api/types';
+import type { GlobalState } from '../../../global/types';
 import type { ISettings } from '../../../types';
 
 import {
@@ -12,19 +13,19 @@ import {
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
-import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
-import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
-import { validateFiles } from '../../../util/files';
 import { getDebugLogs } from '../../../util/debugConsole';
+import { validateFiles } from '../../../util/files';
+import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
+import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 
+import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMouseInside from '../../../hooks/useMouseInside';
-import useLang from '../../../hooks/useLang';
-import useFlag from '../../../hooks/useFlag';
 
-import ResponsiveHoverButton from '../../ui/ResponsiveHoverButton';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
+import ResponsiveHoverButton from '../../ui/ResponsiveHoverButton';
 import AttachBotItem from './AttachBotItem';
 
 import './AttachMenu.scss';
@@ -40,15 +41,17 @@ export type OwnProps = {
   canSendDocuments: boolean;
   canSendAudios: boolean;
   isScheduled?: boolean;
-  attachBots: GlobalState['attachMenu']['bots'];
+  attachBots?: GlobalState['attachMenu']['bots'];
   isChatWithBot: boolean;
   peerType?: ApiAttachMenuPeerType;
   shouldCollectDebugLogs?: boolean;
+  theme: ISettings['theme'];
   onFileSelect: (files: File[], shouldSuggestCompression?: boolean) => void;
-  onPollCreate: () => void;
+  onPollCreate: NoneToVoidFunction;
+  onMenuOpen: NoneToVoidFunction;
   handleSendCrypto: () => void;
   handleCreatePOAP: () => void;
-  theme: ISettings['theme'];
+  onMenuClose: NoneToVoidFunction;
 };
 
 const AttachMenu: FC<OwnProps> = ({
@@ -65,12 +68,14 @@ const AttachMenu: FC<OwnProps> = ({
   peerType,
   isScheduled,
   isChatWithBot,
-  onFileSelect,
-  onPollCreate,
   handleSendCrypto,
   handleCreatePOAP,
   theme,
   shouldCollectDebugLogs,
+  onFileSelect,
+  onMenuOpen,
+  onMenuClose,
+  onPollCreate,
 }) => {
   const [isAttachMenuOpen, openAttachMenu, closeAttachMenu] = useFlag();
   const [handleMouseEnter, handleMouseLeave, markMouseInside] = useMouseInside(isAttachMenuOpen, closeAttachMenu);
@@ -79,12 +84,21 @@ const AttachMenu: FC<OwnProps> = ({
   const canSendVideoOrPhoto = canSendPhotos || canSendVideos;
 
   const [isAttachmentBotMenuOpen, markAttachmentBotMenuOpen, unmarkAttachmentBotMenuOpen] = useFlag();
+  const isMenuOpen = isAttachMenuOpen || isAttachmentBotMenuOpen;
 
   useEffect(() => {
     if (isAttachMenuOpen) {
       markMouseInside();
     }
   }, [isAttachMenuOpen, markMouseInside]);
+
+  useEffect(() => {
+    if (isMenuOpen) {
+      onMenuOpen();
+    } else {
+      onMenuClose();
+    }
+  }, [isMenuOpen, onMenuClose, onMenuOpen]);
 
   const handleToggleAttachMenu = useLastCallback(() => {
     if (isAttachMenuOpen) {
@@ -125,13 +139,15 @@ const AttachMenu: FC<OwnProps> = ({
   });
 
   const bots = useMemo(() => {
-    return Object.values(attachBots).filter((bot) => {
-      if (!peerType) return false;
-      if (peerType === 'bots' && bot.id === chatId && bot.peerTypes.includes('self')) {
-        return true;
-      }
-      return bot.peerTypes.includes(peerType);
-    });
+    return attachBots
+      ? Object.values(attachBots).filter((bot) => {
+        if (!peerType || !bot.isForAttachMenu) return false;
+        if (peerType === 'bots' && bot.id === chatId && bot.attachMenuPeerTypes.includes('self')) {
+          return true;
+        }
+        return bot.attachMenuPeerTypes!.includes(peerType);
+      })
+      : undefined;
   }, [attachBots, chatId, peerType]);
 
   const lang = useLang();
@@ -156,12 +172,12 @@ const AttachMenu: FC<OwnProps> = ({
       </ResponsiveHoverButton>
       <Menu
         id="attach-menu-controls"
-        isOpen={isAttachMenuOpen || isAttachmentBotMenuOpen}
+        isOpen={isMenuOpen}
         autoClose
         positionX="right"
         positionY="bottom"
         onClose={closeAttachMenu}
-        className={isAttachMenuOpen || isAttachmentBotMenuOpen ? 'AttachMenu--menu fluid' : 'AttachMenuHidden'}
+        className="AttachMenu--menu fluid"
         onCloseAnimationEnd={closeAttachMenu}
         onMouseEnter={!IS_TOUCH_ENV ? handleMouseEnter : undefined}
         onMouseLeave={!IS_TOUCH_ENV ? handleMouseLeave : undefined}
@@ -199,6 +215,7 @@ const AttachMenu: FC<OwnProps> = ({
         {canAttachPolls && (
           <MenuItem icon="poll" onClick={onPollCreate}>{lang('Poll')}</MenuItem>
         )}
+
         {/**
            * TL - Add send crypto button to attachments
            * Description: Only chat 1-1 (except with bot and self) or group has this button
@@ -231,7 +248,7 @@ const AttachMenu: FC<OwnProps> = ({
           </MenuItem>
         )}
 
-        {canAttachMedia && !isScheduled && bots.map((bot) => (
+        {canAttachMedia && !isScheduled && bots?.map((bot) => (
           <AttachBotItem
             bot={bot}
             chatId={chatId}

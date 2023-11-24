@@ -4,17 +4,29 @@ import React, {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import type { MessageListType, TabState } from '../../../global/types';
 import type {
-  ApiAvailableReaction, ApiStickerSetInfo, ApiMessage, ApiStickerSet, ApiChatReactions, ApiReaction, ApiThreadInfo,
+  ApiAvailableReaction, ApiChatReactions, ApiMessage, ApiReaction, ApiStickerSet, ApiStickerSetInfo, ApiThreadInfo,
 } from '../../../api/types';
+import type { MessageListType, TabState } from '../../../global/types';
 import type { IAlbum, IAnchorPosition } from '../../../types';
 
+import { PREVIEW_AVATAR_COUNT, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
+import {
+  areReactionsEmpty,
+  getMessageVideo,
+  isActionMessage,
+  isChatChannel,
+  isChatGroup,
+  isMessageLocal,
+  isOwnMessage,
+  isUserId,
+} from '../../../global/helpers';
 import {
   selectActiveDownloads,
   selectAllowedMessageActions,
   selectCanPlayAnimatedEmojis,
   selectCanScheduleUntilOnline,
+  selectCanTranslateMessage,
   selectChat,
   selectChatFullInfo,
   selectCurrentMessageList,
@@ -22,43 +34,30 @@ import {
   selectIsMessageProtected,
   selectIsPremiumPurchaseBlocked,
   selectIsReactionPickerOpen,
-  selectCanTranslateMessage,
   selectMessageCustomEmojiSets,
+  selectMessageLink,
   selectMessageTranslations,
+  selectRequestedChatTranslationLanguage,
   selectRequestedMessageTranslationLanguage,
   selectStickerSet,
-  selectRequestedChatTranslationLanguage,
 } from '../../../global/selectors';
-import {
-  isActionMessage,
-  isChatChannel,
-  isChatGroup,
-  isOwnMessage,
-  areReactionsEmpty,
-  isUserId,
-  isMessageLocal,
-  getMessageVideo,
-  getChatMessageLink,
-} from '../../../global/helpers';
-import { SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
 import { copyTextToClipboard } from '../../../util/clipboard';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import useShowTransition from '../../../hooks/useShowTransition';
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 import useSchedule from '../../../hooks/useSchedule';
+import useShowTransition from '../../../hooks/useShowTransition';
 
 import DeleteMessageModal from '../../common/DeleteMessageModal';
-import ReportModal from '../../common/ReportModal';
 import PinMessageModal from '../../common/PinMessageModal';
-import MessageContextMenu from './MessageContextMenu';
+import ReportModal from '../../common/ReportModal';
 import ConfirmDialog from '../../ui/ConfirmDialog';
+import MessageContextMenu from './MessageContextMenu';
 
 export type OwnProps = {
   isOpen: boolean;
-  chatUsername?: string;
   message: ApiMessage;
   album?: IAlbum;
   anchor: IAnchorPosition;
@@ -109,9 +108,9 @@ type StateProps = {
   enabledReactions?: ApiChatReactions;
   canScheduleUntilOnline?: boolean;
   maxUniqueReactions?: number;
-  threadId?: number;
   canPlayAnimatedEmojis?: boolean;
   isReactionPickerOpen?: boolean;
+  messageLink?: string;
 };
 
 const ContextMenuContainer: FC<OwnProps & StateProps> = ({
@@ -119,7 +118,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   topReactions,
   isOpen,
   messageListType,
-  chatUsername,
   message,
   customEmojiSetsInfo,
   customEmojiSets,
@@ -162,14 +160,14 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   canTranslate,
   canShowOriginal,
   canSelectLanguage,
-  threadId,
+  isReactionPickerOpen,
+  messageLink,
   onClose,
   onCloseAnimationEnd,
-  isReactionPickerOpen,
 }) => {
   const {
     openChat,
-    setReplyingToId,
+    updateDraftReplyInfo,
     setEditingId,
     pinMessage,
     openForwardMenu,
@@ -194,7 +192,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     requestMessageTranslation,
     showOriginalMessage,
     openChatLanguageModal,
-    openReactionPicker,
+    openMessageReactionPicker,
   } = getActions();
 
   const lang = useLang();
@@ -245,14 +243,16 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         ({ peerId }) => usersById[peerId] || chatsById[peerId],
       ));
 
-      return Array.from(uniqueReactors).filter(Boolean).slice(0, 3);
+      return Array.from(uniqueReactors).filter(Boolean).slice(0, PREVIEW_AVATAR_COUNT);
     }
 
     if (!message.seenByDates) {
       return undefined;
     }
 
-    return Object.keys(message.seenByDates).slice(0, 3).map((id) => usersById[id] || chatsById[id]).filter(Boolean);
+    return Object.keys(message.seenByDates).slice(0, PREVIEW_AVATAR_COUNT)
+      .map((id) => usersById[id] || chatsById[id])
+      .filter(Boolean);
   }, [message.reactions?.recentReactions, message.seenByDates]);
 
   const isDownloading = useMemo(() => {
@@ -296,7 +296,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleReply = useLastCallback(() => {
-    setReplyingToId({ messageId: message.id });
+    updateDraftReplyInfo({ replyToMsgId: message.id });
     closeMenu();
   });
 
@@ -401,7 +401,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleCopyLink = useLastCallback(() => {
-    copyTextToClipboard(getChatMessageLink(message.chatId, chatUsername, threadId, message.id));
+    copyTextToClipboard(messageLink!);
     closeMenu();
   });
 
@@ -435,7 +435,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleReactionPickerOpen = useLastCallback((position: IAnchorPosition) => {
-    openReactionPicker({ chatId: message.chatId, messageId: message.id, position });
+    openMessageReactionPicker({ chatId: message.chatId, messageId: message.id, position });
   });
 
   const handleTranslate = useLastCallback(() => {
@@ -639,6 +639,7 @@ export default memo(withGlobal<OwnProps>(
       : undefined;
     const canTranslate = !hasTranslation && selectCanTranslateMessage(global, message, detectedLanguage);
     const isChatTranslated = selectRequestedChatTranslationLanguage(global, message.chatId);
+    const messageLink = selectMessageLink(global, message.chatId, threadId, message.id);
 
     return {
       availableReactions: global.availableReactions,
@@ -675,12 +676,12 @@ export default memo(withGlobal<OwnProps>(
       customEmojiSetsInfo,
       customEmojiSets,
       canScheduleUntilOnline: selectCanScheduleUntilOnline(global, message.chatId),
-      threadId,
       canTranslate,
       canShowOriginal: hasTranslation && !isChatTranslated,
       canSelectLanguage: hasTranslation && !isChatTranslated,
       canPlayAnimatedEmojis: selectCanPlayAnimatedEmojis(global),
       isReactionPickerOpen: selectIsReactionPickerOpen(global),
+      messageLink,
     };
   },
 )(ContextMenuContainer));

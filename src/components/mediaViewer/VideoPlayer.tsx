@@ -6,19 +6,20 @@ import { getActions } from '../../global';
 
 import type { ApiDimensions } from '../../api/types';
 
-import { IS_IOS, IS_TOUCH_ENV, IS_YA_BROWSER } from '../../util/windowEnvironment';
+import { clamp } from '../../util/math';
 import safePlay from '../../util/safePlay';
 import stopEvent from '../../util/stopEvent';
-import { clamp } from '../../util/math';
+import { IS_IOS, IS_TOUCH_ENV, IS_YA_BROWSER } from '../../util/windowEnvironment';
 
-import useLastCallback from '../../hooks/useLastCallback';
+import useUnsupportedMedia from '../../hooks/media/useUnsupportedMedia';
+import useAppLayout from '../../hooks/useAppLayout';
 import useBuffering from '../../hooks/useBuffering';
+import useCurrentTimeSignal from '../../hooks/useCurrentTimeSignal';
 import useFullscreen from '../../hooks/useFullscreen';
+import useLastCallback from '../../hooks/useLastCallback';
 import usePictureInPicture from '../../hooks/usePictureInPicture';
 import useShowTransition from '../../hooks/useShowTransition';
 import useVideoCleanup from '../../hooks/useVideoCleanup';
-import useAppLayout from '../../hooks/useAppLayout';
-import useCurrentTimeSignal from './hooks/useCurrentTimeSignal';
 import useControlsSignal from './hooks/useControlsSignal';
 import useVideoWaitingSignal from './hooks/useVideoWaitingSignal';
 
@@ -120,22 +121,23 @@ const VideoPlayer: FC<OwnProps> = ({
   const {
     isReady, isBuffered, bufferedRanges, bufferingHandlers, bufferedProgress,
   } = useBuffering();
+  const isUnsupported = useUnsupportedMedia(videoRef, undefined, !url);
 
   const {
     shouldRender: shouldRenderSpinner,
     transitionClassNames: spinnerClassNames,
-  } = useShowTransition(!isBuffered, undefined, undefined, 'slow');
+  } = useShowTransition(!isBuffered && !isUnsupported, undefined, undefined, 'slow');
   const {
     shouldRender: shouldRenderPlayButton,
     transitionClassNames: playButtonClassNames,
-  } = useShowTransition(IS_IOS && !isPlaying && !shouldRenderSpinner, undefined, undefined, 'slow');
+  } = useShowTransition(IS_IOS && !isPlaying && !shouldRenderSpinner && !isUnsupported, undefined, undefined, 'slow');
 
   useEffect(() => {
     lockControls(shouldRenderSpinner);
   }, [lockControls, shouldRenderSpinner]);
 
   useEffect(() => {
-    if (noPlay || !isMediaViewerOpen) {
+    if (noPlay || !isMediaViewerOpen || isUnsupported) {
       videoRef.current!.pause();
     } else if (url && !IS_TOUCH_ENV) {
       // Chrome does not automatically start playing when `url` becomes available (even with `autoPlay`),
@@ -143,7 +145,7 @@ const VideoPlayer: FC<OwnProps> = ({
       // so we need to use `autoPlay` instead to allow pre-buffering.
       safePlay(videoRef.current!);
     }
-  }, [noPlay, isMediaViewerOpen, url, setMediaViewerMuted]);
+  }, [noPlay, isMediaViewerOpen, url, setMediaViewerMuted, isUnsupported]);
 
   useEffect(() => {
     videoRef.current!.volume = volume;
@@ -307,9 +309,8 @@ const VideoPlayer: FC<OwnProps> = ({
             bufferingHandlers.onPause(e);
           }}
           onTimeUpdate={handleTimeUpdate}
-        >
-          {url && <source src={url} />}
-        </video>
+          src={url}
+        />
       </div>
       {shouldRenderPlayButton && (
         <Button round className={`play-button ${playButtonClassNames}`} onClick={togglePlayState}>
@@ -327,7 +328,7 @@ const VideoPlayer: FC<OwnProps> = ({
           />
         </div>
       )}
-      {!isGif && (
+      {!isGif && !isUnsupported && (
         <VideoPlayerControls
           url={url}
           isPlaying={isPlaying}

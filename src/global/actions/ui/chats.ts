@@ -1,19 +1,18 @@
-import { addActionHandler, setGlobal } from '../../index';
-
-import { IS_ELECTRON } from '../../../config';
+import type { ActionReturnType } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { createMessageHashUrl } from '../../../util/routing';
+import { IS_ELECTRON } from '../../../util/windowEnvironment';
+import { addActionHandler, setGlobal } from '../../index';
 import {
   exitMessageSelectMode, replaceTabThreadParam, updateCurrentMessageList, updateRequestedChatTranslation,
 } from '../../reducers';
+import { updateTabState } from '../../reducers/tabs';
 import {
   selectChat, selectCurrentMessageList, selectTabState,
 } from '../../selectors';
 import { closeLocalTextSearch } from './localSearch';
-import type { ActionReturnType } from '../../types';
-import { updateTabState } from '../../reducers/tabs';
-import { createMessageHashUrl } from '../../../util/routing';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
 
 addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
   const {
@@ -56,6 +55,7 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
 
     global = updateTabState(global, {
       isStatisticsShown: false,
+      boostStatistics: undefined,
       contentToBeScheduled: undefined,
       ...(id !== selectTabState(global, tabId).forwardMessages.toChatId && {
         forwardMessages: {},
@@ -97,11 +97,12 @@ addActionHandler('openPreviousChat', (global, actions, payload): ActionReturnTyp
 });
 
 addActionHandler('openChatWithInfo', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload;
+  const { profileTab, tabId = getCurrentTabId() } = payload;
 
   global = updateTabState(global, {
     ...selectTabState(global, tabId),
     isChatInfoShown: true,
+    nextProfileTab: profileTab,
   }, tabId);
   global = { ...global, lastIsChatInfoShown: true };
   setGlobal(global);

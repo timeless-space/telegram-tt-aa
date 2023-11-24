@@ -1,43 +1,37 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, { memo, useMemo } from '../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type {
-  ApiAvailableReaction, ApiChat, ApiMessage, ApiReactionCount, ApiStickerSet, ApiUser,
+  ApiMessage, ApiPeer, ApiReactionCount,
 } from '../../../api/types';
-import type { ActiveReaction } from '../../../global/types';
+import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
+import { getMessageKey, isReactionChosen, isSameReaction } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
 import { formatIntegerCompact } from '../../../util/textFormat';
-import { isSameReaction, isReactionChosen } from '../../../global/helpers';
+import { REM } from '../../common/helpers/mediaDimensions';
 
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import Button from '../../ui/Button';
-import AvatarList from '../../common/AvatarList';
-import ReactionAnimatedEmoji from './ReactionAnimatedEmoji';
 import AnimatedCounter from '../../common/AnimatedCounter';
+import AvatarList from '../../common/AvatarList';
+import ReactionAnimatedEmoji from '../../common/reactions/ReactionAnimatedEmoji';
+import Button from '../../ui/Button';
 
 import './Reactions.scss';
+
+const REACTION_SIZE = 1.25 * REM;
 
 const ReactionButton: FC<{
   reaction: ApiReactionCount;
   message: ApiMessage;
-  activeReactions?: ActiveReaction[];
-  availableReactions?: ApiAvailableReaction[];
   withRecentReactors?: boolean;
-  withEffects?: boolean;
-  genericEffects?: ApiStickerSet;
   observeIntersection?: ObserveFn;
 }> = ({
   reaction,
   message,
-  activeReactions,
-  availableReactions,
   withRecentReactors,
-  withEffects,
-  genericEffects,
   observeIntersection,
 }) => {
   const { toggleReaction } = getActions();
@@ -55,7 +49,7 @@ const ReactionButton: FC<{
     return recentReactions
       .filter((recentReaction) => isSameReaction(recentReaction.reaction, reaction.reaction))
       .map((recentReaction) => usersById[recentReaction.peerId] || chatsById[recentReaction.peerId])
-      .filter(Boolean) as (ApiChat | ApiUser)[];
+      .filter(Boolean) as ApiPeer[];
   }, [reaction.reaction, recentReactions, withRecentReactors]);
 
   const handleClick = useLastCallback(() => {
@@ -68,21 +62,22 @@ const ReactionButton: FC<{
 
   return (
     <Button
-      className={buildClassName(isReactionChosen(reaction) && 'chosen')}
+      className={buildClassName(isReactionChosen(reaction) && 'chosen', 'message-reaction')}
       size="tiny"
       onClick={handleClick}
     >
       <ReactionAnimatedEmoji
-        activeReactions={activeReactions}
+        className="reaction-animated-emoji"
+        containerId={getMessageKey(message)}
         reaction={reaction.reaction}
-        availableReactions={availableReactions}
-        genericEffects={genericEffects}
+        size={REACTION_SIZE}
         observeIntersection={observeIntersection}
-        withEffects={withEffects}
       />
       {recentReactors?.length ? (
         <AvatarList size="mini" peers={recentReactors} />
-      ) : <AnimatedCounter text={formatIntegerCompact(reaction.count)} className="counter" />}
+      ) : (
+        <AnimatedCounter text={formatIntegerCompact(reaction.count)} className="counter" />
+      )}
     </Button>
   );
 };

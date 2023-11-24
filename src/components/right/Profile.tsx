@@ -1,21 +1,23 @@
+import type { FC } from '../../lib/teact/teact';
 import React, {
-  useEffect, useMemo, useRef, useState, memo,
+  memo, useCallback,
+  useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
-import type { FC } from '../../lib/teact/teact';
 import type {
-  ApiMessage,
   ApiChat,
   ApiChatMember,
+  ApiMessage,
+  ApiTypeStory,
   ApiUser,
   ApiUserStatus,
 } from '../../api/types';
-import { MAIN_THREAD_ID } from '../../api/types';
 import type {
   ISettings, ProfileState, ProfileTabType, SharedMediaType,
 } from '../../types';
-import { NewChatMembersProgress, MediaViewerOrigin, AudioOrigin } from '../../types';
+import { MAIN_THREAD_ID } from '../../api/types';
+import { AudioOrigin, MediaViewerOrigin, NewChatMembersProgress } from '../../types';
 
 import {
   MEMBERS_SLICE,
@@ -23,7 +25,6 @@ import {
   SHARED_MEDIA_SLICE,
   SLIDE_TRANSITION_DURATION,
 } from '../../config';
-import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
 import {
   getHasAdminRight, isChatAdmin, isChatChannel, isChatGroup, isUserBot, isUserId, isUserRightBanned,
 } from '../../global/helpers';
@@ -34,38 +35,44 @@ import {
   selectChatMessages,
   selectCurrentMediaSearch,
   selectIsRightColumnShown,
+  selectPeerFullInfo,
+  selectPeerStories,
+  selectTabState,
   selectTheme,
   selectUser,
 } from '../../global/selectors';
 import { captureEvents, SwipeDirection } from '../../util/captureEvents';
+import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
 import { getSenderName } from '../left/search/helpers/getSenderName';
 
-import useLastCallback from '../../hooks/useLastCallback';
+import usePeerStoriesPolling from '../../hooks/polling/usePeerStoriesPolling';
 import useCacheBuster from '../../hooks/useCacheBuster';
-import useProfileViewportIds from './hooks/useProfileViewportIds';
-import useProfileState from './hooks/useProfileState';
-import useTransitionFixes from './hooks/useTransitionFixes';
-import useAsyncRendering from './hooks/useAsyncRendering';
-import useLang from '../../hooks/useLang';
-import { useIntersectionObserver } from '../../hooks/useIntersectionObserver';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
+import { useIntersectionObserver } from '../../hooks/useIntersectionObserver';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
+import useAsyncRendering from './hooks/useAsyncRendering';
+import useProfileState from './hooks/useProfileState';
+import useProfileViewportIds from './hooks/useProfileViewportIds';
+import useTransitionFixes from './hooks/useTransitionFixes';
 
-import Transition from '../ui/Transition';
-import InfiniteScroll from '../ui/InfiniteScroll';
-import TabList from '../ui/TabList';
-import Spinner from '../ui/Spinner';
-import ListItem from '../ui/ListItem';
-import PrivateChatInfo from '../common/PrivateChatInfo';
-import ProfileInfo from '../common/ProfileInfo';
-import Document from '../common/Document';
 import Audio from '../common/Audio';
 import ChatExtra from '../common/ChatExtra';
-import Media from '../common/Media';
-import WebLink from '../common/WebLink';
-import NothingFound from '../common/NothingFound';
-import FloatingActionButton from '../ui/FloatingActionButton';
-import DeleteMemberModal from './DeleteMemberModal';
+import Document from '../common/Document';
 import GroupChatInfo from '../common/GroupChatInfo';
+import Media from '../common/Media';
+import NothingFound from '../common/NothingFound';
+import PrivateChatInfo from '../common/PrivateChatInfo';
+import ProfileInfo from '../common/ProfileInfo';
+import WebLink from '../common/WebLink';
+import MediaStory from '../story/MediaStory';
+import FloatingActionButton from '../ui/FloatingActionButton';
+import InfiniteScroll from '../ui/InfiniteScroll';
+import ListItem, { type MenuItemContextAction } from '../ui/ListItem';
+import Spinner from '../ui/Spinner';
+import TabList from '../ui/TabList';
+import Transition from '../ui/Transition';
+import DeleteMemberModal from './DeleteMemberModal';
 
 import './Profile.scss';
 
@@ -86,6 +93,7 @@ type StateProps = {
   foundIds?: number[];
   mediaSearchType?: SharedMediaType;
   hasCommonChatsTab?: boolean;
+  hasStoriesTab?: boolean;
   hasMembersTab?: boolean;
   areMembersHidden?: boolean;
   canAddMembers?: boolean;
@@ -93,6 +101,9 @@ type StateProps = {
   members?: ApiChatMember[];
   adminMembersById?: Record<string, ApiChatMember>;
   commonChatIds?: string[];
+  storyIds?: number[];
+  archiveStoryIds?: number[];
+  storyByIds?: Record<number, ApiTypeStory>;
   chatsById: Record<string, ApiChat>;
   usersById: Record<string, ApiUser>;
   userStatusesById: Record<string, ApiUserStatus>;
@@ -100,6 +111,8 @@ type StateProps = {
   isRestricted?: boolean;
   activeDownloadIds?: number[];
   isChatProtected?: boolean;
+  nextProfileTab?: ProfileTabType;
+  shouldWarnAboutSvg?: boolean;
 };
 
 const TABS = [
@@ -123,8 +136,12 @@ const Profile: FC<OwnProps & StateProps> = ({
   currentUserId,
   messagesById,
   foundIds,
+  storyIds,
+  archiveStoryIds,
+  storyByIds,
   mediaSearchType,
   hasCommonChatsTab,
+  hasStoriesTab,
   hasMembersTab,
   areMembersHidden,
   canAddMembers,
@@ -139,6 +156,8 @@ const Profile: FC<OwnProps & StateProps> = ({
   isRestricted,
   activeDownloadIds,
   isChatProtected,
+  nextProfileTab,
+  shouldWarnAboutSvg,
 }) => {
   const {
     setLocalMediaSearchType,
@@ -151,6 +170,8 @@ const Profile: FC<OwnProps & StateProps> = ({
     focusMessage,
     loadProfilePhotos,
     setNewChatMembersDialogState,
+    loadPeerPinnedStories,
+    loadStoriesArchive,
   } = getActions();
 
   // eslint-disable-next-line no-null/no-null
@@ -158,10 +179,11 @@ const Profile: FC<OwnProps & StateProps> = ({
   // eslint-disable-next-line no-null/no-null
   const transitionRef = useRef<HTMLDivElement>(null);
   const lang = useLang();
-  const [activeTab, setActiveTab] = useState(0);
   const [deletingUserId, setDeletingUserId] = useState<string | undefined>();
 
   const tabs = useMemo(() => ([
+    ...(hasStoriesTab ? [{ type: 'stories', title: 'ProfileStories' }] : []),
+    ...(hasStoriesTab && currentUserId === chatId ? [{ type: 'storiesArchive', title: 'ProfileStoriesArchive' }] : []),
     ...(hasMembersTab ? [{
       type: 'members', title: isChannel ? 'ChannelSubscribers' : 'GroupMembers',
     }] : []),
@@ -170,15 +192,42 @@ const Profile: FC<OwnProps & StateProps> = ({
     // in forum topics. Return it when it's fixed on the server side.
     ...(!topicId ? [{ type: 'voice', title: 'SharedVoiceTab2' }] : []),
     ...(hasCommonChatsTab ? [{ type: 'commonChats', title: 'SharedGroupsTab2' }] : []),
-  ]), [hasCommonChatsTab, hasMembersTab, isChannel, topicId]);
+  ]), [chatId, currentUserId, hasCommonChatsTab, hasMembersTab, hasStoriesTab, isChannel, topicId]);
+
+  const initialTab = useMemo(() => {
+    if (!nextProfileTab) {
+      return 0;
+    }
+
+    const index = tabs.findIndex(({ type }) => type === nextProfileTab);
+    return index === -1 ? 0 : index;
+  }, [nextProfileTab, tabs]);
+
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (!nextProfileTab) return;
+    const index = tabs.findIndex(({ type }) => type === nextProfileTab);
+
+    if (index === -1) return;
+    setActiveTab(index);
+  }, [nextProfileTab, tabs]);
 
   const renderingActiveTab = activeTab > tabs.length - 1 ? tabs.length - 1 : activeTab;
   const tabType = tabs[renderingActiveTab].type as ProfileTabType;
+  const handleLoadPeerStories = useCallback(({ offsetId }: { offsetId: number }) => {
+    loadPeerPinnedStories({ peerId: chatId, offsetId });
+  }, [chatId]);
+  const handleLoadStoriesArchive = useCallback(({ offsetId }: { offsetId: number }) => {
+    loadStoriesArchive({ peerId: currentUserId!, offsetId });
+  }, [currentUserId]);
 
   const [resultType, viewportIds, getMore, noProfileInfo] = useProfileViewportIds(
     loadMoreMembers,
     loadCommonChats,
     searchMediaMessagesLocal,
+    handleLoadPeerStories,
+    handleLoadStoriesArchive,
     tabType,
     mediaSearchType,
     members,
@@ -189,9 +238,15 @@ const Profile: FC<OwnProps & StateProps> = ({
     messagesById,
     foundIds,
     topicId,
+    storyIds,
+    archiveStoryIds,
   );
-  const isFirstTab = resultType === 'members' || (!hasMembersTab && resultType === 'media');
+  const isFirstTab = (hasStoriesTab && resultType === 'stories')
+    || resultType === 'members'
+    || (!hasMembersTab && resultType === 'media');
   const activeKey = tabs.findIndex(({ type }) => type === resultType);
+
+  usePeerStoriesPolling(resultType === 'members' ? viewportIds as string[] : undefined);
 
   const { handleScroll } = useProfileState(containerRef, resultType, profileState, onProfileStateChange);
 
@@ -250,7 +305,7 @@ const Profile: FC<OwnProps & StateProps> = ({
   });
 
   useEffectWithPrevDeps(([prevHasMemberTabs]) => {
-    if (activeTab === 0 || prevHasMemberTabs === hasMembersTab) {
+    if (prevHasMemberTabs === undefined || activeTab === 0 || prevHasMemberTabs === hasMembersTab) {
       return;
     }
 
@@ -290,7 +345,7 @@ const Profile: FC<OwnProps & StateProps> = ({
   }
   const canRenderContent = useAsyncRendering([chatId, topicId, resultType, renderingActiveTab], renderingDelay);
 
-  function getMemberContextAction(memberId: string) {
+  function getMemberContextAction(memberId: string): MenuItemContextAction[] | undefined {
     return memberId === currentUserId || !canDeleteMembers ? undefined : [{
       title: lang('lng_context_remove_from_group'),
       icon: 'stop',
@@ -335,6 +390,12 @@ const Profile: FC<OwnProps & StateProps> = ({
         case 'voice':
           text = lang('lng_media_audio_empty');
           break;
+        case 'stories':
+          text = lang('StoryList.SavedEmptyState.Title');
+          break;
+        case 'storiesArchive':
+          text = lang('StoryList.ArchivedEmptyState.Title');
+          break;
         default:
           text = lang('SharedMedia.EmptyTitle');
       }
@@ -362,6 +423,15 @@ const Profile: FC<OwnProps & StateProps> = ({
               onClick={handleSelectMedia}
             />
           ))
+        ) : (resultType === 'stories' || resultType === 'storiesArchive') ? (
+          (viewportIds as number[])!.map((id) => storyByIds?.[id] && (
+            <MediaStory
+              key={`${resultType}_${id}`}
+              story={storyByIds[id]}
+              isProtected={isChatProtected}
+              isArchive={resultType === 'storiesArchive'}
+            />
+          ))
         ) : resultType === 'documents' ? (
           (viewportIds as number[])!.map((id) => messagesById[id] && (
             <Document
@@ -373,6 +443,7 @@ const Profile: FC<OwnProps & StateProps> = ({
               isDownloading={activeDownloadIds?.includes(id)}
               observeIntersection={observeIntersectionForMedia}
               onDateClick={handleMessageFocus}
+              shouldWarnAboutSvg={shouldWarnAboutSvg}
             />
           ))
         ) : resultType === 'links' ? (
@@ -421,12 +492,12 @@ const Profile: FC<OwnProps & StateProps> = ({
             <ListItem
               key={id}
               teactOrderKey={i}
-              className="chat-item-clickable scroll-item small-icon"
+              className="chat-item-clickable contact-list-item scroll-item small-icon"
               // eslint-disable-next-line react/jsx-no-bind
               onClick={() => handleMemberClick(id)}
               contextActions={getMemberContextAction(id)}
             >
-              <PrivateChatInfo userId={id} adminMember={adminMembersById?.[id]} forceShowSelf />
+              <PrivateChatInfo userId={id} adminMember={adminMembersById?.[id]} forceShowSelf withStory />
             </ListItem>
           ))
         ) : resultType === 'commonChats' ? (
@@ -543,6 +614,14 @@ export default memo(withGlobal<OwnProps>(
       hasCommonChatsTab = user && !user.isSelf && !isUserBot(user);
     }
 
+    const peer = user || chat;
+    const peerFullInfo = selectPeerFullInfo(global, chatId);
+    const hasStoriesTab = peer && (user?.isSelf || (!peer.areStoriesHidden && peerFullInfo?.hasPinnedStories));
+    const peerStories = hasStoriesTab ? selectPeerStories(global, peer.id) : undefined;
+    const storyIds = peerStories?.pinnedIds;
+    const storyByIds = peerStories?.byId;
+    const archiveStoryIds = peerStories?.archiveIds;
+
     return {
       theme: selectTheme(global),
       isChannel,
@@ -551,6 +630,7 @@ export default memo(withGlobal<OwnProps>(
       foundIds,
       mediaSearchType,
       hasCommonChatsTab,
+      hasStoriesTab,
       hasMembersTab,
       areMembersHidden,
       canAddMembers,
@@ -562,7 +642,12 @@ export default memo(withGlobal<OwnProps>(
       usersById,
       userStatusesById,
       chatsById,
+      storyIds,
+      archiveStoryIds,
+      storyByIds,
       isChatProtected: chat?.isProtected,
+      nextProfileTab: selectTabState(global).nextProfileTab,
+      shouldWarnAboutSvg: global.settings.byKey.shouldWarnAboutSvg,
       ...(hasMembersTab && members && { members, adminMembersById }),
       ...(hasCommonChatsTab && user && { commonChatIds: user.commonChats?.ids }),
     };

@@ -3,35 +3,36 @@ import React, { useEffect, useLayoutEffect } from '../lib/teact/teact';
 import { getActions, withGlobal } from '../global';
 
 import type { GlobalState } from '../global/types';
-import type { UiLoaderPage } from './common/UiLoader';
 import type { ThemeKey } from '../types';
+import type { UiLoaderPage } from './common/UiLoader';
 
-import { IS_INSTALL_PROMPT_SUPPORTED, IS_MULTITAB_SUPPORTED, PLATFORM_ENV } from '../util/windowEnvironment';
 import {
   DARK_THEME_BG_COLOR, INACTIVE_MARKER, LIGHT_THEME_BG_COLOR, PAGE_TITLE,
 } from '../config';
 import { selectTabState, selectTheme } from '../global/selectors';
-import { updateSizes } from '../util/windowSize';
 import { addActiveTabChangeListener } from '../util/activeTabMonitor';
-import { hasStoredSession } from '../util/sessions';
 import buildClassName from '../util/buildClassName';
-import { parseInitialLocationHash } from '../util/routing';
-import useFlag from '../hooks/useFlag';
-import usePrevious from '../hooks/usePrevious';
-import useAppLayout from '../hooks/useAppLayout';
-
-import Auth from './auth/Auth';
-import Main from './main/Main.async';
-import LockScreen from './main/LockScreen.async';
-import AppInactive from './main/AppInactive';
-import Transition from './ui/Transition';
-import UiLoader from './common/UiLoader';
-// import Test from './test/TestSvg';
-
-import styles from './App.module.scss';
 import { setupBeforeInstallPrompt } from '../util/installPrompt';
 import { mobileSubscribe, mobileUnsubscribe } from '../util/notifications';
+import { parseInitialLocationHash } from '../util/routing';
+import { hasStoredSession } from '../util/sessions';
 import { handleGetContacts, handleGetUserInfo, handleSendMessage } from '../util/tlCustomFunction';
+import { IS_INSTALL_PROMPT_SUPPORTED, IS_MULTITAB_SUPPORTED, PLATFORM_ENV } from '../util/windowEnvironment';
+import { updateSizes } from '../util/windowSize';
+
+import useAppLayout from '../hooks/useAppLayout';
+import useFlag from '../hooks/useFlag';
+import usePrevious from '../hooks/usePrevious';
+
+// import Test from './test/TestSvg';
+import Auth from './auth/Auth';
+import UiLoader from './common/UiLoader';
+import AppInactive from './main/AppInactive';
+import LockScreen from './main/LockScreen.async';
+import Main from './main/Main.async';
+import Transition from './ui/Transition';
+
+import styles from './App.module.scss';
 
 type StateProps = {
   authState: GlobalState['authState'];
@@ -216,14 +217,12 @@ const App: FC<StateProps> = ({
 
   useLayoutEffect(() => {
     document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
-    document.body.style.setProperty(
-      '--color-background-transition',
-      (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR,
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (window as any).tlSecondaryColor && document.body.style.setProperty(
+      '--color-text',
+      (window as any).tlSecondaryColor ?? '#FFFFFF',
     );
-    document.body.style.setProperty(
-      '--theme-background-color',
-      theme === 'dark' ? (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
-    );
+    document.body.style.setProperty('--theme-background-color', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
     sessionStorage.clear();
   }, [theme]);
 

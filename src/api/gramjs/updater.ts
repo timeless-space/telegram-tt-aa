@@ -1,72 +1,80 @@
-import type { GroupCallConnectionData } from '../../lib/secret-sauce';
 import { Api as GramJs, connection } from '../../lib/gramjs';
+
+import type { GroupCallConnectionData } from '../../lib/secret-sauce';
 import type {
-  ApiMessage, ApiMessageExtendedMediaPreview, ApiUpdate, ApiUpdateConnectionStateType, OnApiUpdate,
+  ApiMessage, ApiMessageExtendedMediaPreview, ApiStory, ApiStorySkipped,
+  ApiUpdate, ApiUpdateConnectionStateType, MediaContent, OnApiUpdate,
 } from '../types';
 
 import { DEBUG, GENERAL_TOPIC_ID } from '../../config';
 import { omit, pick } from '../../util/iteratees';
 import { getServerTimeOffset, setServerTimeOffset } from '../../util/serverTime';
-import {
-  buildApiMessage,
-  buildApiMessageFromShort,
-  buildApiMessageFromShortChat,
-  buildMessageMediaContent,
-  buildPoll,
-  buildPollResults,
-  buildApiMessageFromNotification,
-  buildMessageDraft,
-  buildMessageReactions,
-  buildApiMessageExtendedMediaPreview,
-} from './apiBuilders/messages';
-import {
-  buildChatMember,
-  buildChatMembers,
-  buildChatTypingStatus,
-  buildAvatarHash,
-  buildApiChatFromPreview,
-  buildApiChatFolder,
-  buildApiChatSettings,
-} from './apiBuilders/chats';
-import {
-  buildApiUser,
-  buildApiUserEmojiStatus,
-  buildApiUserStatus,
-} from './apiBuilders/users';
-import {
-  buildMessageFromUpdate,
-  isMessageWithMedia,
-  buildChatPhotoForLocalDb,
-} from './gramjsBuilders';
-import localDb from './localDb';
-import { omitVirtualClassFields } from './apiBuilders/helpers';
-import {
-  addMessageToLocalDb,
-  addEntitiesToLocalDb,
-  addPhotoToLocalDb,
-  resolveMessageApiChatId,
-  serializeBytes,
-  log,
-  swapLocalInvoiceMedia,
-  isChatFolder,
-} from './helpers';
-import {
-  buildApiNotifyException,
-  buildApiNotifyExceptionTopic,
-  buildPrivacyKey,
-  buildPrivacyRules,
-} from './apiBuilders/misc';
-import { buildApiPhoto, buildApiUsernames } from './apiBuilders/common';
+import { buildApiBotMenuButton } from './apiBuilders/bots';
 import {
   buildApiGroupCall,
   buildApiGroupCallParticipant,
   buildPhoneCall,
   getGroupCallId,
 } from './apiBuilders/calls';
+import {
+  buildApiChatFolder,
+  buildApiChatFromPreview,
+  buildApiChatSettings,
+  buildAvatarHash,
+  buildChatMember,
+  buildChatMembers,
+  buildChatTypingStatus,
+} from './apiBuilders/chats';
+import { buildApiPhoto, buildApiUsernames, buildPrivacyRules } from './apiBuilders/common';
+import { omitVirtualClassFields } from './apiBuilders/helpers';
+import {
+  buildApiMessageExtendedMediaPreview,
+  buildMessageMediaContent,
+  buildPoll,
+  buildPollResults,
+} from './apiBuilders/messageContent';
+import {
+  buildApiMessage,
+  buildApiMessageFromNotification,
+  buildApiMessageFromShort,
+  buildApiMessageFromShortChat,
+  buildMessageDraft,
+} from './apiBuilders/messages';
+import {
+  buildApiNotifyException,
+  buildApiNotifyExceptionTopic,
+  buildPrivacyKey,
+} from './apiBuilders/misc';
 import { buildApiPeerId, getApiChatIdFromMtpPeer } from './apiBuilders/peers';
+import {
+  buildApiReaction,
+  buildMessageReactions,
+} from './apiBuilders/reactions';
+import { buildApiStealthMode, buildApiStory } from './apiBuilders/stories';
 import { buildApiEmojiInteraction, buildStickerSet } from './apiBuilders/symbols';
-import { buildApiBotMenuButton } from './apiBuilders/bots';
-import { scheduleMutedTopicUpdate, scheduleMutedChatUpdate } from './scheduleUnmute';
+import {
+  buildApiUser,
+  buildApiUserEmojiStatus,
+  buildApiUserStatus,
+} from './apiBuilders/users';
+import {
+  buildChatPhotoForLocalDb,
+  buildMessageFromUpdate,
+  isMessageWithMedia,
+} from './gramjsBuilders';
+import {
+  addEntitiesToLocalDb,
+  addMessageToLocalDb,
+  addPhotoToLocalDb,
+  addStoryToLocalDb,
+  isChatFolder,
+  log,
+  resolveMessageApiChatId,
+  serializeBytes,
+  swapLocalInvoiceMedia,
+} from './helpers';
+import localDb from './localDb';
+import { scheduleMutedChatUpdate, scheduleMutedTopicUpdate } from './scheduleUnmute';
 
 export type Update = (
   (GramJs.TypeUpdate | GramJs.TypeUpdates) & { _entities?: (GramJs.TypeUser | GramJs.TypeChat)[] }
@@ -300,7 +308,9 @@ export function updater(update: Update) {
           });
         }
       } else if (action instanceof GramJs.MessageActionTopicEdit) {
-        const { replyTo } = update.message;
+        const replyTo = update.message.replyTo instanceof GramJs.MessageReplyHeader
+          ? update.message.replyTo
+          : undefined;
         const {
           replyToMsgId, replyToTopId, forumTopic: isTopicReply,
         } = replyTo || {};
@@ -353,7 +363,7 @@ export function updater(update: Update) {
       reactions: buildMessageReactions(update.reactions),
     });
   } else if (update instanceof GramJs.UpdateMessageExtendedMedia) {
-    let media: ApiMessage['content'] | undefined;
+    let media: MediaContent | undefined;
     if (update.extendedMedia instanceof GramJs.MessageExtendedMedia) {
       media = buildMessageMediaContent(update.extendedMedia.media);
     }
@@ -874,6 +884,7 @@ export function updater(update: Update) {
       '@type': 'updatePeerBlocked',
       id: getApiChatIdFromMtpPeer(update.peerId),
       isBlocked: update.blocked,
+      isBlockedFromStories: update.blockedMyStoriesFrom,
     });
   } else if (update instanceof GramJs.UpdatePrivacy) {
     const key = buildPrivacyKey(update.key);
@@ -891,7 +902,7 @@ export function updater(update: Update) {
       '@type': 'draftMessage',
       chatId: getApiChatIdFromMtpPeer(update.peer),
       threadId: update.topMsgId,
-      ...buildMessageDraft(update.draft),
+      draft: buildMessageDraft(update.draft),
     });
   } else if (update instanceof GramJs.UpdateContactsReset) {
     onUpdate({ '@type': 'updateResetContactList' });
@@ -1050,6 +1061,62 @@ export function updater(update: Update) {
     });
   } else if (update instanceof GramJs.UpdateRecentEmojiStatuses) {
     onUpdate({ '@type': 'updateRecentEmojiStatuses' });
+  } else if (update instanceof GramJs.UpdateStory) {
+    // eslint-disable-next-line no-underscore-dangle
+    const entities = update._entities;
+    if (entities) {
+      addEntitiesToLocalDb(entities);
+      dispatchUserAndChatUpdates(entities);
+    }
+
+    const { story } = update;
+    const peerId = getApiChatIdFromMtpPeer(update.peer);
+    addStoryToLocalDb(story, peerId);
+
+    if (story instanceof GramJs.StoryItemDeleted) {
+      onUpdate({
+        '@type': 'deleteStory',
+        peerId,
+        storyId: story.id,
+      });
+    } else {
+      onUpdate({
+        '@type': 'updateStory',
+        peerId,
+        story: buildApiStory(peerId, story) as ApiStory | ApiStorySkipped,
+      });
+    }
+  } else if (update instanceof GramJs.UpdateReadStories) {
+    onUpdate({
+      '@type': 'updateReadStories',
+      peerId: getApiChatIdFromMtpPeer(update.peer),
+      lastReadId: update.maxId,
+    });
+  } else if (update instanceof GramJs.UpdateSentStoryReaction) {
+    onUpdate({
+      '@type': 'updateSentStoryReaction',
+      peerId: getApiChatIdFromMtpPeer(update.peer),
+      storyId: update.storyId,
+      reaction: buildApiReaction(update.reaction),
+    });
+  } else if (update instanceof GramJs.UpdateStoriesStealthMode) {
+    onUpdate({
+      '@type': 'updateStealthMode',
+      stealthMode: buildApiStealthMode(update.stealthMode),
+    });
+  } else if (update instanceof GramJs.UpdateAttachMenuBots) {
+    onUpdate({
+      '@type': 'updateAttachMenuBots',
+    });
+  } else if (update instanceof GramJs.UpdateNewAuthorization) {
+    onUpdate({
+      '@type': 'updateNewAuthorization',
+      hash: update.hash.toString(),
+      date: update.date,
+      device: update.device,
+      location: update.location,
+      isUnconfirmed: update.unconfirmed,
+    });
   } else if (DEBUG) {
     const params = typeof update === 'object' && 'className' in update ? update.className : update;
     log('UNEXPECTED UPDATE', params);

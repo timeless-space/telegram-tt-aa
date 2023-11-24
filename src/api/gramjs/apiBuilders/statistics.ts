@@ -2,13 +2,14 @@ import type { Api as GramJs } from '../../../lib/gramjs';
 import type {
   ApiChannelStatistics,
   ApiGroupStatistics,
-  ApiMessageStatistics,
   ApiMessagePublicForward,
+  ApiMessageStatistics,
   StatisticsGraph,
   StatisticsOverviewItem,
   StatisticsOverviewPercentage,
   StatisticsOverviewPeriod,
 } from '../../types';
+
 import { buildAvatarHash } from './chats';
 import { buildApiPeerId } from './peers';
 
@@ -160,8 +161,10 @@ function buildStatisticsOverview({ current, previous }: GramJs.StatsAbsValueAndP
   };
 }
 
-function buildStatisticsPercentage(data: GramJs.StatsPercentValue): StatisticsOverviewPercentage {
+export function buildStatisticsPercentage(data: GramJs.StatsPercentValue): StatisticsOverviewPercentage {
   return {
+    part: data.part,
+    total: data.total,
     percentage: ((data.part / data.total) * 100).toFixed(2),
   };
 }

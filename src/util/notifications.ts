@@ -1,13 +1,12 @@
-import { callApi } from '../api/gramjs';
+import { getActions, getGlobal, setGlobal } from '../global';
+
 import type {
-  ApiChat, ApiMessage, ApiPhoneCall, ApiUser, ApiPeerReaction,
+  ApiChat, ApiMessage, ApiPeer, ApiPeerReaction,
+  ApiPhoneCall, ApiUser,
 } from '../api/types';
 import { ApiMediaFormat } from '../api/types';
-import { renderActionMessageText } from '../components/common/helpers/renderActionMessageText';
-import {
-  APP_NAME, DEBUG, IS_ELECTRON, IS_TEST,
-} from '../config';
-import { getActions, getGlobal, setGlobal } from '../global';
+
+import { APP_NAME, DEBUG, IS_TEST } from '../config';
 import {
   getChatAvatarHash,
   getChatTitle,
@@ -22,21 +21,24 @@ import {
   selectIsChatMuted,
   selectShouldShowMessagePreview,
 } from '../global/helpers';
+import { getMessageReplyInfo } from '../global/helpers/replies';
 import { addNotifyExceptions, replaceSettings } from '../global/reducers';
 import {
+  selectChat,
   selectChatMessage,
   selectCurrentMessageList,
-  selectTopicFromMessage,
   selectNotifyExceptions,
   selectNotifySettings,
+  selectTopicFromMessage,
   selectUser,
-  selectChat,
 } from '../global/selectors';
-import { IS_SERVICE_WORKER_SUPPORTED, IS_TOUCH_ENV } from './windowEnvironment';
+import { callApi } from '../api/gramjs';
+import { renderActionMessageText } from '../components/common/helpers/renderActionMessageText';
+import { buildCollectionByKey } from './iteratees';
 import { translate } from './langProvider';
 import * as mediaLoader from './mediaLoader';
 import { debounce } from './schedulers';
-import { buildCollectionByKey } from './iteratees';
+import { IS_ELECTRON, IS_SERVICE_WORKER_SUPPORTED, IS_TOUCH_ENV } from './windowEnvironment';
 
 function getDeviceToken(subscription: PushSubscription) {
   const data = subscription.toJSON();
@@ -330,9 +332,6 @@ function checkIfShouldNotify(chat: ApiChat, message: Partial<ApiMessage>) {
 
 function getNotificationContent(chat: ApiChat, message: ApiMessage, reaction?: ApiPeerReaction) {
   const global = getGlobal();
-  const {
-    replyToMessageId,
-  } = message;
   let {
     senderId,
   } = message;
@@ -344,8 +343,9 @@ function getNotificationContent(chat: ApiChat, message: ApiMessage, reaction?: A
   const messageSenderUser = senderId ? selectUser(global, senderId) : undefined;
   const messageAction = getMessageAction(message as ApiMessage);
 
-  const actionTargetMessage = messageAction && replyToMessageId
-    ? selectChatMessage(global, chat.id, replyToMessageId)
+  const replyInfo = getMessageReplyInfo(message);
+  const actionTargetMessage = messageAction && replyInfo?.replyToMsgId
+    ? selectChatMessage(global, replyInfo?.replyFrom?.fromChatId || chat.id, replyInfo.replyToMsgId)
     : undefined;
   const {
     targetUserIds: actionTargetUserIds,
@@ -405,7 +405,7 @@ function getNotificationContent(chat: ApiChat, message: ApiMessage, reaction?: A
   return { title, body };
 }
 
-async function getAvatar(chat: ApiChat | ApiUser) {
+async function getAvatar(chat: ApiPeer) {
   const imageHash = getChatAvatarHash(chat);
   if (!imageHash) return undefined;
   let mediaData = mediaLoader.getFromMemory(imageHash);

@@ -1,16 +1,17 @@
-import type { GlobalState } from '../types';
 import type { ApiChat, ApiMessage, ApiReaction } from '../../api/types';
+import type { GlobalState } from '../types';
 
 import { MIN_SCREEN_WIDTH_FOR_STATIC_LEFT_COLUMN, MIN_SCREEN_WIDTH_FOR_STATIC_RIGHT_COLUMN } from '../../config';
+import windowSize from '../../util/windowSize';
 import {
   MIN_LEFT_COLUMN_WIDTH,
   SIDE_COLUMN_MAX_WIDTH,
 } from '../../components/middle/helpers/calculateMiddleFooterTransforms';
-import windowSize from '../../util/windowSize';
-import { updateChat } from './chats';
-import { isSameReaction, isReactionChosen } from '../helpers';
-import { updateChatMessage } from './messages';
+import { updateReactionCount } from '../helpers';
 import { selectSendAs, selectTabState } from '../selectors';
+import { updateChat } from './chats';
+import { updateChatMessage } from './messages';
+
 import { getIsMobile } from '../../hooks/useAppLayout';
 
 function getLeftColumnWidth(windowWidth: number) {
@@ -45,30 +46,7 @@ export function addMessageReaction<T extends GlobalState>(
   const currentSendAs = selectSendAs(global, message.chatId);
 
   // Update UI without waiting for server response
-  const results = currentReactions.results.map((current) => (
-    isReactionChosen(current) ? {
-      ...current,
-      chosenOrder: undefined,
-      count: current.count - 1,
-    } : current
-  )).filter(({ count }) => count > 0);
-
-  userReactions.forEach((reaction, i) => {
-    const existingIndex = results.findIndex((r) => isSameReaction(r.reaction, reaction));
-    if (existingIndex > -1) {
-      results[existingIndex] = {
-        ...results[existingIndex],
-        chosenOrder: i,
-        count: results[existingIndex].count + 1,
-      };
-    } else {
-      results.push({
-        reaction,
-        chosenOrder: i,
-        count: 1,
-      });
-    }
-  });
+  const results = updateReactionCount(currentReactions.results, userReactions);
 
   let { recentReactions = [] } = currentReactions;
 

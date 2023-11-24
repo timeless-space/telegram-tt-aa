@@ -1,10 +1,11 @@
 import type { FC } from '../../lib/teact/teact';
 import React, { memo } from '../../lib/teact/teact';
 
+import type { ApiPeer } from '../../api/types';
 import type { AvatarSize } from './Avatar';
-import type { ApiChat, ApiUser } from '../../api/types';
 
 import buildClassName from '../../util/buildClassName';
+
 import useLang from '../../hooks/useLang';
 
 import Avatar from './Avatar';
@@ -13,7 +14,7 @@ import styles from './AvatarList.module.scss';
 
 type OwnProps = {
   size: AvatarSize;
-  peers?: (ApiUser | ApiChat)[];
+  peers?: ApiPeer[];
   className?: string;
 };
 

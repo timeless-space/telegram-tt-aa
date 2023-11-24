@@ -1,19 +1,17 @@
 import React, {
   useCallback, useLayoutEffect, useMemo, useRef,
 } from '../../../../lib/teact/teact';
-import { requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import { getGlobal } from '../../../../global';
 
-import type { LangFn } from '../../../../hooks/useLang';
-import useLang from '../../../../hooks/useLang';
 import type {
-  ApiChat, ApiMessage, ApiTopic, ApiTypingStatus, ApiUser,
+  ApiChat, ApiMessage, ApiPeer, ApiTopic, ApiTypingStatus, ApiUser,
 } from '../../../../api/types';
+import type { ApiDraft } from '../../../../global/types';
 import type { ObserveFn } from '../../../../hooks/useIntersectionObserver';
-import type { Thread } from '../../../../global/types';
+import type { LangFn } from '../../../../hooks/useLang';
 
 import { ANIMATION_END_DELAY, CHAT_HEIGHT_PX } from '../../../../config';
-import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
+import { requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import {
   getMessageIsSpoiler,
   getMessageMediaHash,
@@ -25,15 +23,19 @@ import {
   isActionMessage,
   isChatChannel,
 } from '../../../../global/helpers';
+import { getMessageReplyInfo } from '../../../../global/helpers/replies';
+import buildClassName from '../../../../util/buildClassName';
 import { renderActionMessageText } from '../../../common/helpers/renderActionMessageText';
 import renderText from '../../../common/helpers/renderText';
-import buildClassName from '../../../../util/buildClassName';
-import useEnsureMessage from '../../../../hooks/useEnsureMessage';
-import useMedia from '../../../../hooks/useMedia';
+import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
 import { ChatAnimationTypes } from './useChatAnimationType';
 
-import MessageSummary from '../../../common/MessageSummary';
+import useEnsureMessage from '../../../../hooks/useEnsureMessage';
+import useLang from '../../../../hooks/useLang';
+import useMedia from '../../../../hooks/useMedia';
+
 import ChatForumLastMessage from '../../../common/ChatForumLastMessage';
+import MessageSummary from '../../../common/MessageSummary';
 import TypingStatus from '../../../common/TypingStatus';
 
 const ANIMATION_DURATION = 200;
@@ -59,11 +61,11 @@ export default function useChatListEntry({
   lastMessage?: ApiMessage;
   chatId: string;
   typingStatus?: ApiTypingStatus;
-  draft?: Thread['draft'];
+  draft?: ApiDraft;
   actionTargetMessage?: ApiMessage;
   actionTargetUserIds?: string[];
   lastMessageTopic?: ApiTopic;
-  lastMessageSender?: ApiUser | ApiChat;
+  lastMessageSender?: ApiPeer;
   actionTargetChatId?: string;
   observeIntersection?: ObserveFn;
   isTopic?: boolean;
@@ -78,7 +80,8 @@ export default function useChatListEntry({
 
   const isAction = lastMessage && isActionMessage(lastMessage);
 
-  useEnsureMessage(chatId, isAction ? lastMessage.replyToMessageId : undefined, actionTargetMessage);
+  const replyToMessageId = lastMessage && getMessageReplyInfo(lastMessage)?.replyToMsgId;
+  useEnsureMessage(chatId, isAction ? replyToMessageId : undefined, actionTargetMessage);
 
   const mediaThumbnail = lastMessage && !getMessageSticker(lastMessage)
     ? getMessageMediaThumbDataUri(lastMessage)
@@ -101,13 +104,15 @@ export default function useChatListEntry({
       return <TypingStatus typingStatus={typingStatus} />;
     }
 
-    if (draft?.text.length && (!chat?.isForum || isTopic)) {
+    const isDraftReplyToTopic = draft && draft.replyInfo?.replyToMsgId === lastMessageTopic?.id;
+
+    if (draft && (!chat?.isForum || (isTopic && !isDraftReplyToTopic))) {
       return (
         <p className="last-message" dir={lang.isRtl ? 'auto' : 'ltr'}>
           <span className="draft">{lang('Draft')}</span>
           {renderTextWithEntities({
-            text: draft.text,
-            entities: draft.entities,
+            text: draft.text?.text || '',
+            entities: draft.text?.entities,
             isSimple: true,
             withTranslucentThumbs: true,
           })}
@@ -151,6 +156,8 @@ export default function useChatListEntry({
             <span className="colon">:</span>
           </>
         )}
+        {lastMessage.forwardInfo && (<i className="icon icon-share-filled chat-prefix-icon" />)}
+        {lastMessage.replyInfo?.type === 'story' && (<i className="icon icon-story-reply chat-prefix-icon" />)}
         {renderSummary(lang, lastMessage, observeIntersection, mediaBlobUrl || mediaThumbnail, isRoundVideo)}
       </p>
     );
@@ -243,6 +250,7 @@ function renderSummary(
         className={
           buildClassName('media-preview--image', isRoundVideo && 'round', isSpoiler && 'media-preview-spoiler')
         }
+        draggable={false}
       />
       {getMessageVideo(message) && <i className="icon icon-play" />}
       {messageSummary}

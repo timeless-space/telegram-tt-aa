@@ -1,39 +1,45 @@
+import type { FC } from '../../../lib/teact/teact';
 import React, {
-  memo, useEffect, useRef,
+  memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../global';
 
-import type { FC } from '../../../lib/teact/teact';
-import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
-import { LeftColumnContent } from '../../../types';
-import type { SettingsScreens } from '../../../types';
+import type { ApiSession } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
+import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
+import type { SettingsScreens } from '../../../types';
+import { LeftColumnContent } from '../../../types';
 
 import {
   ALL_FOLDER_ID,
-  ARCHIVED_FOLDER_ID,
   ARCHIVE_MINIMIZED_HEIGHT,
+  ARCHIVED_FOLDER_ID,
   CHAT_HEIGHT_PX,
   CHAT_LIST_SLICE,
+  FRESH_AUTH_PERIOD,
 } from '../../../config';
-import { IS_MAC_OS, IS_APP } from '../../../util/windowEnvironment';
-import { getPinnedChatsCount, getOrderKey } from '../../../util/folderManager';
 import buildClassName from '../../../util/buildClassName';
+import { getOrderKey, getPinnedChatsCount } from '../../../util/folderManager';
+import { getServerTime } from '../../../util/serverTime';
+import { handleScrollUnactiveTab } from '../../../util/tlCustomFunction';
+import { IS_APP, IS_MAC_OS } from '../../../util/windowEnvironment';
 
-import useLastCallback from '../../../hooks/useLastCallback';
-import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
-import { useFolderManagerForOrderedIds } from '../../../hooks/useFolderManager';
-import { useIntersectionObserver } from '../../../hooks/useIntersectionObserver';
-import { useHotkeys } from '../../../hooks/useHotkeys';
+import usePeerStoriesPolling from '../../../hooks/polling/usePeerStoriesPolling';
+import useTopOverscroll from '../../../hooks/scroll/useTopOverscroll';
 import useDebouncedCallback from '../../../hooks/useDebouncedCallback';
+import { useFolderManagerForOrderedIds } from '../../../hooks/useFolderManager';
+import { useHotkeys } from '../../../hooks/useHotkeys';
+import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
+import { useIntersectionObserver } from '../../../hooks/useIntersectionObserver';
+import useLastCallback from '../../../hooks/useLastCallback';
 import useOrderDiff from './hooks/useOrderDiff';
 
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import Loading from '../../ui/Loading';
+import Archive from './Archive';
 import Chat from './Chat';
 import EmptyFolder from './EmptyFolder';
-import Archive from './Archive';
-import { handleScrollUnactiveTab } from '../../../util/tlCustomFunction';
+import UnconfirmedSession from './UnconfirmedSession';
 
 type OwnProps = {
   folderType: 'all' | 'archived' | 'folder';
@@ -42,6 +48,7 @@ type OwnProps = {
   canDisplayArchive?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
   isForumPanelOpen?: boolean;
+  sessions?: Record<string, ApiSession>;
   foldersDispatch: FolderEditDispatch;
   onSettingsScreenSelect: (screen: SettingsScreens) => void;
   onLeftColumnContentChange: (content: LeftColumnContent) => void;
@@ -62,24 +69,34 @@ const ChatList: FC<OwnProps> = ({
   isForumPanelOpen,
   canDisplayArchive,
   archiveSettings,
+  sessions,
   foldersDispatch,
   onSettingsScreenSelect,
   onLeftColumnContentChange,
   allowAbsoluteHeader = false,
 }) => {
-  const { openChat, openNextChat, closeForumPanel } = getActions();
+  const {
+    openChat,
+    openNextChat,
+    closeForumPanel,
+    toggleStoryRibbon,
+  } = getActions();
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldIgnoreDragRef = useRef(false);
   const firstScroll = useRef<any>(true);
+  const [unconfirmedSessionHeight, setUnconfirmedSessionHeight] = useState(0);
 
+  const isArchived = folderType === 'archived';
+  const isAllFolder = folderType === 'all';
   const resolvedFolderId = (
-    folderType === 'all' ? ALL_FOLDER_ID : folderType === 'archived' ? ARCHIVED_FOLDER_ID : folderId!
+    isAllFolder ? ALL_FOLDER_ID : isArchived ? ARCHIVED_FOLDER_ID : folderId!
   );
 
-  const shouldDisplayArchive = folderType === 'all' && canDisplayArchive;
+  const shouldDisplayArchive = isAllFolder && canDisplayArchive;
 
   const orderedIds = useFolderManagerForOrderedIds(resolvedFolderId);
+  usePeerStoriesPolling(orderedIds);
 
   const chatsHeight = (orderedIds?.length || 0) * CHAT_HEIGHT_PX;
   const archiveHeight = shouldDisplayArchive
@@ -100,6 +117,18 @@ const ChatList: FC<OwnProps> = ({
       }, 500);
     }
   }, [containerRef, isExpandHeader, folderType]);
+
+  const shouldShowUnconfirmedSessions = useMemo(() => {
+    const sessionsArray = Object.values(sessions || {});
+    const current = sessionsArray.find((session) => session.isCurrent);
+    if (!current || getServerTime() - current.dateCreated < FRESH_AUTH_PERIOD) return false;
+
+    return isAllFolder && sessionsArray.some((session) => session.isUnconfirmed);
+  }, [isAllFolder, sessions]);
+
+  useEffect(() => {
+    if (!shouldShowUnconfirmedSessions) setUnconfirmedSessionHeight(0);
+  }, [shouldShowUnconfirmedSessions]);
 
   // Support <Alt>+<Up/Down> to navigate between chats
   useHotkeys(isActive && orderedIds?.length ? {
@@ -182,6 +211,16 @@ const ChatList: FC<OwnProps> = ({
     shouldIgnoreDragRef.current = true;
   });
 
+  const handleShowStoryRibbon = useLastCallback(() => {
+    toggleStoryRibbon({ isShown: true, isArchived });
+  });
+
+  const handleHideStoryRibbon = useLastCallback(() => {
+    toggleStoryRibbon({ isShown: false, isArchived });
+  });
+
+  const renderedOverflowTrigger = useTopOverscroll(containerRef, handleShowStoryRibbon, handleHideStoryRibbon);
+
   function renderChats() {
     const viewportOffset = orderedIds!.indexOf(viewportIds![0]);
 
@@ -218,7 +257,7 @@ const ChatList: FC<OwnProps> = ({
     }, 0);
     return viewportIds!.map((id, i) => {
       const isPinned = viewportOffset + i < pinnedCount;
-      const offsetTop = archiveHeight + (viewportOffset + i) * CHAT_HEIGHT_PX
+      const offsetTop = unconfirmedSessionHeight + archiveHeight + (viewportOffset + i) * CHAT_HEIGHT_PX
         + (allowAbsoluteHeader ? HEIGHT_HEADER_FIXED : 0);
 
       return (
@@ -289,12 +328,20 @@ const ChatList: FC<OwnProps> = ({
       itemSelector=".ListItem:not(.chat-item-archive)"
       preloadBackwards={CHAT_LIST_SLICE}
       withAbsolutePositioning
-      maxHeight={chatsHeight + archiveHeight + HEIGHT_HEADER_FIXED}
+      beforeChildren={renderedOverflowTrigger}
+      maxHeight={chatsHeight + archiveHeight + unconfirmedSessionHeight + HEIGHT_HEADER_FIXED}
       onLoadMore={getMore}
       onDragLeave={handleDragLeave}
       // eslint-disable-next-line react/jsx-no-bind
       onScroll={handleScroll}
     >
+      {shouldShowUnconfirmedSessions && (
+        <UnconfirmedSession
+          key="unconfirmed"
+          sessions={sessions!}
+          onHeightChange={setUnconfirmedSessionHeight}
+        />
+      )}
       {shouldDisplayArchive && (
         <Archive
           key="archive"

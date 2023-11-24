@@ -3,17 +3,20 @@ import React, { memo, useCallback } from '../../../lib/teact/teact';
 import { withGlobal } from '../../../global';
 
 import type { ApiChat, ApiUser } from '../../../api/types';
+import { StoryViewerOrigin } from '../../../types';
+
+import { getPrivateChatUserId, isUserId, selectIsChatMuted } from '../../../global/helpers';
+import {
+  selectChat, selectIsChatPinned, selectNotifyExceptions,
+  selectNotifySettings, selectUser,
+} from '../../../global/selectors';
 
 import useChatContextActions from '../../../hooks/useChatContextActions';
 import useFlag from '../../../hooks/useFlag';
-import { isUserId, getPrivateChatUserId, selectIsChatMuted } from '../../../global/helpers';
-import {
-  selectChat, selectUser, selectIsChatPinned, selectNotifySettings, selectNotifyExceptions,
-} from '../../../global/selectors';
 import useSelectWithEnter from '../../../hooks/useSelectWithEnter';
 
-import PrivateChatInfo from '../../common/PrivateChatInfo';
 import GroupChatInfo from '../../common/GroupChatInfo';
+import PrivateChatInfo from '../../common/PrivateChatInfo';
 import ListItem from '../../ui/ListItem';
 import ChatFolderModal from '../ChatFolderModal.async';
 import MuteChatModal from '../MuteChatModal.async';
@@ -85,9 +88,21 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
       buttonRef={buttonRef}
     >
       {isUserId(chatId) ? (
-        <PrivateChatInfo userId={chatId} withUsername={withUsername} avatarSize="large" />
+        <PrivateChatInfo
+          userId={chatId}
+          withUsername={withUsername}
+          withStory
+          avatarSize="large"
+          storyViewerOrigin={StoryViewerOrigin.SearchResult}
+        />
       ) : (
-        <GroupChatInfo chatId={chatId} withUsername={withUsername} avatarSize="large" />
+        <GroupChatInfo
+          chatId={chatId}
+          withUsername={withUsername}
+          avatarSize="large"
+          withStory
+          storyViewerOrigin={StoryViewerOrigin.SearchResult}
+        />
       )}
       {shouldRenderMuteModal && (
         <MuteChatModal

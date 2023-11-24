@@ -1,30 +1,29 @@
+import type {
+  ApiUpdateAuthorizationError,
+  ApiUpdateAuthorizationState,
+  ApiUpdateConnectionState,
+  ApiUpdateCurrentUser,
+  ApiUpdateServerTimeOffset,
+  ApiUpdateSession,
+} from '../../../api/types';
 import type { RequiredGlobalActions } from '../../index';
+import type { ActionReturnType, GlobalState } from '../../types';
+
+import { SESSION_USER_KEY } from '../../../config';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { getShippingError, shouldClosePaymentModal } from '../../../util/getReadableErrorText';
+import { unique } from '../../../util/iteratees';
+import { setLanguage } from '../../../util/langProvider';
+import { clearWebTokenAuth } from '../../../util/routing';
+import { setServerTimeOffset } from '../../../util/serverTime';
+import { forceWebsync } from '../../../util/websync';
+import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import {
   addActionHandler, getGlobal, setGlobal,
 } from '../../index';
-
-import type { ActionReturnType, GlobalState } from '../../types';
-
-import type {
-  ApiUpdateAuthorizationState,
-  ApiUpdateAuthorizationError,
-  ApiUpdateConnectionState,
-  ApiUpdateSession,
-  ApiUpdateCurrentUser,
-  ApiUpdateServerTimeOffset,
-} from '../../../api/types';
-import { SESSION_USER_KEY } from '../../../config';
 import { updateUser, updateUserFullInfo } from '../../reducers';
-import { setLanguage } from '../../../util/langProvider';
-import { selectTabState } from '../../selectors';
-import { forceWebsync } from '../../../util/websync';
-import { getShippingError, shouldClosePaymentModal } from '../../../util/getReadableErrorText';
-import { clearWebTokenAuth } from '../../../util/routing';
-import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { updateTabState } from '../../reducers/tabs';
-import { setServerTimeOffset } from '../../../util/serverTime';
-import { isChatChannel, isChatSuperGroup } from '../../helpers';
-import { unique } from '../../../util/iteratees';
+import { selectTabState } from '../../selectors';
 
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   switch (update['@type']) {
@@ -222,17 +221,19 @@ function onUpdateConnectionState<T extends GlobalState>(
   };
   setGlobal(global);
 
-  const channelStackIds = Object.values(global.byTabId)
-    .flatMap((tab) => tab.messageLists)
-    .map((messageList) => messageList.chatId)
-    .filter((chatId) => {
-      const chat = global.chats.byId[chatId];
-      return isChatChannel(chat) || isChatSuperGroup(chat);
-    });
-  if (connectionState === 'connectionStateReady' && channelStackIds.length) {
-    unique(channelStackIds).forEach((chatId) => {
-      actions.requestChannelDifference({ chatId });
-    });
+  if (global.isSynced) {
+    const channelStackIds = Object.values(global.byTabId)
+      .flatMap((tab) => tab.messageLists)
+      .map((messageList) => messageList.chatId)
+      .filter((chatId) => {
+        const chat = global.chats.byId[chatId];
+        return chat && (isChatChannel(chat) || isChatSuperGroup(chat));
+      });
+    if (connectionState === 'connectionStateReady' && channelStackIds.length) {
+      unique(channelStackIds).forEach((chatId) => {
+        actions.requestChannelDifference({ chatId });
+      });
+    }
   }
 
   if (connectionState === 'connectionStateBroken') {
