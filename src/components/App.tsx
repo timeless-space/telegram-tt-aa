@@ -212,6 +212,11 @@ const App: FC<StateProps> = ({
 
   useLayoutEffect(() => {
     document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (window as any).tlSecondaryColor && document.body.style.setProperty(
+      '--color-text',
+      (window as any).tlSecondaryColor,
+    );
     document.body.style.setProperty(
       '--theme-background-color',
       theme === 'dark' ? (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
