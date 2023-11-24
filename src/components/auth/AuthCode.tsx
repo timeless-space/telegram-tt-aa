@@ -7,6 +7,7 @@ import { getActions, withGlobal } from '../../global';
 
 import type { GlobalState } from '../../global/types';
 
+import { fallbackLangPackInitial as langPack } from '../../util/fallbackLangPackInitial';
 import { pick } from '../../util/iteratees';
 import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
 import renderText from '../common/helpers/renderText';
@@ -16,7 +17,6 @@ import useLang from '../../hooks/useLang';
 
 import TrackingMonkey from '../common/TrackingMonkey';
 import InputText from '../ui/InputText';
-import { fallbackLangPackInitial as langPack } from '../../util/fallbackLangPackInitial';
 
 type StateProps = Pick<GlobalState, 'authPhoneNumber' | 'authIsCodeViaApp' | 'authIsLoading' | 'authError'>;
 

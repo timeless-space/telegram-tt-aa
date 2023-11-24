@@ -215,12 +215,9 @@ const App: FC<StateProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     (window as any).tlSecondaryColor && document.body.style.setProperty(
       '--color-text',
-      (window as any).tlSecondaryColor,
+      (window as any).tlSecondaryColor ?? '#FFFFFF',
     );
-    document.body.style.setProperty(
-      '--theme-background-color',
-      theme === 'dark' ? (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
-    );
+    document.body.style.setProperty('--theme-background-color', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
     sessionStorage.clear();
   }, [theme]);
 

@@ -13,6 +13,7 @@ import preloadFonts from '../../util/fonts';
 import * as mediaLoader from '../../util/mediaLoader';
 import { Bundles, loadModule } from '../../util/moduleLoader';
 import { pause } from '../../util/schedulers';
+import { sendScreenName } from '../../util/tlCustomFunction';
 
 import useEffectOnce from '../../hooks/useEffectOnce';
 import useFlag from '../../hooks/useFlag';
@@ -27,7 +28,6 @@ import styles from './UiLoader.module.scss';
 import lockPreviewPath from '../../assets/lock.png';
 import monkeyPath from '../../assets/monkey.svg';
 import spoilerMaskPath from '../../assets/spoilers/mask.svg';
-import { sendScreenName } from '../../util/tlCustomFunction';
 import telegramLogoPath from '../../assets/telegram-logo.svg';
 
 export type UiLoaderPage =

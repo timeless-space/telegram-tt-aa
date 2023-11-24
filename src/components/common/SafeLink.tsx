@@ -10,9 +10,9 @@ import {
 import convertPunycode from '../../lib/punycode';
 import buildClassName from '../../util/buildClassName';
 import { ensureProtocol } from '../../util/ensureProtocol';
+import { handleSendLink } from '../../util/tlCustomFunction';
 
 import useLastCallback from '../../hooks/useLastCallback';
-import { handleSendLink } from '../../util/tlCustomFunction';
 
 type OwnProps = {
   url?: string;
