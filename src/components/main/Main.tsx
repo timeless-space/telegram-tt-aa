@@ -46,6 +46,7 @@ import { waitForTransitionEnd } from '../../util/cssAnimationEndListeners';
 import { processDeepLink } from '../../util/deeplink';
 import { Bundles, loadBundle } from '../../util/moduleLoader';
 import { parseInitialLocationHash, parseLocationHash } from '../../util/routing';
+import { sendScreenName } from '../../util/tlCustomFunction';
 import updateIcon from '../../util/updateIcon';
 import { IS_ANDROID, IS_ELECTRON } from '../../util/windowEnvironment';
 
@@ -103,7 +104,6 @@ import PremiumMainModal from './premium/PremiumMainModal.async';
 import SafeLinkModal from './SafeLinkModal.async';
 
 import './Main.scss';
-import { sendScreenName } from '../../util/tlCustomFunction';
 
 export interface OwnProps {
   isMobile?: boolean;

@@ -4,7 +4,6 @@ import { requestMutation } from '../lib/fasterdom/fasterdom';
 import themeColors from '../styles/themes.json';
 import { animate } from './animation';
 import { lerp } from './math';
-import { DARK_THEME_BG_COLOR } from '../config';
 
 type RGBAColor = {
   r: number;
@@ -37,7 +36,10 @@ const colors = (Object.keys(themeColors) as Array<keyof typeof themeColors>).map
   if (property === '--color-background') {
     return {
       property,
-      colors: [hexToRgb(themeColors[property][0]), hexToRgb((window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR)],
+      colors: [
+        hexToRgb(themeColors[property][0]),
+        hexToRgb((window as any).tlPrimaryColor ?? themeColors[property][1]),
+      ],
     };
   }
   return {

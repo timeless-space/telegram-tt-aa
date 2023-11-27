@@ -15,6 +15,7 @@ import File from '../../common/File';
 import MediaSpoiler from '../../common/MediaSpoiler';
 
 import styles from './AttachmentModalItem.module.scss';
+import Loading from '../../ui/Loading';
 
 type OwnProps = {
   attachment: ApiAttachment;
@@ -62,14 +63,16 @@ const AttachmentModalItem: FC<OwnProps> = ({
             {Boolean(attachment.quick?.duration) && (
               <div className={styles.duration}>{formatMediaDuration(attachment.quick!.duration)}</div>
             )}
-            <video
+            {/* <video
               className={styles.preview}
               src={attachment.blobUrl}
-              autoPlay
               muted
               loop
               disablePictureInPicture
-            />
+            /> */}
+            <div className={styles.customModal}>
+              <Loading />
+            </div>
           </>
         );
       default:

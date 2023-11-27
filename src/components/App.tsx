@@ -7,7 +7,7 @@ import type { ThemeKey } from '../types';
 import type { UiLoaderPage } from './common/UiLoader';
 
 import {
-  DARK_THEME_BG_COLOR, INACTIVE_MARKER, LIGHT_THEME_BG_COLOR, PAGE_TITLE,
+  DARK_THEME_BG_COLOR, INACTIVE_MARKER, PAGE_TITLE,
 } from '../config';
 import { selectTabState, selectTheme } from '../global/selectors';
 import { addActiveTabChangeListener } from '../util/activeTabMonitor';
@@ -71,6 +71,12 @@ const App: FC<StateProps> = ({
     if (IS_INSTALL_PROMPT_SUPPORTED) {
       setupBeforeInstallPrompt();
     }
+    document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
+    document.body.style.setProperty(
+      '--color-text',
+      (window as any).tlSecondaryColor ?? '#FFFFFF',
+    );
+    document.body.style.setProperty('--theme-background-color', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
   }, []);
 
   // Prevent drop on elements that do not accept it
@@ -210,16 +216,9 @@ const App: FC<StateProps> = ({
     (window as any).mobileUnsubscribeGlobal = mobileUnsubscribe;
   }, []);
 
-  useLayoutEffect(() => {
-    document.body.style.setProperty('--color-background', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    (window as any).tlSecondaryColor && document.body.style.setProperty(
-      '--color-text',
-      (window as any).tlSecondaryColor ?? '#FFFFFF',
-    );
-    document.body.style.setProperty('--theme-background-color', (window as any).tlPrimaryColor ?? DARK_THEME_BG_COLOR);
+  useEffect(() => {
     sessionStorage.clear();
-  }, [theme]);
+  }, []);
 
   useEffect(() => {
     sessionStorage.setItem('isExpandHeader', 'false');
