@@ -64,7 +64,7 @@ export function handleSendLink(message: string) {
 /**
  * TL - Custom function to get base64 encode image data from blob url
  */
-const getBlobData = (url: string) => {
+export const getBlobData = (url: string) => {
   return new Promise((resolve, reject) => {
     Axios({
       method: 'GET',

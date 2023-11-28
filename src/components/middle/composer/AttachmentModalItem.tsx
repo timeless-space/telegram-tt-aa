@@ -1,11 +1,12 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, { memo, useMemo } from '../../../lib/teact/teact';
+import React, { memo, useEffect, useMemo, useState } from '../../../lib/teact/teact';
 
 import type { ApiAttachment } from '../../../api/types';
 
 import { GIF_MIME_TYPE, SUPPORTED_IMAGE_CONTENT_TYPES, SUPPORTED_VIDEO_CONTENT_TYPES } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
 import { formatMediaDuration } from '../../../util/dateFormat';
+import { getBlobData } from '../../../util/tlCustomFunction';
 import { getFileExtension } from '../../common/helpers/documentInfo';
 import { REM } from '../../common/helpers/mediaDimensions';
 
@@ -15,7 +16,6 @@ import File from '../../common/File';
 import MediaSpoiler from '../../common/MediaSpoiler';
 
 import styles from './AttachmentModalItem.module.scss';
-import Loading from '../../ui/Loading';
 
 type OwnProps = {
   attachment: ApiAttachment;
@@ -63,16 +63,7 @@ const AttachmentModalItem: FC<OwnProps> = ({
             {Boolean(attachment.quick?.duration) && (
               <div className={styles.duration}>{formatMediaDuration(attachment.quick!.duration)}</div>
             )}
-            {/* <video
-              className={styles.preview}
-              src={attachment.blobUrl}
-              muted
-              loop
-              disablePictureInPicture
-            /> */}
-            <div className={styles.customModal}>
-              <Loading />
-            </div>
+            <video className={styles.preview} src={attachment.blobUrl} playsInline autoPlay preload="metadata" />
           </>
         );
       default:
