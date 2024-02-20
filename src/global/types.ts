@@ -2817,6 +2817,6 @@ export type TabArgs<T> = T extends RequiredGlobalState ? [
  */
 export interface Message {
   chatId: string;
-  threadId: number;
+  threadId?: number;
   text: string;
 }

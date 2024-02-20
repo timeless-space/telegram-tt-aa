@@ -1,6 +1,6 @@
 /**
  * TL - Add padding top
- * Description: Add padding top when called this function, all elements have 'tl-custom-padding' className will be change styles.
+ * Description: Add padding top when this function has called, all elements have 'tl-custom-padding' className will be change styles.
  */
 import Axios from 'axios';
 import { getActions, getGlobal } from '../global';
@@ -11,7 +11,7 @@ import type { Message } from '../global/types';
 const HEIGHT_HEADER_FIXED = 56;
 
 /**
- * TL - Custom a sendMessage function to send a message
+ * TL - Custom a sendMessage function
  */
 export function handleSendMessage({ chatId, threadId = 0, text }: Message) {
   getActions().sendMessage({

@@ -50,6 +50,8 @@ export type OwnProps = {
   onPollCreate: NoneToVoidFunction;
   onMenuOpen: NoneToVoidFunction;
   handleSendCrypto: () => void;
+  handleSendCryptoViaLink: () => void;
+  handleSendNTFViaLink: () => void;
   handleCreatePOAP: () => void;
   onMenuClose: NoneToVoidFunction;
 };
@@ -69,6 +71,8 @@ const AttachMenu: FC<OwnProps> = ({
   isScheduled,
   isChatWithBot,
   handleSendCrypto,
+  handleSendCryptoViaLink,
+  handleSendNTFViaLink,
   handleCreatePOAP,
   theme,
   shouldCollectDebugLogs,
@@ -221,17 +225,37 @@ const AttachMenu: FC<OwnProps> = ({
            * Description: Only chat 1-1 (except with bot and self) or group has this button
            */}
         {!isChatWithBot && Number(chatId) >= 0 && (
-          <MenuItem
-            icon="lock"
-            className="margin-left-1px"
-            customIcon={(
-              <img className="icon" src="./wallet_20px.svg" alt="" />
-            )}
-            onClick={handleSendCrypto}
-          >
-            {lang('Send Crypto')}
-          </MenuItem>
+          <>
+            <MenuItem
+              icon="lock"
+              className="margin-left-1px"
+              customIcon={(
+                <img className="icon" src="./wallet_20px.svg" alt="" />
+              )}
+              onClick={handleSendCrypto}
+            >
+              {lang('Send Crypto')}
+            </MenuItem>
+            <MenuItem
+              icon="link"
+              className="margin-left-1px"
+              onClick={handleSendCryptoViaLink}
+            >
+              {lang('Send Crypto via link')}
+            </MenuItem>
+          </>
         )}
+        {
+          !isChatWithBot && (
+            <MenuItem
+              icon="link"
+              className="margin-left-1px"
+              onClick={handleSendNTFViaLink}
+            >
+              {lang('Send NFT via link')}
+            </MenuItem>
+          )
+        }
         {/**
          * TL - Add create POAP button to attachments
          */}

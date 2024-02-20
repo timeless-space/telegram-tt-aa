@@ -395,6 +395,16 @@ const Composer: FC<OwnProps & StateProps> = ({
   const isSentStoryReactionHeart = sentStoryReaction && 'emoticon' in sentStoryReaction
     ? sentStoryReaction.emoticon === HEART_REACTION.emoticon : false;
 
+  // TL - Send ChatId whenever Chat is Open
+  useEffect(() => {
+    if (chatId) {
+      (window as any)?.onReceivedChatId?.postMessage({
+        chatId,
+        threadId,
+      });
+    }
+  }, [chatId, threadId]);
+
   useEffect(() => {
     const clearIntervalFn = () => {
       clearInterval(interval);
@@ -1228,6 +1238,16 @@ const Composer: FC<OwnProps & StateProps> = ({
   }, [chatId]);
 
   /**
+   * TL - Send NFT Via Link
+   */
+  const handleSendNTFViaLink = useCallback(() => {
+    (window as any)?.sendNFTViaLink?.postMessage(JSON.stringify({
+      chatId,
+      threadId,
+    }));
+  }, [chatId, threadId]);
+
+  /**
   * TL - Create POAP function
   */
   const handleCreatePOAP = useCallback(() => {
@@ -1246,6 +1266,16 @@ const Composer: FC<OwnProps & StateProps> = ({
       }, 5000);
     }
   }, [chatId, handleGetLastMessageId]);
+
+  /**
+   * TL - Send crypto via link
+   */
+  const handleSendCryptoViaLink = useCallback(() => {
+    (window as any)?.sendCryptoViaLink.postMessage(JSON.stringify({
+      chatId,
+      threadId,
+    }));
+  }, [chatId, threadId]);
 
   const handleSendAsMenuOpen = useLastCallback(() => {
     const messageInput = document.querySelector<HTMLDivElement>(editableInputCssSelector);
@@ -1798,6 +1828,8 @@ const Composer: FC<OwnProps & StateProps> = ({
             isChatWithBot={(isChatWithBot || isChatWithSelf) ?? false}
             handleSendCrypto={handleSendCrypto}
             handleCreatePOAP={handleCreatePOAP}
+            handleSendCryptoViaLink={handleSendCryptoViaLink}
+            handleSendNTFViaLink={handleSendNTFViaLink}
             theme={theme}
             onMenuOpen={onAttachMenuOpen}
             onMenuClose={onAttachMenuClose}
