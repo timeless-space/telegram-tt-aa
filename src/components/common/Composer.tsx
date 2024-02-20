@@ -398,10 +398,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   // TL - Send ChatId whenever Chat is Open
   useEffect(() => {
     if (chatId) {
-      (window as any)?.onReceivedChatId?.postMessage({
-        chatId,
-        threadId,
-      });
+      (window as any)?.onReceivedChatId?.postMessage(JSON.stringify({ chatId, threadId }));
     }
   }, [chatId, threadId]);
 
@@ -1241,10 +1238,7 @@ const Composer: FC<OwnProps & StateProps> = ({
    * TL - Send NFT Via Link
    */
   const handleSendNTFViaLink = useCallback(() => {
-    (window as any)?.sendNFTViaLink?.postMessage(JSON.stringify({
-      chatId,
-      threadId,
-    }));
+    (window as any)?.sendNFTViaLink?.postMessage(JSON.stringify({ chatId, threadId }));
   }, [chatId, threadId]);
 
   /**
@@ -1271,10 +1265,7 @@ const Composer: FC<OwnProps & StateProps> = ({
    * TL - Send crypto via link
    */
   const handleSendCryptoViaLink = useCallback(() => {
-    (window as any)?.sendCryptoViaLink.postMessage(JSON.stringify({
-      chatId,
-      threadId,
-    }));
+    (window as any)?.sendCryptoViaLink.postMessage(JSON.stringify({ chatId, threadId }));
   }, [chatId, threadId]);
 
   const handleSendAsMenuOpen = useLastCallback(() => {
