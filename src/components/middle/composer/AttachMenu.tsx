@@ -224,36 +224,36 @@ const AttachMenu: FC<OwnProps> = ({
            * TL - Add send crypto button to attachments
            * Description: Only chat 1-1 (except with bot and self) or group has this button
            */}
-        {!isChatWithBot && (
-          <>
-            <MenuItem
-              icon="lock"
-              className="margin-left-1px"
-              customIcon={(
-                <img className="icon" src="./wallet_20px.svg" alt="" />
-              )}
-              onClick={handleSendCrypto}
-            >
-              {lang('Send Crypto')}
-            </MenuItem>
-            <MenuItem
-              icon="link"
-              className="margin-left-1px"
-              onClick={handleSendCryptoViaLink}
-            >
-              {lang('Send Crypto via link')}
-            </MenuItem>
-          </>
+        {!isChatWithBot && Number(chatId) >= 0 && (
+          <MenuItem
+            icon="lock"
+            className="margin-left-1px"
+            customIcon={(
+              <img className="icon" src="./wallet_20px.svg" alt="" />
+            )}
+            onClick={handleSendCrypto}
+          >
+            {lang('Send Crypto')}
+          </MenuItem>
         )}
         {
           !isChatWithBot && (
-            <MenuItem
-              icon="link"
-              className="margin-left-1px"
-              onClick={handleSendNTFViaLink}
-            >
-              {lang('Send NFT via link')}
-            </MenuItem>
+            <>
+              <MenuItem
+                icon="link"
+                className="margin-left-1px"
+                onClick={handleSendNTFViaLink}
+              >
+                {lang('Send NFT via link')}
+              </MenuItem>
+              <MenuItem
+                icon="link"
+                className="margin-left-1px"
+                onClick={handleSendCryptoViaLink}
+              >
+                {lang('Send Crypto via link')}
+              </MenuItem>
+            </>
           )
         }
         {/**
