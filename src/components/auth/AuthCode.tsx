@@ -55,35 +55,35 @@ const AuthCode: FC<StateProps> = ({
      * TL - Use trick to make button always above keyboard
      * Description:
      *   - First, prevent input from being scroll to the center of the screen
-     *   - Second, caculate x value. It calculates by substract clientHeight and viewHeight
+     *   - Second, calculate x value. It calculates by subtract clientHeight and viewHeight
      *   - Third, translate view up by x pixels.
      */
-    inputRef.current!.addEventListener('focusin', () => {
-      if (!isFocused.current) {
-        inputRef.current!.style.transform = 'TranslateY(-10000px)';
-        inputRef.current!.style.caretColor = 'transparent';
-        setTimeout(() => {
-          inputRef.current!.style.transform = 'none';
-          const scrollPixel = containerRef.current!.clientHeight
-            - currentViewportHeight.current + ((window as any).numberKeyboardHeight ?? 0) / 1.15 + 10;
+    // inputRef.current!.addEventListener('focusin', () => {
+    //   if (!isFocused.current) {
+    //     inputRef.current!.style.transform = 'TranslateY(-10000px)';
+    //     inputRef.current!.style.caretColor = 'transparent';
+    //     setTimeout(() => {
+    //       inputRef.current!.style.transform = 'none';
+    //       const scrollPixel = containerRef.current!.clientHeight
+    //         - currentViewportHeight.current + ((window as any).numberKeyboardHeight ?? 0) / 1.15 + 10;
 
-          if (scrollPixel > 0) {
-            containerRef.current!.style.transform = `translateY(${-scrollPixel}px)`;
-            containerRef.current!.style.transition = 'transform 0.2s linear';
-          }
-          setTimeout(() => {
-            inputRef.current!.style.caretColor = '#8774E1';
-          }, 180);
-        }, 80);
-        isFocused.current = true;
-      }
-    });
+    //       if (scrollPixel > 0) {
+    //         containerRef.current!.style.transform = `translateY(${-scrollPixel}px)`;
+    //         containerRef.current!.style.transition = 'transform 0.2s linear';
+    //       }
+    //       setTimeout(() => {
+    //         inputRef.current!.style.caretColor = '#8774E1';
+    //       }, 180);
+    //     }, 80);
+    //     isFocused.current = true;
+    //   }
+    // });
 
-    inputRef.current!.addEventListener('blur', () => {
-      isFocused.current = false;
-      containerRef.current!.style.transform = 'translateY(0)';
-      containerRef.current!.style.transition = 'transform 0.2s linear';
-    });
+    // inputRef.current!.addEventListener('blur', () => {
+    //   isFocused.current = false;
+    //   containerRef.current!.style.transform = 'translateY(0)';
+    //   containerRef.current!.style.transition = 'transform 0.2s linear';
+    // });
   }, []);
 
   useHistoryBack({
