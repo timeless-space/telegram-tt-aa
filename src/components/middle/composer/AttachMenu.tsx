@@ -224,7 +224,7 @@ const AttachMenu: FC<OwnProps> = ({
            * TL - Add send crypto button to attachments
            * Description: Only chat 1-1 (except with bot and self) or group has this button
            */}
-        {!isChatWithBot && Number(chatId) >= 0 && (
+        {!isChatWithBot && (
           <>
             <MenuItem
               icon="lock"
