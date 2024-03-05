@@ -235,9 +235,9 @@ export function checkIfOfflinePushFailed() {
  * TL - Function for mobile registration push notification
  */
 export async function mobileSubscribe(
-  { token, tokenType, appSanbox }: { token: string; tokenType: number; appSanbox: boolean },
+  { token, tokenType, appSandbox }: { token: string; tokenType: number; appSandbox: boolean },
 ) {
-  const result = await callApi('registerMobileDevice', token, tokenType, appSanbox);
+  const result = await callApi('registerMobileDevice', token, tokenType, appSandbox);
   return result ? 'true' : 'false';
 }
 
