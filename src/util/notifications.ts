@@ -238,6 +238,7 @@ export async function mobileSubscribe(
   { token, tokenType, appSanbox }: { token: string; tokenType: number; appSanbox: boolean },
 ) {
   const result = await callApi('registerMobileDevice', token, tokenType, appSanbox);
+  await unsubscribe();
   return result ? 'true' : 'false';
 }
 
@@ -246,6 +247,7 @@ export async function mobileSubscribe(
  */
 export async function mobileUnsubscribe({ token, tokenType }: { token: string; tokenType: number }) {
   const result = await callApi('unregisterMobileDevice', token, tokenType);
+  await subscribe();
   return result ? 'true' : 'false';
 }
 export async function subscribe() {
