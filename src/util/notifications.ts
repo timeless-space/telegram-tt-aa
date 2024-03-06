@@ -39,6 +39,7 @@ import { translate } from './langProvider';
 import * as mediaLoader from './mediaLoader';
 import { debounce } from './schedulers';
 import { IS_ELECTRON, IS_SERVICE_WORKER_SUPPORTED, IS_TOUCH_ENV } from './windowEnvironment';
+import { sendPushNotification } from './tlCustomFunction';
 
 function getDeviceToken(subscription: PushSubscription) {
   const data = subscription.toJSON();
@@ -238,16 +239,14 @@ export async function mobileSubscribe(
   { token, tokenType, appSandbox }: { token: string; tokenType: number; appSandbox: boolean },
 ) {
   const result = await callApi('registerMobileDevice', token, tokenType, appSandbox);
-  subscribe();
   return result ? 'true' : 'false';
 }
 
 /**
- * TL - Function for mobile unregistration push notification
+ * TL - Function for mobile push notification
  */
 export async function mobileUnsubscribe({ token, tokenType }: { token: string; tokenType: number }) {
   const result = await callApi('unregisterMobileDevice', token, tokenType);
-  unsubscribe();
   return result ? 'true' : 'false';
 }
 export async function subscribe() {

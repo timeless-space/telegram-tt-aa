@@ -490,14 +490,16 @@ export async function fetchPrivacySettings(privacyKey: ApiPrivacyKey) {
  * TL - Register mobile divice to receive push notifications
  * https://core.telegram.org/api/push-updates
  */
-export function registerMobileDevice(token: string, tokenType = 1, appSanbox = false) {
-  const secret = Buffer.of();
+export function registerMobileDevice(token: string, tokenType = 1, appSandbox = false) {
+  const client = getClient();
+  const secret = client.session.getAuthKey().getKey();
   return invokeRequest(new GramJs.account.RegisterDevice({
     tokenType,
-    secret,
-    appSandbox: appSanbox,
-    otherUids: [],
     token,
+    appSandbox,
+    secret,
+    otherUids: [],
+    noMuted: true,
   }));
 }
 
