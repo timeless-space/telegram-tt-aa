@@ -487,24 +487,24 @@ export async function fetchPrivacySettings(privacyKey: ApiPrivacyKey) {
 }
 
 /**
- * TL - Register mobile divice to receive push notifications
+ * TL - Register mobile device to receive push notifications
  * https://core.telegram.org/api/push-updates
+ * https://gram.js.org/tl/account/RegisterDevice#accountregisterdevice
  */
-export function registerMobileDevice(token: string, tokenType = 1, appSandbox = false) {
+export function registerMobileDevice(token: string, tokenType = 1) {
   const client = getClient();
   const secret = client.session.getAuthKey().getKey();
   return invokeRequest(new GramJs.account.RegisterDevice({
     tokenType,
-    token,
-    appSandbox,
     secret,
+    appSandbox: false,
     otherUids: [],
-    noMuted: true,
+    token,
   }));
 }
 
 /**
- * TL - Unregister mobile divice from receive push notifications
+ * TL - Unregister mobile device from receive push notifications
  */
 export function unregisterMobileDevice(token: string, tokenType = 1) {
   return invokeRequest(new GramJs.account.UnregisterDevice({
