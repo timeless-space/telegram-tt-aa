@@ -259,7 +259,7 @@ const AttachMenu: FC<OwnProps> = ({
         {/**
          * TL - Add create POAP button to attachments
          */}
-        {!isChatWithBot && Number(chatId) >= 0 && (
+        {/* {!isChatWithBot && Number(chatId) >= 0 && (
           <MenuItem
             icon="lock"
             className="margin-left-1px"
@@ -270,7 +270,7 @@ const AttachMenu: FC<OwnProps> = ({
           >
             {lang('Create POAP')}
           </MenuItem>
-        )}
+        )} */}
 
         {canAttachMedia && !isScheduled && bots?.map((bot) => (
           <AttachBotItem
