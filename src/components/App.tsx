@@ -16,7 +16,7 @@ import { setupBeforeInstallPrompt } from '../util/installPrompt';
 import { mobileSubscribe, mobileUnsubscribe } from '../util/notifications';
 import { parseInitialLocationHash } from '../util/routing';
 import { hasStoredSession } from '../util/sessions';
-import { handleSendMessage } from '../util/tlCustomFunction';
+import { changeThemeColor, handleSendMessage, handleSignOut } from '../util/tlCustomFunction';
 import { IS_INSTALL_PROMPT_SUPPORTED, IS_MULTITAB_SUPPORTED, PLATFORM_ENV } from '../util/windowEnvironment';
 import { updateSizes } from '../util/windowSize';
 
@@ -33,6 +33,7 @@ import Main from './main/Main.async';
 import Transition from './ui/Transition';
 
 import styles from './App.module.scss';
+import { registerMobileDevice } from '../api/gramjs/methods';
 
 type StateProps = {
   authState: GlobalState['authState'];
@@ -208,8 +209,8 @@ const App: FC<StateProps> = ({
     /**
      * TL - Set window properties for easier call function from native App
      */
-    const { signOut } = getActions();
-    (window as any).signOutGlobal = signOut;
+    (window as any).signOutGlobal = handleSignOut;
+    (window as any).changeThemeColorGlobal = changeThemeColor;
     (window as any).handleSendMessageGlobal = handleSendMessage;
     document.body.classList.add(styles.bg);
     (window as any).mobileSubscribeGlobal = mobileSubscribe;

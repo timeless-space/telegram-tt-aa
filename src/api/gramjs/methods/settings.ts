@@ -513,6 +513,7 @@ export function unregisterMobileDevice(token: string, tokenType = 1) {
     token,
   }));
 }
+
 export function registerDevice(token: string) {
   const client = getClient();
   const secret = client.session.getAuthKey().getKey();

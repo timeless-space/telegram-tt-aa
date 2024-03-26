@@ -36,6 +36,7 @@ export function storeSession(sessionData: ApiSessionData, currentUserId?: string
   const { mainDcId, keys, hashes } = sessionData;
 
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify({ dcID: mainDcId, id: currentUserId }));
+  (window as any).onLoggedIn?.postMessage(JSON.stringify({ dcID: mainDcId, id: currentUserId }));
   localStorage.setItem('dc', String(mainDcId));
   Object.keys(keys).map(Number).forEach((dcId) => {
     localStorage.setItem(`dc${dcId}_auth_key`, JSON.stringify(keys[dcId]));

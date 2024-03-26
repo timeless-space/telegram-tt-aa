@@ -311,7 +311,8 @@ export const LIGHT_THEME_BG_COLOR = '#99BA92';
 /**
  * TL - Change background color for dark theme
  */
-export const DARK_THEME_BG_COLOR = '#5a769d';
+export const DARK_THEME_BG_COLOR = '#131314';
+export const DARK_THEME_TEXT_COLOR = '#FFFFFF';
 export const DEFAULT_PATTERN_COLOR = '#4A8E3A8C';
 export const DARK_THEME_PATTERN_COLOR = '#0A0A0A8C';
 export const PEER_COLOR_BG_OPACITY = '1a';

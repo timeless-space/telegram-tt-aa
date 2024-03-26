@@ -239,7 +239,7 @@ export async function mobileSubscribe(
   { token, tokenType }: { token: string; tokenType: number },
 ) {
   const result = await callApi('registerMobileDevice', token, tokenType);
-  return result ? 'true' : 'false';
+  return result;
 }
 
 /**
@@ -249,6 +249,7 @@ export async function mobileUnsubscribe({ token, tokenType }: { token: string; t
   const result = await callApi('unregisterMobileDevice', token, tokenType);
   return result ? 'true' : 'false';
 }
+
 export async function subscribe() {
   const { setDeviceToken, updateWebNotificationSettings } = getActions();
   let hasWebNotifications = false;

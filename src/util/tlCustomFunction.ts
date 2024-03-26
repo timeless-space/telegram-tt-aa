@@ -25,6 +25,31 @@ export function handleSendMessage({ chatId, threadId = 0, text }: Message) {
 }
 
 /**
+ * TL - Custom sign out function
+ */
+export function handleSignOut() {
+  getActions().signOut({ forceInitApi: true });
+}
+
+/**
+ * TL - Change theme color
+ */
+export function changeThemeColor({
+  primaryColor = '#131314',
+  secondaryColor = '#FFFFFF',
+}: { primaryColor?: string; secondaryColor?: string }) {
+  try {
+    localStorage.setItem('primaryColor', primaryColor);
+    localStorage.setItem('secondaryColor', secondaryColor);
+    document.body.style.setProperty('--color-background', primaryColor);
+    document.body.style.setProperty('--color-text', secondaryColor);
+    document.body.style.setProperty('--theme-background-color', primaryColor);
+  } catch (error) {
+    (window as any).onShowSnackBar?.postMessage(JSON.stringify({ error }));
+  }
+}
+
+/**
  * TL - Set session screen name
  */
 export function sendScreenName(name: string) {
