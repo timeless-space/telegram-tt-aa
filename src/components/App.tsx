@@ -72,13 +72,12 @@ const App: FC<StateProps> = ({
     if (IS_INSTALL_PROMPT_SUPPORTED) {
       setupBeforeInstallPrompt();
     }
-    const storagePrimaryColor = localStorage.getItem('primaryColor')
-      && localStorage.getItem('primaryColor')?.includes('#') ? localStorage.getItem('primaryColor') : undefined;
-    const storageSecondaryColor = localStorage.getItem('secondaryColor')
-      && localStorage.getItem('secondaryColor')?.includes('#') ? localStorage.getItem('secondaryColor') : undefined;
-    document.body.style.setProperty('--color-background', storagePrimaryColor ?? DARK_THEME_BG_COLOR);
-    document.body.style.setProperty('--color-text', storageSecondaryColor ?? '#FFFFFF');
-    document.body.style.setProperty('--theme-background-color', storagePrimaryColor ?? DARK_THEME_BG_COLOR);
+    document.body.style.setProperty('--color-background', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
+    document.body.style.setProperty('--color-text', localStorage.getItem('secondaryColor') ?? '#FFFFFF');
+    document.body.style.setProperty(
+      '--theme-background-color',
+      localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR,
+    );
   }, []);
 
   // Prevent drop on elements that do not accept it
