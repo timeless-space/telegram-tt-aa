@@ -1242,6 +1242,13 @@ const Composer: FC<OwnProps & StateProps> = ({
   }, [chatId, threadId]);
 
   /**
+   * TL - Send NFT
+   */
+  const handleSendNFT = useCallback(() => {
+    (window as any)?.sendNFT?.postMessage(JSON.stringify({ chatId, threadId }));
+  }, [chatId, threadId]);
+
+  /**
   * TL - Create POAP function
   */
   const handleCreatePOAP = useCallback(() => {
@@ -1819,6 +1826,7 @@ const Composer: FC<OwnProps & StateProps> = ({
             isChatWithBot={(isChatWithBot || isChatWithSelf) ?? false}
             handleSendCrypto={handleSendCrypto}
             handleCreatePOAP={handleCreatePOAP}
+            handleSendNFT={handleSendNFT}
             handleSendCryptoViaLink={handleSendCryptoViaLink}
             handleSendNTFViaLink={handleSendNTFViaLink}
             theme={theme}

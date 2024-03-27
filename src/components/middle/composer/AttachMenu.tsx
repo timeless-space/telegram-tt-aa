@@ -49,10 +49,11 @@ export type OwnProps = {
   onFileSelect: (files: File[], shouldSuggestCompression?: boolean) => void;
   onPollCreate: NoneToVoidFunction;
   onMenuOpen: NoneToVoidFunction;
-  handleSendCrypto: () => void;
-  handleSendCryptoViaLink: () => void;
-  handleSendNTFViaLink: () => void;
-  handleCreatePOAP: () => void;
+  handleSendCrypto: NoneToVoidFunction;
+  handleSendCryptoViaLink: NoneToVoidFunction;
+  handleSendNTFViaLink: NoneToVoidFunction;
+  handleSendNFT: NoneToVoidFunction;
+  handleCreatePOAP: NoneToVoidFunction;
   onMenuClose: NoneToVoidFunction;
 };
 
@@ -73,6 +74,7 @@ const AttachMenu: FC<OwnProps> = ({
   handleSendCrypto,
   handleSendCryptoViaLink,
   handleSendNTFViaLink,
+  handleSendNFT,
   handleCreatePOAP,
   theme,
   shouldCollectDebugLogs,
@@ -216,10 +218,6 @@ const AttachMenu: FC<OwnProps> = ({
             )}
           </>
         )}
-        {canAttachPolls && (
-          <MenuItem icon="poll" onClick={onPollCreate}>{lang('Poll')}</MenuItem>
-        )}
-
         {/**
            * TL - Add send crypto button to attachments
            * Description: Only chat 1-1 (except with bot and self) or group has this button
@@ -236,22 +234,39 @@ const AttachMenu: FC<OwnProps> = ({
             {lang('Send Crypto')}
           </MenuItem>
         )}
+        {canAttachPolls && (
+          <MenuItem icon="poll" onClick={onPollCreate}>{lang('Poll')}</MenuItem>
+        )}
+        {
+          !isChatWithBot && Number(chatId) >= 0 && (
+            <MenuItem
+              icon="permissions"
+              className="margin-left-1px"
+              onClick={handleSendNFT}
+              customIcon={(
+                <img className="icon" src="./hexagon.svg" alt="" width={20} height={20} />
+              )}
+            >
+              {lang('Send NFT')}
+            </MenuItem>
+          )
+        }
         {
           !isChatWithBot && (
             <>
               <MenuItem
                 icon="link"
                 className="margin-left-1px"
-                onClick={handleSendNTFViaLink}
+                onClick={handleSendCryptoViaLink}
               >
-                {lang('Send NFT via link')}
+                {lang('Send Crypto via link')}
               </MenuItem>
               <MenuItem
                 icon="link"
                 className="margin-left-1px"
-                onClick={handleSendCryptoViaLink}
+                onClick={handleSendNTFViaLink}
               >
-                {lang('Send Crypto via link')}
+                {lang('Send NFT via link')}
               </MenuItem>
             </>
           )
