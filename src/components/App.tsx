@@ -16,7 +16,7 @@ import { setupBeforeInstallPrompt } from '../util/installPrompt';
 import { mobileSubscribe, mobileUnsubscribe } from '../util/notifications';
 import { parseInitialLocationHash } from '../util/routing';
 import { hasStoredSession } from '../util/sessions';
-import { handleChangeThemeColor, handleSendMessage, handleSignOut } from '../util/tlCustomFunction';
+import { changeThemeColor, handleSendMessage, handleSignOut } from '../util/tlCustomFunction';
 import { IS_INSTALL_PROMPT_SUPPORTED, IS_MULTITAB_SUPPORTED, PLATFORM_ENV } from '../util/windowEnvironment';
 import { updateSizes } from '../util/windowSize';
 
@@ -199,10 +199,13 @@ const App: FC<StateProps> = ({
   }
 
   useLayoutEffect(() => {
+    document.body.style.setProperty('--color-background', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
     document.body.style.setProperty(
-      '--theme-background-color',
-      theme === 'dark' ? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
+      '--color-text',
+      localStorage.getItem('secondaryColor') ?? '#FFFFFF',
     );
+    // eslint-disable-next-line max-len
+    document.body.style.setProperty('--theme-background-color', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
   }, [theme]);
 
   useLayoutEffect(() => {
@@ -210,7 +213,7 @@ const App: FC<StateProps> = ({
      * TL - Set window properties for easier call function from native App
      */
     (window as any).signOutGlobal = handleSignOut;
-    (window as any).changeThemeColorGlobal = handleChangeThemeColor;
+    (window as any).changeThemeColorGlobal = changeThemeColor;
     (window as any).handleSendMessageGlobal = handleSendMessage;
     document.body.classList.add(styles.bg);
     (window as any).mobileSubscribeGlobal = mobileSubscribe;

@@ -274,18 +274,13 @@ const AttachMenu: FC<OwnProps> = ({
         {/**
          * TL - Add create POAP button to attachments
          */}
-        {/* {!isChatWithBot && Number(chatId) >= 0 && (
-          <MenuItem
-            icon="lock"
-            className="margin-left-1px"
-            customIcon={(
-              <img className="icon" src="./camera_macro.svg" alt="" />
-            )}
-            onClick={() => changeThemeColor('dark')}
-          >
-            {lang('Create POAP')}
-          </MenuItem>
-        )} */}
+        {/* <MenuItem
+          icon="message"
+          className="margin-left-1px"
+          onClick={() => changeThemeColor({ primaryColor: '#FF0000', secondaryColor: '#FFFFFA' })}
+        >
+          {lang('Test Send Message')}
+        </MenuItem> */}
 
         {canAttachMedia && !isScheduled && bots?.map((bot) => (
           <AttachBotItem

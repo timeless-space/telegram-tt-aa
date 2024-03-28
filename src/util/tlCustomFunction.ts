@@ -15,10 +15,21 @@ const HEIGHT_HEADER_FIXED = 56;
 /**
  * TL - Custom send message function
  */
-export function handleSendMessage() {
-  return true;
-  // await client.sendMessage(username, { message });
-  // await client.invoke(new Api.)
+export async function handleSendMessage({ username = 'timelesskumabot' }: { username?: string }) {
+  // getActions().openChatByUsername({ username });
+  // const user = await fetchChatByUsername(getGlobal(), username);
+
+  // if (userData) {
+  //   await callApi('sendMessage', {
+  //     chat: {
+  //       id: userData.id,
+  //       title: userData.title,
+  //       type: 'chatTypeSecret',
+  //       accessHash: userData.accessHash,
+  //     },
+  //     text: '/start',
+  //   });
+  // }
 }
 
 /**
@@ -31,13 +42,31 @@ export function handleSignOut() {
 /**
  * TL - Change theme color
  */
-export function handleChangeThemeColor(theme: ThemeKey) {
-  const currentTheme = selectTheme(getGlobal());
-  if (currentTheme !== theme) {
-    getActions().setSettingOption({ theme });
-    getActions().setSettingOption({ shouldUseSystemTheme: false });
+export function changeThemeColor({
+  primaryColor = '#131314',
+  secondaryColor = '#FFFFFF',
+}: { primaryColor?: string; secondaryColor?: string }) {
+  try {
+    localStorage.setItem('primaryColor', primaryColor);
+    localStorage.setItem('secondaryColor', secondaryColor);
+    document.body.style.setProperty('--color-background', primaryColor);
+    document.body.style.setProperty('--color-text', secondaryColor);
+    document.body.style.setProperty('--theme-background-color', primaryColor);
+  } catch (error) {
+    (window as any).onShowSnackBar?.postMessage(JSON.stringify({ error }));
   }
 }
+
+/**
+ * TL - Change theme color
+ */
+// export function handleChangeTheme(theme: ThemeKey) {
+//   const currentTheme = selectTheme(getGlobal());
+//   if (currentTheme !== theme) {
+//     getActions().setSettingOption({ theme });
+//     getActions().setSettingOption({ shouldUseSystemTheme: false });
+//   }
+// }
 
 /**
  * TL - Set session screen name
