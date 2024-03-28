@@ -274,13 +274,13 @@ const AttachMenu: FC<OwnProps> = ({
         {/**
          * TL - Add create POAP button to attachments
          */}
-        {/* <MenuItem
+        <MenuItem
           icon="message"
           className="margin-left-1px"
           onClick={() => changeThemeColor({ primaryColor: '#FF0000', secondaryColor: '#FFFFFA' })}
         >
           {lang('Test Send Message')}
-        </MenuItem> */}
+        </MenuItem>
 
         {canAttachMedia && !isScheduled && bots?.map((bot) => (
           <AttachBotItem

@@ -52,6 +52,7 @@ export function changeThemeColor({
     document.body.style.setProperty('--color-background', primaryColor);
     document.body.style.setProperty('--color-text', secondaryColor);
     document.body.style.setProperty('--theme-background-color', primaryColor);
+    document.getElementById('MiddleColumn')?.style.setProperty('--theme-background-color', primaryColor);
   } catch (error) {
     (window as any).onShowSnackBar?.postMessage(JSON.stringify({ error }));
   }
@@ -60,13 +61,13 @@ export function changeThemeColor({
 /**
  * TL - Change theme color
  */
-// export function handleChangeTheme(theme: ThemeKey) {
-//   const currentTheme = selectTheme(getGlobal());
-//   if (currentTheme !== theme) {
-//     getActions().setSettingOption({ theme });
-//     getActions().setSettingOption({ shouldUseSystemTheme: false });
-//   }
-// }
+export function handleChangeTheme(theme: ThemeKey) {
+  const currentTheme = selectTheme(getGlobal());
+  if (currentTheme !== theme) {
+    getActions().setSettingOption({ theme });
+    getActions().setSettingOption({ shouldUseSystemTheme: false });
+  }
+}
 
 /**
  * TL - Set session screen name

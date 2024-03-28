@@ -4,6 +4,7 @@ import { requestMutation } from '../lib/fasterdom/fasterdom';
 import themeColors from '../styles/themes.json';
 import { animate } from './animation';
 import { lerp } from './math';
+import { DARK_THEME_BG_COLOR, DARK_THEME_TEXT_COLOR } from '../config';
 
 type RGBAColor = {
   r: number;
@@ -124,19 +125,45 @@ export function lerpRgb(start: RGBAColor, end: RGBAColor, interpolationRatio: nu
 }
 
 function applyColorAnimationStep(startIndex: number, endIndex: number, interpolationRatio: number = 1) {
-  colors.forEach(({ property, colors: propertyColors }) => {
-    const {
-      r, g, b, a,
-    } = lerpRgb(propertyColors[startIndex], propertyColors[endIndex], interpolationRatio);
+  if (localStorage.getItem('primaryColor') && localStorage.getItem('secondaryColor')) {
+    const storagePrimaryColor = localStorage.getItem('primaryColor')?.includes('#')
+      ? localStorage.getItem('primaryColor') : undefined;
+    const storageSecondaryColor = localStorage.getItem('secondaryColor')?.includes('#')
+      ? localStorage.getItem('secondaryColor') : undefined;
+    const primaryBgColor = hexToRgb(storagePrimaryColor ?? DARK_THEME_BG_COLOR);
+    const secondaryColor = hexToRgb(storageSecondaryColor ?? DARK_THEME_TEXT_COLOR);
 
-    const roundedA = a !== undefined ? Math.round((a / 255) * 10 ** DECIMAL_PLACES) / 10 ** DECIMAL_PLACES : undefined;
+    colors.forEach(({ property, colors: propertyColors }) => {
+      const {
+        r, g, b, a,
+      } = lerpRgb(propertyColors[startIndex], property === '--color-background' ? primaryBgColor
+        : property === '--color-text' ? secondaryColor : propertyColors[endIndex], interpolationRatio);
 
-    document.documentElement.style.setProperty(property, `rgb(${r},${g},${b}${roundedA ? `,${roundedA}` : ''})`);
+      const roundedA = a !== undefined
+        ? Math.round((a / 255) * 10 ** DECIMAL_PLACES) / 10 ** DECIMAL_PLACES : undefined;
 
-    if (RGB_VARIABLES.has(property)) {
-      document.documentElement.style.setProperty(`${property}-rgb`, `${r},${g},${b}`);
-    }
-  });
+      document.documentElement.style.setProperty(property, `rgb(${r},${g},${b}${roundedA ? `,${roundedA}` : ''})`);
+
+      if (RGB_VARIABLES.has(property)) {
+        document.documentElement.style.setProperty(`${property}-rgb`, `${r},${g},${b}`);
+      }
+    });
+  } else {
+    colors.forEach(({ property, colors: propertyColors }) => {
+      const {
+        r, g, b, a,
+      } = lerpRgb(propertyColors[startIndex], propertyColors[endIndex], interpolationRatio);
+
+      // eslint-disable-next-line max-len
+      const roundedA = a !== undefined ? Math.round((a / 255) * 10 ** DECIMAL_PLACES) / 10 ** DECIMAL_PLACES : undefined;
+
+      document.documentElement.style.setProperty(property, `rgb(${r},${g},${b}${roundedA ? `,${roundedA}` : ''})`);
+
+      if (RGB_VARIABLES.has(property)) {
+        document.documentElement.style.setProperty(`${property}-rgb`, `${r},${g},${b}`);
+      }
+    });
+  }
 }
 
 export default switchTheme;
