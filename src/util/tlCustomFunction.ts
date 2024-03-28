@@ -18,19 +18,19 @@ const HEIGHT_HEADER_FIXED = 56;
  * TL - Custom send message function
  */
 export async function handleSendMessage({ username = 'timelesskumabot' }: { username?: string }) {
-  const user = await fetchChatByUsername(getGlobal(), username);
+  // const user = await fetchChatByUsername(getGlobal(), username);
 
-  if (user) {
-    await callApi('sendMessage', {
-      chat: {
-        id: user.id,
-        title: user.title,
-        type: 'chatTypeSecret',
-        accessHash: user.accessHash,
-      },
-      text: '/start',
-    });
-  }
+  // if (user) {
+  //   await callApi('sendMessage', {
+  //     chat: {
+  //       id: user.id,
+  //       title: user.title,
+  //       type: 'chatTypeSecret',
+  //       accessHash: user.accessHash,
+  //     },
+  //     text: '/start',
+  //   });
+  // }
 }
 
 /**
