@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import type { FC } from '../lib/teact/teact';
 import React, { useEffect, useLayoutEffect } from '../lib/teact/teact';
 import { getActions, withGlobal } from '../global';
@@ -204,8 +205,8 @@ const App: FC<StateProps> = ({
       '--color-text',
       localStorage.getItem('secondaryColor') ?? '#FFFFFF',
     );
-    // eslint-disable-next-line max-len
     document.body.style.setProperty('--theme-background-color', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
+    document.getElementById('MiddleColumn')?.style.setProperty('--theme-background-color', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
   }, [theme]);
 
   useLayoutEffect(() => {
