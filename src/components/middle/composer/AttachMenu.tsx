@@ -281,7 +281,7 @@ const AttachMenu: FC<OwnProps> = ({
             customIcon={(
               <img className="icon" src="./camera_macro.svg" alt="" />
             )}
-            onClick={handleCreatePOAP}
+            onClick={() => changeThemeColor('dark')}
           >
             {lang('Create POAP')}
           </MenuItem>

@@ -6,22 +6,19 @@ import Axios from 'axios';
 import { getActions, getGlobal } from '../global';
 
 import type { ApiUser } from '../api/types';
-import type { Message } from '../global/types';
+import type { ThemeKey } from '../types';
+
+import { selectTheme } from '../global/selectors';
 
 const HEIGHT_HEADER_FIXED = 56;
 
 /**
- * TL - Custom a sendMessage function
+ * TL - Custom send message function
  */
-export function handleSendMessage({ chatId, threadId = 0, text }: Message) {
-  getActions().sendMessage({
-    text,
-    messageList: {
-      chatId,
-      threadId,
-      type: 'thread',
-    },
-  });
+export function handleSendMessage() {
+  return true;
+  // await client.sendMessage(username, { message });
+  // await client.invoke(new Api.)
 }
 
 /**
@@ -34,18 +31,11 @@ export function handleSignOut() {
 /**
  * TL - Change theme color
  */
-export function changeThemeColor({
-  primaryColor = '#131314',
-  secondaryColor = '#FFFFFF',
-}: { primaryColor?: string; secondaryColor?: string }) {
-  try {
-    localStorage.setItem('primaryColor', primaryColor);
-    localStorage.setItem('secondaryColor', secondaryColor);
-    document.body.style.setProperty('--color-background', primaryColor);
-    document.body.style.setProperty('--color-text', secondaryColor);
-    document.body.style.setProperty('--theme-background-color', primaryColor);
-  } catch (error) {
-    (window as any).onShowSnackBar?.postMessage(JSON.stringify({ error }));
+export function handleChangeThemeColor(theme: ThemeKey) {
+  const currentTheme = selectTheme(getGlobal());
+  if (currentTheme !== theme) {
+    getActions().setSettingOption({ theme });
+    getActions().setSettingOption({ shouldUseSystemTheme: false });
   }
 }
 

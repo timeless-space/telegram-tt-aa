@@ -307,7 +307,7 @@ export const STORY_EXPIRE_PERIOD = 86400; // 1 day
 export const STORY_VIEWERS_EXPIRE_PERIOD = 86400; // 1 day
 export const FRESH_AUTH_PERIOD = 86400; // 1 day
 
-export const LIGHT_THEME_BG_COLOR = '#99BA92';
+export const LIGHT_THEME_BG_COLOR = '#5A769D';
 /**
  * TL - Change background color for dark theme
  */

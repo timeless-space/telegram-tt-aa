@@ -43,6 +43,7 @@ import DropdownMenu from '../../ui/DropdownMenu';
 import SearchInput from '../../ui/SearchInput';
 import ShowTransition from '../../ui/ShowTransition';
 import ConnectionStatusOverlay from '../ConnectionStatusOverlay';
+import LeftSideMenuItems from './LeftSideMenuItems';
 import StatusButton from './StatusButton';
 
 import './LeftMainHeader.scss';
@@ -99,6 +100,9 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   hasPasscode,
   canSetPasscode,
   onSearchQuery,
+  onSelectSettings,
+  onSelectContacts,
+  onSelectArchived,
   onReset,
 }) => {
   const {
@@ -112,7 +116,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   const lang = useLang();
   const { isMobile } = useAppLayout();
 
-  const [isBotMenuOpen] = useFlag();
+  const [isBotMenuOpen, markBotMenuOpen, unmarkBotMenuOpen] = useFlag();
 
   const hasMenu = content === LeftColumnContent.ChatList;
   const selectedSearchDate = useMemo(() => {
@@ -283,7 +287,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
           focused={isSearchFocused}
           isLoading={isLoading || connectionStatusPosition === 'minimized'}
           spinnerColor={connectionStatusPosition === 'minimized' ? 'gray' : undefined}
-          spinnerBackgroundColor={connectionStatusPosition === 'minimized' && theme === 'light' ? 'light' : undefined}
+          spinnerBackgroundColor={undefined}
           placeholder={searchInputPlaceholder}
           autoComplete="off"
           canClose={Boolean(globalSearchChatId || searchDate)}

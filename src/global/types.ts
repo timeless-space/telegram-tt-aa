@@ -2811,12 +2811,3 @@ export type TabArgs<T> = T extends RequiredGlobalState ? [
 ] : [
   tabId?: number | undefined,
 ];
-
-/**
- * TL - Custom message interface for sendMessageGlobal function
- */
-export interface Message {
-  chatId: string;
-  threadId?: number;
-  text: string;
-}
