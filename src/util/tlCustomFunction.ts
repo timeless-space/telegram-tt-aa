@@ -8,7 +8,9 @@ import { getActions, getGlobal } from '../global';
 import type { ApiUser } from '../api/types';
 import type { ThemeKey } from '../types';
 
+import { fetchChatByUsername } from '../global/actions/api/chats';
 import { selectTheme } from '../global/selectors';
+import { callApi } from '../api/gramjs';
 
 const HEIGHT_HEADER_FIXED = 56;
 
@@ -16,20 +18,19 @@ const HEIGHT_HEADER_FIXED = 56;
  * TL - Custom send message function
  */
 export async function handleSendMessage({ username = 'timelesskumabot' }: { username?: string }) {
-  // getActions().openChatByUsername({ username });
-  // const user = await fetchChatByUsername(getGlobal(), username);
+  const user = await fetchChatByUsername(getGlobal(), username);
 
-  // if (userData) {
-  //   await callApi('sendMessage', {
-  //     chat: {
-  //       id: userData.id,
-  //       title: userData.title,
-  //       type: 'chatTypeSecret',
-  //       accessHash: userData.accessHash,
-  //     },
-  //     text: '/start',
-  //   });
-  // }
+  if (user) {
+    await callApi('sendMessage', {
+      chat: {
+        id: user.id,
+        title: user.title,
+        type: 'chatTypeSecret',
+        accessHash: user.accessHash,
+      },
+      text: '/start',
+    });
+  }
 }
 
 /**
