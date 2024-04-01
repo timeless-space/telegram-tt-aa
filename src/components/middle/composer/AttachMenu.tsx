@@ -277,7 +277,7 @@ const AttachMenu: FC<OwnProps> = ({
         {/* <MenuItem
           icon="message"
           className="margin-left-1px"
-          onClick={() => changeThemeColor({ primaryColor: '#FF0000', secondaryColor: '#FFFFFA' })}
+          onClick={() => handleSendMessage({ username: 'eddytravels_bot' })}
         >
           {lang('Test Send Message')}
         </MenuItem> */}

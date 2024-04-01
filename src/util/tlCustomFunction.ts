@@ -1,7 +1,3 @@
-/**
- * TL - Add padding top
- * Description: Add padding top when this function has called, all elements have 'tl-custom-padding' className will be change styles.
- */
 import Axios from 'axios';
 import { getActions, getGlobal } from '../global';
 
@@ -15,22 +11,50 @@ import { callApi } from '../api/gramjs';
 const HEIGHT_HEADER_FIXED = 56;
 
 /**
+ * TL - Subscribe notification
+ */
+export async function handleSubcribeNotification(token: string) {
+  await callApi('registerDevice', token);
+}
+
+/**
+ * TL - Unsubscribe notification
+ */
+export async function handleUnsubscribeNotification(token: string) {
+  await callApi('unregisterDevice', token);
+}
+
+/**
+ * TL - Custom send message
+ */
+export function handleSendMessage({ chatId, threadId = 0, text }: { chatId: string; threadId?: number; text: string }) {
+  getActions().sendMessage({
+    text,
+    messageList: {
+      chatId,
+      threadId,
+      type: 'thread',
+    },
+  });
+}
+
+/**
  * TL - Custom send message function
  */
-export async function handleSendMessage({ username = 'timelesskumabot' }: { username?: string }) {
-  // const user = await fetchChatByUsername(getGlobal(), username);
+export async function sendMessage({ username, message }: { username: string; message: string }) {
+  const user = await fetchChatByUsername(getGlobal(), username);
 
-  // if (user) {
-  //   await callApi('sendMessage', {
-  //     chat: {
-  //       id: user.id,
-  //       title: user.title,
-  //       type: 'chatTypeSecret',
-  //       accessHash: user.accessHash,
-  //     },
-  //     text: '/start',
-  //   });
-  // }
+  if (user) {
+    await callApi('sendMessage', {
+      chat: {
+        id: user.id,
+        title: user.title,
+        type: 'chatTypeSecret',
+        accessHash: user.accessHash,
+      },
+      text: message,
+    });
+  }
 }
 
 /**
@@ -60,7 +84,7 @@ export function changeThemeColor({
 }
 
 /**
- * TL - Change theme color
+ * TL - Change theme color v2
  */
 export function handleChangeTheme(theme: ThemeKey) {
   const currentTheme = selectTheme(getGlobal());
