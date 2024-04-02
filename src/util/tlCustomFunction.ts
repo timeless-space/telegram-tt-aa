@@ -5,7 +5,7 @@ import type { ApiUser } from '../api/types';
 import type { ThemeKey } from '../types';
 
 import { fetchChatByUsername } from '../global/actions/api/chats';
-import { selectTheme } from '../global/selectors';
+import { selectChat, selectTheme } from '../global/selectors';
 import { callApi } from '../api/gramjs';
 
 const HEIGHT_HEADER_FIXED = 56;
@@ -27,13 +27,15 @@ export async function handleUnsubscribeNotification(token: string) {
 /**
  * TL - Custom send message
  */
-export function handleSendMessage({ chatId, threadId = 0, text }: { chatId: string; threadId?: number; text: string }) {
+export function handleSendMessage({ chatId, text }: { chatId: string; text: string }) {
+  const chat = selectChat(getGlobal(), chatId);
+  const isGroup = Number(chatId) < 0;
   getActions().sendMessage({
     text,
     messageList: {
       chatId,
-      threadId,
       type: 'thread',
+      threadId: 0,
     },
   });
 }

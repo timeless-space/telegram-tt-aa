@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import React, {
+import {
   memo, useEffect,
   useMemo,
 } from '../../../lib/teact/teact';
@@ -277,7 +277,10 @@ const AttachMenu: FC<OwnProps> = ({
         {/* <MenuItem
           icon="message"
           className="margin-left-1px"
-          onClick={() => handleSendMessage({ username: 'eddytravels_bot' })}
+          onClick={() => {
+            const currentTheme = selectTheme(getGlobal());
+            handleChangeTheme(currentTheme === 'dark' ? 'light' : 'dark');
+          }}
         >
           {lang('Test Send Message')}
         </MenuItem> */}

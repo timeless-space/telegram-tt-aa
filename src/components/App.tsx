@@ -16,7 +16,7 @@ import buildClassName from '../util/buildClassName';
 import { setupBeforeInstallPrompt } from '../util/installPrompt';
 import { parseInitialLocationHash } from '../util/routing';
 import { hasStoredSession } from '../util/sessions';
-import { changeThemeColor, handleSendMessage, handleSignOut,handleSubcribeNotification,handleUnsubscribeNotification,sendMessage } from '../util/tlCustomFunction';
+import { changeThemeColor, handleChangeTheme, handleSendMessage, handleSignOut,handleSubcribeNotification,handleUnsubscribeNotification,sendMessage } from '../util/tlCustomFunction';
 import { IS_INSTALL_PROMPT_SUPPORTED, IS_MULTITAB_SUPPORTED, PLATFORM_ENV } from '../util/windowEnvironment';
 import { updateSizes } from '../util/windowSize';
 
@@ -199,13 +199,7 @@ const App: FC<StateProps> = ({
   }
 
   useLayoutEffect(() => {
-    document.body.style.setProperty('--color-background', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
-    document.body.style.setProperty(
-      '--color-text',
-      localStorage.getItem('secondaryColor') ?? '#FFFFFF',
-    );
-    document.body.style.setProperty('--theme-background-color', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
-    document.getElementById('MiddleColumn')?.style.setProperty('--theme-background-color', localStorage.getItem('primaryColor') ?? DARK_THEME_BG_COLOR);
+    document.body.style.setProperty('--theme-background-color', theme === 'dark' ? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR);
   }, [theme]);
 
   useLayoutEffect(() => {
@@ -214,6 +208,7 @@ const App: FC<StateProps> = ({
      */
     (window as any).signOutGlobal = handleSignOut;
     (window as any).changeThemeColorGlobal = changeThemeColor;
+    (window as any).handleChangeThemeGlobal = handleChangeTheme;
     (window as any).handleSendMessageGlobal = handleSendMessage;
     (window as any).sendMessageGlobal = sendMessage;
     (window as any).mobileSubscribeGlobal = handleSubcribeNotification;
@@ -223,9 +218,6 @@ const App: FC<StateProps> = ({
 
   useEffect(() => {
     sessionStorage.clear();
-  }, []);
-
-  useEffect(() => {
     sessionStorage.setItem('isExpandHeader', 'false');
   }, []);
 
