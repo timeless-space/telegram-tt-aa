@@ -335,19 +335,20 @@ const ChatList: FC<OwnProps> = ({
       // eslint-disable-next-line react/jsx-no-bind
       onScroll={handleScroll}
     >
-      {/* {shouldShowUnconfirmedSessions && (
+      {shouldShowUnconfirmedSessions && (
         <UnconfirmedSession
           key="unconfirmed"
           sessions={sessions!}
           onHeightChange={setUnconfirmedSessionHeight}
         />
-      )} */}
+      )}
       {shouldDisplayArchive && (
         <Archive
           key="archive"
           archiveSettings={archiveSettings}
           onClick={handleArchivedClick}
           onDragEnter={handleArchivedDragEnter}
+          shouldAddPadding={!sessions}
         />
       )}
       {viewportIds?.length ? (

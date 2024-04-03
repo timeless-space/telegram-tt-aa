@@ -21,6 +21,7 @@ import styles from './Archive.module.scss';
 
 type OwnProps = {
   archiveSettings: GlobalState['archiveSettings'];
+  shouldAddPadding: boolean;
   onDragEnter?: NoneToVoidFunction;
   onClick?: NoneToVoidFunction;
 };
@@ -29,6 +30,7 @@ const PREVIEW_SLICE = 5;
 
 const Archive: FC<OwnProps> = ({
   archiveSettings,
+  shouldAddPadding,
   onDragEnter,
   onClick,
 }) => {
@@ -147,6 +149,7 @@ const Archive: FC<OwnProps> = ({
         'chat-item-archive',
         'padding-top-56px',
       )}
+      style={shouldAddPadding ? 'z-index: -1' : ''}
       buttonClassName={styles.button}
       contextActions={contextActions}
       withPortalForMenu
