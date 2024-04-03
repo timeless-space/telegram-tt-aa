@@ -111,7 +111,7 @@
   }
 
   @media (max-width: 600px) {
-    height: calc(var(--vh, 1vh) * 100);
+    height: calc(1vh * 100);
     max-width: none;
     --left-column-max-width: calc(100vw - env(safe-area-inset-left));
     transform: translate3d(-20vw, 0, 0);

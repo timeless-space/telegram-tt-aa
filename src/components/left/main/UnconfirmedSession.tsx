@@ -13,10 +13,11 @@ import styles from './UnconfirmedSession.module.scss';
 
 type OwnProps = {
   sessions: Record<string, ApiSession>;
+  className?: string;
   onHeightChange: (height: number) => void;
 };
 
-const UnconfirmedSession = ({ sessions, onHeightChange } : OwnProps) => {
+const UnconfirmedSession = ({ sessions, className, onHeightChange } : OwnProps) => {
   const { changeSessionSettings, terminateAuthorization, showNotification } = getActions();
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLDivElement>(null);
@@ -52,7 +53,7 @@ const UnconfirmedSession = ({ sessions, onHeightChange } : OwnProps) => {
   });
 
   return (
-    <div className={styles.root} ref={ref}>
+    <div className={`${styles.root} ${className}`} ref={ref}>
       <h2 className={styles.title}>{lang('UnconfirmedAuthTitle')}</h2>
       <p className={styles.info}>
         {lang('UnconfirmedAuthSingle', locationString)}
