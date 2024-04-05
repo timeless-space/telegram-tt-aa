@@ -21,6 +21,7 @@ import {
   buildApiStealthMode,
   buildApiStory,
   buildApiStoryView,
+  buildApiStoryViews,
 } from '../apiBuilders/stories';
 import { buildApiUser } from '../apiBuilders/users';
 import {
@@ -285,15 +286,45 @@ export async function fetchStoryViewList({
   }
 
   addEntitiesToLocalDb(result.users);
+  addEntitiesToLocalDb(result.chats);
   const users = result.users.map(buildApiUser).filter(Boolean);
-  const views = result.views.map(buildApiStoryView);
+  const chats = result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean);
+  const views = result.views.map(buildApiStoryView).filter(Boolean);
 
   return {
     users,
+    chats,
     views,
     nextOffset: result.nextOffset,
     reactionsCount: result.reactionsCount,
     viewsCount: result.count,
+  };
+}
+
+export async function fetchStoriesViews({
+  peer,
+  storyIds,
+}: {
+  peer: ApiPeer;
+  storyIds: number[];
+}) {
+  const result = await invokeRequest(new GramJs.stories.GetStoriesViews({
+    peer: buildInputPeer(peer.id, peer.accessHash),
+    id: storyIds,
+  }));
+
+  if (!result?.views[0]) {
+    return undefined;
+  }
+
+  addEntitiesToLocalDb(result.users);
+
+  const views = buildApiStoryViews(result.views[0]);
+  const users = result.users.map(buildApiUser).filter(Boolean);
+
+  return {
+    views,
+    users,
   };
 }
 
@@ -364,7 +395,7 @@ export function fetchStoriesMaxIds({
 }) {
   return invokeRequest(new GramJs.stories.GetPeerMaxIDs({
     id: peers.map((peer) => buildInputPeer(peer.id, peer.accessHash)),
-  }));
+  }), { shouldIgnoreErrors: true });
 }
 
 async function fetchCommonStoriesRequest({ method, peerId }: {

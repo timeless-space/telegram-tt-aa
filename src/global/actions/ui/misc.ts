@@ -2,11 +2,9 @@ import { addCallback } from '../../../lib/teact/teactn';
 
 import type { ApiError, ApiNotification } from '../../../api/types';
 import type { ActionReturnType, GlobalState } from '../../types';
-import { MAIN_THREAD_ID } from '../../../api/types';
 
 import {
-  DEBUG, GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT, INACTIVE_MARKER,
-  PAGE_TITLE,
+  DEBUG, GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT, INACTIVE_MARKER, PAGE_TITLE,
 } from '../../../config';
 import { getAllMultitabTokens, getCurrentTabId, reestablishMasterToSelf } from '../../../util/establishMultitabRole';
 import { getAllNotificationsCount } from '../../../util/folderManager';
@@ -26,6 +24,7 @@ import { updateTabState } from '../../reducers/tabs';
 import {
   selectCanAnimateInterface,
   selectChat,
+  selectChatFullInfo,
   selectChatMessage,
   selectCurrentChat,
   selectCurrentMessageList,
@@ -135,7 +134,7 @@ addActionHandler('closeManagement', (global, actions, payload): ActionReturnType
   }, tabId);
 });
 
-addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
+addActionHandler('processOpenChatOrThread', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload;
   if (!getIsMobile() && !getIsTablet()) {
     return undefined;
@@ -154,7 +153,7 @@ addActionHandler('resetNextProfileTab', (global, actions, payload): ActionReturn
     return undefined;
   }
 
-  return updateTabState(global, { nextProfileTab: undefined }, tabId);
+  return updateTabState(global, { nextProfileTab: undefined, forceScrollProfileTab: false }, tabId);
 });
 
 addActionHandler('toggleStatistics', (global, actions, payload): ActionReturnType => {
@@ -165,6 +164,7 @@ addActionHandler('toggleStatistics', (global, actions, payload): ActionReturnTyp
     statistics: {
       ...tabState.statistics,
       currentMessageId: undefined,
+      currentStoryId: undefined,
     },
   }, tabId);
 });
@@ -175,6 +175,18 @@ addActionHandler('toggleMessageStatistics', (global, actions, payload): ActionRe
     statistics: {
       ...selectTabState(global, tabId).statistics,
       currentMessageId: messageId,
+      currentStoryId: undefined,
+    },
+  }, tabId);
+});
+
+addActionHandler('toggleStoryStatistics', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId(), storyId } = payload || {};
+  return updateTabState(global, {
+    statistics: {
+      ...selectTabState(global, tabId).statistics,
+      currentStoryId: storyId,
+      currentMessageId: undefined,
     },
   }, tabId);
 });
@@ -311,11 +323,12 @@ addActionHandler('showAllowedMessageTypesNotification', (global, actions, payloa
 
   const chat = selectChat(global, chatId);
   if (!chat) return;
+  const chatFullInfo = selectChatFullInfo(global, chatId);
 
   const {
     canSendPlainText, canSendPhotos, canSendVideos, canSendDocuments, canSendAudios,
     canSendStickers, canSendRoundVideos, canSendVoices,
-  } = getAllowedAttachmentOptions(chat);
+  } = getAllowedAttachmentOptions(chat, chatFullInfo);
   const allowedContent = compact([
     canSendPlainText ? 'Chat.SendAllowedContentTypeText' : undefined,
     canSendPhotos ? 'Chat.SendAllowedContentTypePhoto' : undefined,
@@ -544,7 +557,7 @@ addActionHandler('openCreateTopicPanel', (global, actions, payload): ActionRetur
 
   // Topic panel can be opened only if there is a selected chat
   const currentChat = selectCurrentChat(global, tabId);
-  if (!currentChat) actions.openChat({ id: chatId, threadId: MAIN_THREAD_ID, tabId });
+  if (!currentChat) actions.openChat({ id: chatId, tabId });
 
   return updateTabState(global, {
     createTopicPanel: {
@@ -724,6 +737,13 @@ addActionHandler('updatePageTitle', (global, actions, payload): ActionReturnType
   }
 
   setPageTitleInstant(IS_ELECTRON ? '' : PAGE_TITLE);
+});
+
+addActionHandler('closeInviteViaLinkModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload ?? {};
+  return updateTabState(global, {
+    inviteViaLinkModal: undefined,
+  }, tabId);
 });
 
 let prevIsScreenLocked: boolean | undefined;

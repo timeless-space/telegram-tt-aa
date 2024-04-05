@@ -1,5 +1,6 @@
 import type { API_CHAT_TYPES } from '../../config';
 import type { ApiBotInfo } from './bots';
+import type { ApiPeerColor } from './chats';
 import type { ApiDocument, ApiPhoto } from './messages';
 
 export interface ApiUser {
@@ -35,8 +36,8 @@ export interface ApiUser {
   hasStories?: boolean;
   hasUnreadStories?: boolean;
   maxStoryId?: number;
-  color?: number;
-  backgroundEmojiId?: string;
+  color?: ApiPeerColor;
+  canEditBot?: boolean;
 }
 
 export interface ApiUserFullInfo {
@@ -52,6 +53,7 @@ export interface ApiUserFullInfo {
   premiumGifts?: ApiPremiumGiftOption[];
   isTranslationDisabled?: true;
   hasPinnedStories?: boolean;
+  isContactRequirePremium?: boolean;
 }
 
 export type ApiFakeType = 'fake' | 'scam';
@@ -65,6 +67,8 @@ export interface ApiUserStatus {
   );
   wasOnline?: number;
   expires?: number;
+  isReadDateRestrictedByMe?: boolean;
+  isReadDateRestricted?: boolean;
 }
 
 export interface ApiUsername {

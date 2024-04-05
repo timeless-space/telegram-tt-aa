@@ -103,8 +103,10 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     isFullyLoaded: {},
     orderedPinnedIds: {},
     totalCount: {},
+    lastMessageIds: {},
     byId: {},
     fullInfoById: {},
+    similarChannelsById: {},
   },
 
   messages: {
@@ -142,13 +144,18 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
   },
 
   fileUploads: {
-    byMessageLocalId: {},
+    byMessageKey: {},
   },
 
   recentEmojis: ['grinning', 'kissing_heart', 'christmas_tree', 'brain', 'trophy', 'duck', 'cherries'],
   recentCustomEmojis: ['5377305978079288312'],
-  topReactions: [],
-  recentReactions: [],
+
+  reactions: {
+    defaultTags: [],
+    topReactions: [],
+    recentReactions: [],
+    hash: {},
+  },
 
   stickers: {
     setsById: {},
@@ -163,9 +170,6 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
       stickers: [],
     },
     premium: {
-      stickers: [],
-    },
-    premiumSet: {
       stickers: [],
     },
     featured: {
@@ -238,6 +242,8 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
       wasTimeFormatSetManually: false,
       isConnectionStatusMinimized: true,
       shouldArchiveAndMuteNewNonContact: false,
+      shouldNewNonContactPeersRequirePremium: false,
+      shouldHideReadMarks: false,
       canTranslate: false,
       canTranslateChats: true,
       doNotTranslate: [],

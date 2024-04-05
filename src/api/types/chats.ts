@@ -1,9 +1,12 @@
+import type { ThreadId } from '../../types';
 import type { ApiBotCommand } from './bots';
 import type {
-  ApiChatReactions, ApiMessage, ApiPhoto, ApiStickerSet,
+  ApiChatReactions, ApiPhoto, ApiStickerSet,
 } from './messages';
 import type { ApiChatInviteImporter } from './misc';
-import type { ApiFakeType, ApiUser, ApiUsername } from './users';
+import type {
+  ApiEmojiStatus, ApiFakeType, ApiUser, ApiUsername,
+} from './users';
 
 type ApiChatType = (
   'chatTypePrivate' | 'chatTypeSecret' |
@@ -19,7 +22,6 @@ export interface ApiChat {
   type: ApiChatType;
   title: string;
   hasUnreadMark?: boolean;
-  lastMessage?: ApiMessage;
   lastReadOutboxMessageId?: number;
   lastReadInboxMessageId?: number;
   unreadCount?: number;
@@ -42,13 +44,15 @@ export interface ApiChat {
   draftDate?: number;
   isProtected?: boolean;
   fakeType?: ApiFakeType;
-  color?: number;
-  backgroundEmojiId?: string;
+  color?: ApiPeerColor;
+  emojiStatus?: ApiEmojiStatus;
   isForum?: boolean;
-  topics?: Record<number, ApiTopic>;
+  isForumAsMessages?: true;
+  topics?: Record<ThreadId, ApiTopic>;
   listedTopicIds?: number[];
   topicsCount?: number;
   orderedPinnedTopicIds?: number[];
+  boostLevel?: number;
 
   // Calls
   isCallActive?: boolean;
@@ -125,10 +129,14 @@ export interface ApiChatFullInfo {
   requestsPending?: number;
   statisticsDcId?: number;
   stickerSet?: ApiStickerSet;
+  emojiSet?: ApiStickerSet;
   profilePhoto?: ApiPhoto;
   areParticipantsHidden?: boolean;
   isTranslationDisabled?: true;
   hasPinnedStories?: boolean;
+
+  boostsApplied?: number;
+  boostsToUnrestrict?: number;
 }
 
 export interface ApiChatMember {
@@ -264,4 +272,9 @@ export interface ApiChatlistExportedInvite {
   title: string;
   url: string;
   peerIds: string[];
+}
+
+export interface ApiPeerColor {
+  color?: number;
+  backgroundEmojiId?: string;
 }

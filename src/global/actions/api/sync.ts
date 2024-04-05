@@ -1,28 +1,33 @@
 import { addCallback } from '../../../lib/teact/teactn';
 
-import type { ApiChat, ApiMessage } from '../../../api/types';
+import type { ThreadId } from '../../../types';
 import type { RequiredGlobalActions } from '../../index';
 import type { ActionReturnType, GlobalState, Thread } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
 import { DEBUG, MESSAGE_LIST_SLICE, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import { init as initFolderManager } from '../../../util/folderManager';
-import { buildCollectionByKey } from '../../../util/iteratees';
+import {
+  buildCollectionByKey, omitUndefined, pick, unique,
+} from '../../../util/iteratees';
 import { callApi } from '../../../api/gramjs';
+import { getIsSavedDialog } from '../../helpers';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
 } from '../../index';
 import {
   addChatMessagesById,
+  addMessages,
   safeReplaceViewportIds,
   updateChats,
   updateListedIds,
-  updateThread, updateThreadInfo,
-  updateThreadInfos,
+  updateThread,
+  updateThreadInfo,
   updateUsers,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
 import {
+  selectChat,
   selectChatMessage,
   selectChatMessages,
   selectCurrentMessageList,
@@ -63,6 +68,8 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
     loadAllChats, preloadTopChatMessages, loadAllStories, loadAllHiddenStories,
   } = actions;
 
+  initFolderManager();
+
   loadAllChats({
     listType: 'active',
     shouldReplace: true,
@@ -83,9 +90,8 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
         console.log('>>> FINISH SYNC');
       }
 
-      initFolderManager();
       loadAllChats({ listType: 'archived', shouldReplace: true });
-      void callApi('fetchCurrentUser');
+      loadAllChats({ listType: 'saved', shouldReplace: true });
       preloadTopChatMessages();
       loadAllStories();
       loadAllHiddenStories();
@@ -107,11 +113,11 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
     acc[chatId] = Object
       .keys(global.messages.byChatId[chatId].threadsById)
       .reduce<Record<number, Partial<Thread>>>((acc2, threadId) => {
-        acc2[Number(threadId)] = {
+        acc2[Number(threadId)] = omitUndefined({
           draft: selectDraft(global, chatId, Number(threadId)),
           editingId: selectEditingId(global, chatId, Number(threadId)),
           editingDraft: selectEditingDraft(global, chatId, Number(threadId)),
-        };
+        });
 
         return acc2;
       }, {});
@@ -119,15 +125,34 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
   }, {});
   /* eslint-enable @typescript-eslint/indent */
 
+  // Memoize last messages
+  const lastMessages = Object.entries(global.chats.lastMessageIds.all || {}).map(([chatId, messageId]) => (
+    selectChatMessage(global, chatId, Number(messageId))
+  )).filter(Boolean);
+  const savedLastMessages = Object.values(global.chats.lastMessageIds.saved || {}).map((messageId) => (
+    selectChatMessage(global, global.currentUserId!, Number(messageId))
+  )).filter(Boolean);
+
   for (const { id: tabId } of Object.values(global.byTabId)) {
     global = getGlobal();
     const { chatId: currentChatId, threadId: currentThreadId } = selectCurrentMessageList(global, tabId) || {};
     const activeThreadId = currentThreadId || MAIN_THREAD_ID;
-    const threadInfo = currentThreadId && currentChatId
+    const threadInfo = currentChatId && currentThreadId
       ? selectThreadInfo(global, currentChatId, currentThreadId) : undefined;
     const currentChat = currentChatId ? global.chats.byId[currentChatId] : undefined;
     if (currentChatId && currentChat) {
-      const result = await loadTopMessages(currentChat, activeThreadId, threadInfo?.lastReadInboxMessageId);
+      const [result, resultDiscussion] = await Promise.all([
+        loadTopMessages(
+          global,
+          currentChatId,
+          activeThreadId,
+        ),
+        activeThreadId !== MAIN_THREAD_ID && !getIsSavedDialog(currentChat.id, activeThreadId, global.currentUserId)
+          ? callApi('fetchDiscussionMessage', {
+            chat: currentChat,
+            messageId: Number(activeThreadId),
+          }) : undefined,
+      ]);
       global = getGlobal();
       const { chatId: newCurrentChatId } = selectCurrentMessageList(global, tabId) || {};
 
@@ -142,10 +167,16 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
             .filter(Boolean)
           : [];
 
-        const allMessages = ([] as ApiMessage[]).concat(result.messages, localMessages);
+        const resultMessageIds = result.messages.map(({ id }) => id);
+        const messagesThreadInfos = pick(global.messages.byChatId[currentChatId].threadsById, resultMessageIds);
+
+        const isDiscussionStartLoaded = !result.messages.length
+          || result.messages.some(({ id }) => id === resultDiscussion?.firstMessageId);
+        const threadStartMessages = (isDiscussionStartLoaded && resultDiscussion?.topMessages) || [];
+        const allMessages = threadStartMessages.concat(result.messages, localMessages);
         const allMessagesWithTopicLastMessages = allMessages.concat(topicLastMessages);
         const byId = buildCollectionByKey(allMessagesWithTopicLastMessages, 'id');
-        const listedIds = allMessages.map(({ id }) => id);
+        const listedIds = unique(allMessages.map(({ id }) => id));
 
         if (!wasReset) {
           global = {
@@ -166,8 +197,17 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
 
         global = addChatMessagesById(global, currentChatId, byId);
         global = updateListedIds(global, currentChatId, activeThreadId, listedIds);
-        if (threadInfo?.originChannelId) {
-          global = updateThreadInfo(global, currentChatId, activeThreadId, threadInfo);
+
+        // eslint-disable-next-line @typescript-eslint/no-loop-func
+        Object.entries(messagesThreadInfos).forEach(([id, thread]) => {
+          if (!thread?.threadInfo) return;
+          global = updateThreadInfo(global, currentChatId, id, thread.threadInfo);
+        });
+
+        if (threadInfo && !threadInfo.isCommentsInfo && activeThreadId !== MAIN_THREAD_ID) {
+          global = updateThreadInfo(global, currentChatId, activeThreadId, {
+            ...pick(threadInfo, ['fromChannelId', 'fromMessageId']),
+          });
         }
         // eslint-disable-next-line @typescript-eslint/no-loop-func
         Object.values(global.byTabId).forEach(({ id: otherTabId }) => {
@@ -178,9 +218,6 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
         });
         global = updateChats(global, buildCollectionByKey(result.chats, 'id'));
         global = updateUsers(global, buildCollectionByKey(result.users, 'id'));
-        if (result.repliesThreadInfos.length) {
-          global = updateThreadInfos(global, result.repliesThreadInfos);
-        }
 
         areMessagesLoaded = true;
       }
@@ -192,7 +229,7 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
       actions.loadTopics({ chatId: currentChatId!, force: true });
       if (currentThreadId && currentThreadId !== MAIN_THREAD_ID) {
         actions.loadTopicById({
-          chatId: currentChatId!, topicId: currentThreadId, shouldCloseChatOnError: true,
+          chatId: currentChatId!, topicId: Number(currentThreadId), shouldCloseChatOnError: true,
         });
       }
     }
@@ -225,6 +262,10 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
     });
   });
 
+  // Restore last messages
+  global = addMessages(global, lastMessages);
+  global = addMessages(global, savedLastMessages);
+
   setGlobal(global);
 
   Object.values(global.byTabId).forEach(({ id: tabId }) => {
@@ -235,13 +276,20 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
   });
 }
 
-function loadTopMessages(chat: ApiChat, threadId: number, lastReadInboxId?: number) {
+function loadTopMessages<T extends GlobalState>(global: T, chatId: string, threadId: ThreadId) {
+  const currentUserId = global.currentUserId!;
+  const isSavedDialog = getIsSavedDialog(chatId, threadId, currentUserId);
+  const realChatId = isSavedDialog ? String(threadId) : chatId;
+
+  const chat = selectChat(global, realChatId)!;
+
   return callApi('fetchMessages', {
     chat,
     threadId,
-    offsetId: lastReadInboxId || chat.lastReadInboxMessageId,
+    offsetId: !isSavedDialog ? chat.lastReadInboxMessageId : undefined,
     addOffset: -(Math.round(MESSAGE_LIST_SLICE / 2) + 1),
     limit: MESSAGE_LIST_SLICE,
+    isSavedDialog,
   });
 }
 

@@ -5,7 +5,7 @@ import type {
   ApiMessage, ApiPeer, ApiStory, ApiTopic, ApiUser,
 } from '../../../../api/types';
 import type { LangFn } from '../../../../hooks/useLang';
-import type { IAlbum } from '../../../../types';
+import type { IAlbum, ThreadId } from '../../../../types';
 import { MAIN_THREAD_ID } from '../../../../api/types';
 import { MediaViewerOrigin } from '../../../../types';
 
@@ -18,7 +18,7 @@ export default function useInnerHandlers(
   selectMessage: (e: React.MouseEvent<HTMLDivElement, MouseEvent>, groupedId?: string) => void,
   message: ApiMessage,
   chatId: string,
-  threadId: number,
+  threadId: ThreadId,
   isInDocumentGroup: boolean,
   asForwarded?: boolean,
   isScheduled?: boolean,
@@ -34,8 +34,8 @@ export default function useInnerHandlers(
 ) {
   const {
     openChat, showNotification, focusMessage, openMediaViewer, openAudioPlayer,
-    markMessagesRead, cancelSendingMessage, sendPollVote, openForwardMenu,
-    openChatLanguageModal, openStoryViewer, focusMessageInComments,
+    markMessagesRead, cancelUploadMedia, sendPollVote, openForwardMenu,
+    openChatLanguageModal, openThread, openStoryViewer,
   } = getActions();
 
   const {
@@ -43,7 +43,7 @@ export default function useInnerHandlers(
   } = message;
 
   const {
-    replyToMsgId, replyToPeerId, replyToTopId, isQuote,
+    replyToMsgId, replyToPeerId, replyToTopId, isQuote, quoteText,
   } = getMessageReplyInfo(message) || {};
 
   const handleAvatarClick = useLastCallback(() => {
@@ -90,6 +90,7 @@ export default function useInnerHandlers(
       messageId: replyToMsgId,
       replyMessageId: replyToPeerId ? undefined : messageId,
       noForumTopicPanel: !replyToPeerId, // Open topic panel for cross-chat replies
+      ...(isQuote && { quote: quoteText?.text }),
     });
   });
 
@@ -120,7 +121,7 @@ export default function useInnerHandlers(
   });
 
   const handleCancelUpload = useLastCallback(() => {
-    cancelSendingMessage({ chatId, messageId });
+    cancelUploadMedia({ chatId, messageId });
   });
 
   const handleVoteSend = useLastCallback((options: string[]) => {
@@ -155,7 +156,7 @@ export default function useInnerHandlers(
     }
 
     if (replyToPeerId && replyToTopId) {
-      focusMessageInComments({
+      focusMessage({
         chatId: replyToPeerId,
         threadId: replyToTopId,
         messageId: forwardInfo!.fromMessageId!,
@@ -180,8 +181,8 @@ export default function useInnerHandlers(
   });
 
   const handleOpenThread = useLastCallback(() => {
-    openChat({
-      id: message.chatId,
+    openThread({
+      chatId: message.chatId,
       threadId: message.id,
     });
   });

@@ -1,6 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { FC, TeactNode } from '../../lib/teact/teact';
-import React, { memo, useRef } from '../../lib/teact/teact';
+import React, { memo, useMemo, useRef } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type {
@@ -16,6 +16,7 @@ import {
   getChatTitle,
   getPeerStoryHtmlId,
   getUserFullName,
+  isAnonymousForwardsChat,
   isChatWithRepliesBot,
   isDeletedUser,
   isUserId,
@@ -33,6 +34,7 @@ import useMediaTransition from '../../hooks/useMediaTransition';
 
 import OptimizedVideo from '../ui/OptimizedVideo';
 import AvatarStoryCircle from './AvatarStoryCircle';
+import Icon from './Icon';
 
 import './Avatar.scss';
 
@@ -51,11 +53,14 @@ type OwnProps = {
   photo?: ApiPhoto;
   text?: string;
   isSavedMessages?: boolean;
+  isSavedDialog?: boolean;
   withVideo?: boolean;
   withStory?: boolean;
   forPremiumPromo?: boolean;
   withStoryGap?: boolean;
   withStorySolid?: boolean;
+  forceFriendStorySolid?: boolean;
+  forceUnreadStorySolid?: boolean;
   storyViewerOrigin?: StoryViewerOrigin;
   storyViewerMode?: 'full' | 'single-peer' | 'disabled';
   loopIndefinitely?: boolean;
@@ -71,11 +76,14 @@ const Avatar: FC<OwnProps> = ({
   photo,
   text,
   isSavedMessages,
+  isSavedDialog,
   withVideo,
   withStory,
   forPremiumPromo,
   withStoryGap,
   withStorySolid,
+  forceFriendStorySolid,
+  forceUnreadStorySolid,
   storyViewerOrigin,
   storyViewerMode = 'single-peer',
   loopIndefinitely,
@@ -92,6 +100,7 @@ const Avatar: FC<OwnProps> = ({
   const chat = peer && isPeerChat ? peer as ApiChat : undefined;
   const isDeleted = user && isDeletedUser(user);
   const isReplies = peer && isChatWithRepliesBot(peer.id);
+  const isAnonymousForwards = peer && isAnonymousForwardsChat(peer.id);
   const isForum = chat?.isForum;
   let imageHash: string | undefined;
   let videoHash: string | undefined;
@@ -109,6 +118,26 @@ const Avatar: FC<OwnProps> = ({
       }
     }
   }
+
+  const specialIcon = useMemo(() => {
+    if (isSavedMessages) {
+      return isSavedDialog ? 'my-notes' : 'avatar-saved-messages';
+    }
+
+    if (isDeleted) {
+      return 'avatar-deleted-account';
+    }
+
+    if (isReplies) {
+      return 'reply-filled';
+    }
+
+    if (isAnonymousForwards) {
+      return 'author-hidden';
+    }
+
+    return undefined;
+  }, [isAnonymousForwards, isDeleted, isSavedDialog, isReplies, isSavedMessages]);
 
   const imgBlobUrl = useMedia(imageHash, false, ApiMediaFormat.BlobUrl);
   const videoBlobUrl = useMedia(videoHash, !shouldLoadVideo, ApiMediaFormat.BlobUrl);
@@ -135,40 +164,13 @@ const Avatar: FC<OwnProps> = ({
   let content: TeactNode | undefined;
   const author = user ? getUserFullName(user) : (chat ? getChatTitle(lang, chat) : text);
 
-  if (isSavedMessages) {
+  if (specialIcon) {
     content = (
-      <i
-        className={buildClassName(
-          cn.icon,
-          'icon',
-          'icon-avatar-saved-messages',
-        )}
+      <Icon
+        name={specialIcon}
+        className={cn.icon}
         role="img"
-        aria-label={author}
-      />
-    );
-  } else if (isDeleted) {
-    content = (
-      <i
-        className={buildClassName(
-          cn.icon,
-          'icon',
-          'icon-avatar-deleted-account',
-        )}
-        role="img"
-        aria-label={author}
-      />
-    );
-  } else if (isReplies) {
-    content = (
-      <i
-        className={buildClassName(
-          cn.icon,
-          'icon',
-          'icon-reply-filled',
-        )}
-        role="img"
-        aria-label={author}
+        ariaLabel={author}
       />
     );
   } else if (hasBlobUrl) {
@@ -207,17 +209,22 @@ const Avatar: FC<OwnProps> = ({
     content = getFirstLetters(text, 2);
   }
 
+  const isRoundedRect = isForum && !((withStory || withStorySolid) && peer?.hasStories);
+
   const fullClassName = buildClassName(
     `Avatar size-${size}`,
     className,
     getPeerColorClass(peer),
+    !peer && text && 'hidden-user',
     isSavedMessages && 'saved-messages',
+    isAnonymousForwards && 'anonymous-forwards',
     isDeleted && 'deleted-account',
     isReplies && 'replies-bot-account',
-    isForum && 'forum',
+    isRoundedRect && 'forum',
     ((withStory && peer?.hasStories) || forPremiumPromo) && 'with-story-circle',
     withStorySolid && peer?.hasStories && 'with-story-solid',
-    withStorySolid && peer?.hasUnreadStories && 'has-unread-story',
+    withStorySolid && forceFriendStorySolid && 'close-friend',
+    withStorySolid && (peer?.hasUnreadStories || forceUnreadStorySolid) && 'has-unread-story',
     onClick && 'interactive',
     (!isSavedMessages && !imgBlobUrl) && 'no-photo',
   );

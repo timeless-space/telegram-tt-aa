@@ -1,5 +1,6 @@
 import { Api as GramJs } from '../../../lib/gramjs';
 
+import type { ApiPremiumSection } from '../../../global/types';
 import type {
   ApiBoostsStatus,
   ApiCheckedGiftCode,
@@ -90,6 +91,7 @@ export function buildApiPaymentForm(form: GramJs.payments.PaymentForm): ApiPayme
     savedInfo,
     invoice,
     savedCredentials,
+    url,
   } = form;
 
   const {
@@ -118,6 +120,7 @@ export function buildApiPaymentForm(form: GramJs.payments.PaymentForm): ApiPayme
   const nativeData = nativeParams ? JSON.parse(nativeParams.data) : {};
 
   return {
+    url,
     canSaveCredentials,
     isPasswordMissing,
     formId: String(formId),
@@ -179,7 +182,7 @@ export function buildApiPremiumPromo(promo: GramJs.help.PremiumPromo): ApiPremiu
   return {
     statusText,
     statusEntities: statusEntities.map(buildApiMessageEntity),
-    videoSections,
+    videoSections: videoSections as ApiPremiumSection[],
     videos: videos.map(buildApiDocument).filter(Boolean),
     options: periodOptions.map(buildApiPremiumSubscriptionOption),
   };
@@ -194,7 +197,7 @@ function buildApiPremiumSubscriptionOption(option: GramJs.PremiumSubscriptionOpt
     isCurrent: current,
     canPurchaseUpgrade,
     currency,
-    amount: amount.toString(),
+    amount: amount.toJSNumber(),
     botUrl,
     months,
   };
@@ -248,7 +251,7 @@ export function buildApiGiveawayInfo(info: GramJs.payments.TypeGiveawayInfo): Ap
       type: 'active',
       startDate,
       isParticipating: participating,
-      adminDisallowedChatId: adminDisallowedChatId?.toString(),
+      adminDisallowedChatId: adminDisallowedChatId && buildApiPeerId(adminDisallowedChatId, 'channel'),
       disallowedCountry,
       joinedTooEarlyDate,
       isPreparingResults: preparingResults,

@@ -27,13 +27,15 @@ import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { getPeerColorClass } from '../../common/helpers/peerColor';
 
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
+import useCurrentOrPrev from '../../../hooks/useCurrentOrPrev';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMenuPosition from '../../../hooks/useMenuPosition';
 import useShowTransition from '../../../hooks/useShowTransition';
 import useAsyncRendering from '../../right/hooks/useAsyncRendering';
 
-import EmbeddedMessage from '../../common/embedded/EmbeddedMessage';
+import { ClosableEmbeddedMessage } from '../../common/embedded/EmbeddedMessage';
+import Icon from '../../common/Icon';
 import Button from '../../ui/Button';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
@@ -53,6 +55,7 @@ type StateProps = {
   forwardsHaveCaptions?: boolean;
   isCurrentUserPremium?: boolean;
   isContextMenuDisabled?: boolean;
+  isReplyToDiscussion?: boolean;
 };
 
 type OwnProps = {
@@ -75,6 +78,7 @@ const ComposerEmbeddedMessage: FC<OwnProps & StateProps> = ({
   shouldForceShowEditing,
   isCurrentUserPremium,
   isContextMenuDisabled,
+  isReplyToDiscussion,
   onClear,
 }) => {
   const {
@@ -98,14 +102,14 @@ const ComposerEmbeddedMessage: FC<OwnProps & StateProps> = ({
     || (sender && forwardedMessagesCount),
   );
   const canAnimate = useAsyncRendering(
-    [isShown],
-    isShown ? FORWARD_RENDERING_DELAY : undefined,
+    [isShown, isForwarding],
+    isShown && isForwarding ? FORWARD_RENDERING_DELAY : undefined,
   );
 
   const {
     shouldRender, transitionClassNames,
   } = useShowTransition(
-    canAnimate && isShown && !isReplyToTopicStart,
+    canAnimate && isShown && !isReplyToTopicStart && !isReplyToDiscussion,
     undefined,
     !shouldAnimate,
     undefined,
@@ -162,24 +166,27 @@ const ComposerEmbeddedMessage: FC<OwnProps & StateProps> = ({
   }, [handleContextMenuClose, shouldRender]);
 
   const className = buildClassName('ComposerEmbeddedMessage', transitionClassNames);
+  const renderingSender = useCurrentOrPrev(sender, true);
   const innerClassName = buildClassName(
     'ComposerEmbeddedMessage_inner',
-    getPeerColorClass(sender),
+    getPeerColorClass(renderingSender),
   );
 
+  const isShowingReply = replyInfo && !shouldForceShowEditing;
+
   const leftIcon = useMemo(() => {
-    if (replyInfo && !shouldForceShowEditing) {
-      return 'icon-reply';
+    if (isShowingReply) {
+      return 'reply';
     }
     if (editingId) {
-      return 'icon-edit';
+      return 'edit';
     }
     if (isForwarding) {
-      return 'icon-forward';
+      return 'forward';
     }
 
     return undefined;
-  }, [editingId, isForwarding, replyInfo, shouldForceShowEditing]);
+  }, [editingId, isForwarding, isShowingReply]);
 
   const customText = forwardedMessagesCount && forwardedMessagesCount > 1
     ? lang('ForwardedMessageCount', forwardedMessagesCount)
@@ -198,6 +205,8 @@ const ComposerEmbeddedMessage: FC<OwnProps & StateProps> = ({
     };
   }, [isCurrentUserPremium, isForwarding, message, noAuthors]);
 
+  const renderingLeftIcon = useCurrentOrPrev(leftIcon, true);
+
   if (!shouldRender) {
     return undefined;
   }
@@ -206,15 +215,21 @@ const ComposerEmbeddedMessage: FC<OwnProps & StateProps> = ({
     <div className={className} ref={ref} onContextMenu={handleContextMenu} onClick={handleContextMenu}>
       <div className={innerClassName}>
         <div className="embedded-left-icon">
-          <i className={buildClassName('icon', leftIcon)} />
+          {renderingLeftIcon && <Icon name={renderingLeftIcon} />}
+          {Boolean(replyInfo?.quoteText) && (
+            <Icon name="quote" className="quote-reply" />
+          )}
         </div>
-        <EmbeddedMessage
+        <ClosableEmbeddedMessage
+          isOpen={isShown}
           className="inside-input"
           replyInfo={replyInfo}
+          isInComposer
           message={strippedMessage}
           sender={!noAuthors ? sender : undefined}
           customText={customText}
-          title={editingId ? lang('EditMessage') : noAuthors ? lang('HiddenSendersNameDescription') : undefined}
+          title={(editingId && !isShowingReply) ? lang('EditMessage')
+            : noAuthors ? lang('HiddenSendersNameDescription') : undefined}
           onClick={handleMessageClick}
         />
         <Button
@@ -317,6 +332,7 @@ export default memo(withGlobal<OwnProps>(
 
     const draft = selectDraft(global, chatId, threadId);
     const replyInfo = draft?.replyInfo;
+
     let message: ApiMessage | undefined;
     if (replyInfo && !shouldForceShowEditing) {
       message = selectChatMessage(global, replyInfo.replyToPeerId || chatId, replyInfo.replyToMsgId);
@@ -334,7 +350,7 @@ export default memo(withGlobal<OwnProps>(
         sender = selectForwardedSender(global, message);
       }
 
-      if (!sender && !forwardInfo?.hiddenUserName) {
+      if (!sender && (!forwardInfo?.hiddenUserName || Boolean(replyInfo.quoteText))) {
         sender = selectSender(global, message);
       }
     } else if (isForwarding) {
@@ -347,8 +363,8 @@ export default memo(withGlobal<OwnProps>(
       if (!sender) {
         sender = selectPeer(global, fromChatId!);
       }
-    } else if (editingId) {
-      sender = selectSender(global, message!);
+    } else if (editingId && message) {
+      sender = selectSender(global, message);
     }
 
     const forwardsHaveCaptions = forwardedMessages?.some((forward) => (
@@ -357,6 +373,8 @@ export default memo(withGlobal<OwnProps>(
 
     const isContextMenuDisabled = isForwarding && forwardMessageIds!.length === 1
       && Boolean(message?.content.storyData);
+
+    const isReplyToDiscussion = replyInfo?.replyToMsgId === threadId && !replyInfo.replyToPeerId;
 
     return {
       replyInfo,
@@ -370,6 +388,7 @@ export default memo(withGlobal<OwnProps>(
       forwardsHaveCaptions,
       isCurrentUserPremium: selectIsCurrentUserPremium(global),
       isContextMenuDisabled,
+      isReplyToDiscussion,
     };
   },
 )(ComposerEmbeddedMessage));

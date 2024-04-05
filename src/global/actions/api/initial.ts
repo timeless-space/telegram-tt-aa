@@ -1,8 +1,8 @@
 import type { ActionReturnType } from '../../types';
+import { ManagementProgress } from '../../../types';
 
 import {
   CUSTOM_BG_CACHE_NAME,
-  IS_TEST,
   LANG_CACHE_NAME,
   LOCK_SCREEN_ANIMATION_DURATION_MS,
   MEDIA_CACHE_NAME,
@@ -15,11 +15,9 @@ import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { buildCollectionByKey } from '../../../util/iteratees';
 import { unsubscribe } from '../../../util/notifications';
 import { clearEncryptedSession, encryptSession, forgetPasscode } from '../../../util/passcode';
-import { parseInitialLocationHash, resetInitialLocationHash } from '../../../util/routing';
+import { parseInitialLocationHash, resetInitialLocationHash, resetLocationHash } from '../../../util/routing';
 import {
-  clearLegacySessions,
   clearStoredSession,
-  importLegacySession,
   loadStoredSession,
   storeSession,
 } from '../../../util/sessions';
@@ -34,14 +32,11 @@ import { serializeGlobal } from '../../cache';
 import {
   addActionHandler, getGlobal, setGlobal,
 } from '../../index';
-import { addUsers, clearGlobalForLockScreen, updatePasscodeSettings } from '../../reducers';
+import {
+  addUsers, clearGlobalForLockScreen, updateManagementProgress, updatePasscodeSettings,
+} from '../../reducers';
 
-addActionHandler('initApi', async (global, actions): Promise<void> => {
-  if (!IS_TEST) {
-    await importLegacySession();
-    void clearLegacySessions();
-  }
-
+addActionHandler('initApi', (global, actions): ActionReturnType => {
   const initialLocationHash = parseInitialLocationHash();
 
   void initApi(actions.apiUpdate, {
@@ -57,6 +52,7 @@ addActionHandler('initApi', async (global, actions): Promise<void> => {
     shouldAllowHttpTransport: global.settings.byKey.shouldAllowHttpTransport,
     shouldForceHttpTransport: global.settings.byKey.shouldForceHttpTransport,
     shouldDebugExportedSenders: global.settings.byKey.shouldDebugExportedSenders,
+    langCode: global.settings.byKey.language,
   });
 
   void setShouldEnableDebugLog(Boolean(global.settings.byKey.shouldCollectDebugLogs));
@@ -100,14 +96,19 @@ addActionHandler('setAuthPassword', (global, actions, payload): ActionReturnType
 
 addActionHandler('uploadProfilePhoto', async (global, actions, payload): Promise<void> => {
   const {
-    file, isFallback, isVideo, videoTs,
+    file, isFallback, isVideo, videoTs, bot,
+    tabId = getCurrentTabId(),
   } = payload!;
 
-  const result = await callApi('uploadProfilePhoto', file, isFallback, isVideo, videoTs);
+  global = updateManagementProgress(global, ManagementProgress.InProgress, tabId);
+  setGlobal(global);
+
+  const result = await callApi('uploadProfilePhoto', file, isFallback, isVideo, videoTs, bot);
   if (!result) return;
 
   global = getGlobal();
   global = addUsers(global, buildCollectionByKey(result.users, 'id'));
+  global = updateManagementProgress(global, ManagementProgress.Complete, tabId);
   setGlobal(global);
 
   actions.loadFullUser({ userId: global.currentUserId! });
@@ -163,7 +164,8 @@ addActionHandler('signOut', async (global, actions, payload): Promise<void> => {
 
   try {
     resetInitialLocationHash();
-    await sessionStorage.clear();
+    sessionStorage.clear();
+    resetLocationHash();
     await unsubscribe();
     await callApi('destroy');
     await forceWebsync(false);
@@ -198,8 +200,6 @@ addActionHandler('reset', (global, actions): ActionReturnType => {
   for (let i = 0; i < langCacheVersion; i++) {
     void cacheApi.clear(`${langCachePrefix}${i === 0 ? '' : i}`);
   }
-
-  void clearLegacySessions();
 
   updateAppBadge(0);
 

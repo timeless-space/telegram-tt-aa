@@ -2,7 +2,7 @@
 import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
-import type { ApiLimitType } from '../../../global/types';
+import type { ApiLimitType, ApiPremiumSection } from '../../../global/types';
 import type { ApiAppConfig } from '../../types';
 
 import {
@@ -15,9 +15,22 @@ import localDb from '../localDb';
 import { buildJson } from './misc';
 
 type LimitType = 'default' | 'premium';
-type Limit = 'upload_max_fileparts' | 'stickers_faved_limit' | 'saved_gifs_limit' | 'dialog_filters_chats_limit' |
-'dialog_filters_limit' | 'dialogs_folder_pinned_limit' | 'dialogs_pinned_limit' | 'caption_length_limit' |
-'channels_limit' | 'channels_public_limit' | 'about_length_limit' | 'chatlist_invites_limit' | 'chatlist_joined_limit';
+type Limit =
+  | 'upload_max_fileparts'
+  | 'stickers_faved_limit'
+  | 'saved_gifs_limit'
+  | 'dialog_filters_chats_limit'
+  | 'dialog_filters_limit'
+  | 'dialogs_folder_pinned_limit'
+  | 'dialogs_pinned_limit'
+  | 'caption_length_limit'
+  | 'channels_limit'
+  | 'channels_public_limit'
+  | 'about_length_limit'
+  | 'chatlist_invites_limit'
+  | 'chatlist_joined_limit'
+  | 'recommended_channels_limit'
+  | 'saved_dialogs_pinned_limit';
 type LimitKey = `${Limit}_${LimitType}`;
 type LimitsConfig = Record<LimitKey, number>;
 
@@ -32,6 +45,7 @@ export interface GramJsAppConfig extends LimitsConfig {
   reactions_uniq_max: number;
   chat_read_mark_size_threshold: number;
   chat_read_mark_expire_period: number;
+  pm_read_date_expire_period: number;
   reactions_user_max_default: number;
   reactions_user_max_premium: number;
   autologin_domains: string[];
@@ -52,8 +66,8 @@ export interface GramJsAppConfig extends LimitsConfig {
   story_expire_period: number;
   story_viewers_expire_period: number;
   stories_changelog_user_id?: number;
-  peer_colors: Record<string, string[]>;
-  dark_peer_colors: Record<string, string[]>;
+  // Boosts
+  group_transcribe_level_min?: number;
 }
 
 function buildEmojiSounds(appConfig: GramJsAppConfig) {
@@ -87,12 +101,13 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     emojiSounds: buildEmojiSounds(appConfig),
     seenByMaxChatMembers: appConfig.chat_read_mark_size_threshold,
     seenByExpiresAt: appConfig.chat_read_mark_expire_period,
+    readDateExpiresAt: appConfig.pm_read_date_expire_period,
     autologinDomains: appConfig.autologin_domains || [],
     urlAuthDomains: appConfig.url_auth_domains || [],
     maxUniqueReactions: appConfig.reactions_uniq_max,
     premiumBotUsername: appConfig.premium_bot_username,
     premiumInvoiceSlug: appConfig.premium_invoice_slug,
-    premiumPromoOrder: appConfig.premium_promo_order,
+    premiumPromoOrder: appConfig.premium_promo_order as ApiPremiumSection[],
     isPremiumPurchaseBlocked: appConfig.premium_purchase_blocked,
     defaultEmojiStatusesStickerSetId: appConfig.default_emoji_statuses_stickerset_id,
     topicsPinnedLimit: appConfig.topics_pinned_limit,
@@ -113,13 +128,14 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
       aboutLength: getLimit(appConfig, 'about_length_limit', 'aboutLength'),
       chatlistInvites: getLimit(appConfig, 'chatlist_invites_limit', 'chatlistInvites'),
       chatlistJoined: getLimit(appConfig, 'chatlist_joined_limit', 'chatlistJoined'),
+      recommendedChannels: getLimit(appConfig, 'recommended_channels_limit', 'recommendedChannels'),
+      savedDialogsPinned: getLimit(appConfig, 'saved_dialogs_pinned_limit', 'savedDialogsPinned'),
     },
     hash,
     areStoriesHidden: appConfig.stories_all_hidden,
     storyExpirePeriod: appConfig.story_expire_period ?? STORY_EXPIRE_PERIOD,
     storyViewersExpirePeriod: appConfig.story_viewers_expire_period ?? STORY_VIEWERS_EXPIRE_PERIOD,
     storyChangelogUserId: appConfig.stories_changelog_user_id?.toString() ?? SERVICE_NOTIFICATIONS_USER_ID,
-    peerColors: appConfig.peer_colors,
-    darkPeerColors: appConfig.dark_peer_colors,
+    groupTranscribeLevelMin: appConfig.group_transcribe_level_min,
   };
 }

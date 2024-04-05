@@ -12,9 +12,7 @@
     padding: 0 0.5rem 0.5rem;
   }
 
-  @supports (margin-bottom: env(safe-area-inset-bottom)) {
-    margin-bottom: env(safe-area-inset-bottom);
-  }
+  margin-bottom: env(safe-area-inset-bottom);
 }
 
 .viewInfo {
@@ -53,10 +51,17 @@
   font-size: 1.25rem;
 }
 
-.channelReaction {
+.footerItem {
   display: flex;
   align-items: center;
-  padding-inline-end: 0.5rem;
+
+  &:last-child {
+    padding-inline-end: 0.5rem;
+  }
+
+  & + & {
+    margin-inline-end: 0.5rem;
+  }
 }
 
 .views {

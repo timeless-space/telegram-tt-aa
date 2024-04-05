@@ -1,12 +1,14 @@
 import type { FC } from '../../lib/teact/teact';
-import React, { memo } from '../../lib/teact/teact';
+import React, { memo, useMemo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type { ApiChat, ApiPeer, ApiUser } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 
 import { EMOJI_STATUS_LOOP_LIMIT } from '../../config';
-import { getChatTitle, getUserFullName, isUserId } from '../../global/helpers';
+import {
+  getChatTitle, getUserFullName, isAnonymousForwardsChat, isChatWithRepliesBot, isUserId,
+} from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { copyTextToClipboard } from '../../util/clipboard';
 import stopEvent from '../../util/stopEvent';
@@ -30,6 +32,7 @@ type OwnProps = {
   withEmojiStatus?: boolean;
   emojiStatusSize?: number;
   isSavedMessages?: boolean;
+  isSavedDialog?: boolean;
   noLoopLimit?: boolean;
   canCopyTitle?: boolean;
   onEmojiStatusClick?: NoneToVoidFunction;
@@ -44,6 +47,7 @@ const FullNameTitle: FC<OwnProps> = ({
   withEmojiStatus,
   emojiStatusSize,
   isSavedMessages,
+  isSavedDialog,
   noLoopLimit,
   canCopyTitle,
   onEmojiStatusClick,
@@ -53,7 +57,6 @@ const FullNameTitle: FC<OwnProps> = ({
   const { showNotification } = getActions();
   const isUser = isUserId(peer.id);
   const title = isUser ? getUserFullName(peer as ApiUser) : getChatTitle(lang, peer as ApiChat);
-  const emojiStatus = isUser && (peer as ApiUser).emojiStatus;
   const isPremium = isUser && (peer as ApiUser).isPremium;
 
   const handleTitleClick = useLastCallback((e) => {
@@ -66,10 +69,26 @@ const FullNameTitle: FC<OwnProps> = ({
     showNotification({ message: `${isUser ? 'User' : 'Chat'} name was copied` });
   });
 
-  if (isSavedMessages) {
+  const specialTitle = useMemo(() => {
+    if (isSavedMessages) {
+      return lang(isSavedDialog ? 'MyNotes' : 'SavedMessages');
+    }
+
+    if (isAnonymousForwardsChat(peer.id)) {
+      return lang('AnonymousForward');
+    }
+
+    if (isChatWithRepliesBot(peer.id)) {
+      return lang('RepliesTitle');
+    }
+
+    return undefined;
+  }, [isSavedDialog, isSavedMessages, lang, peer.id]);
+
+  if (specialTitle) {
     return (
       <div className={buildClassName('title', styles.root, className)}>
-        <h3>{lang('SavedMessages')}</h3>
+        <h3>{specialTitle}</h3>
       </div>
     );
   }
@@ -86,16 +105,16 @@ const FullNameTitle: FC<OwnProps> = ({
       </h3>
       {!noVerified && peer.isVerified && <VerifiedIcon />}
       {!noFake && peer.fakeType && <FakeIcon fakeType={peer.fakeType} />}
-      {withEmojiStatus && emojiStatus && (
+      {withEmojiStatus && peer.emojiStatus && (
         <CustomEmoji
-          documentId={emojiStatus.documentId}
+          documentId={peer.emojiStatus.documentId}
           size={emojiStatusSize}
           loopLimit={!noLoopLimit ? EMOJI_STATUS_LOOP_LIMIT : undefined}
           observeIntersectionForLoading={observeIntersection}
           onClick={onEmojiStatusClick}
         />
       )}
-      {withEmojiStatus && !emojiStatus && isPremium && <PremiumIcon />}
+      {withEmojiStatus && !peer.emojiStatus && isPremium && <PremiumIcon />}
     </div>
   );
 };

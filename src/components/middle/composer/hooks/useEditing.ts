@@ -3,6 +3,7 @@ import { getActions } from '../../../../global';
 
 import type { ApiFormattedText, ApiMessage } from '../../../../api/types';
 import type { ApiDraft, MessageListType } from '../../../../global/types';
+import type { ThreadId } from '../../../../types';
 import type { Signal } from '../../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../../api/types';
 
@@ -10,15 +11,15 @@ import { EDITABLE_INPUT_CSS_SELECTOR } from '../../../../config';
 import { requestMeasure, requestNextMutation } from '../../../../lib/fasterdom/fasterdom';
 import { hasMessageMedia } from '../../../../global/helpers';
 import focusEditableElement from '../../../../util/focusEditableElement';
-import parseMessageInput from '../../../../util/parseMessageInput';
+import parseHtmlAsFormattedText from '../../../../util/parseHtmlAsFormattedText';
 import { getTextWithEntitiesAsHtml } from '../../../common/helpers/renderTextWithEntities';
 
 import { useDebouncedResolver } from '../../../../hooks/useAsyncResolvers';
-import useBackgroundMode from '../../../../hooks/useBackgroundMode';
-import useBeforeUnload from '../../../../hooks/useBeforeUnload';
 import useDerivedSignal from '../../../../hooks/useDerivedSignal';
 import useEffectWithPrevDeps from '../../../../hooks/useEffectWithPrevDeps';
 import useLastCallback from '../../../../hooks/useLastCallback';
+import useBackgroundMode from '../../../../hooks/window/useBackgroundMode';
+import useBeforeUnload from '../../../../hooks/window/useBeforeUnload';
 
 const URL_ENTITIES = new Set<string>([ApiMessageEntityTypes.TextUrl, ApiMessageEntityTypes.Url]);
 const DEBOUNCE_MS = 300;
@@ -30,7 +31,7 @@ const useEditing = (
   resetComposer: (shouldPreserveInput?: boolean) => void,
   openDeleteModal: () => void,
   chatId: string,
-  threadId: number,
+  threadId: ThreadId,
   type: MessageListType,
   draft?: ApiDraft,
   editingDraft?: ApiFormattedText,
@@ -87,7 +88,7 @@ const useEditing = (
   useEffect(() => {
     if (!editedMessage) return undefined;
     return () => {
-      const edited = parseMessageInput(getHtml());
+      const edited = parseHtmlAsFormattedText(getHtml());
       const update = edited.text.length ? edited : undefined;
 
       setEditingDraft({
@@ -99,7 +100,7 @@ const useEditing = (
   const detectLinkDebounced = useDebouncedResolver(() => {
     if (!editedMessage) return false;
 
-    const edited = parseMessageInput(getHtml());
+    const edited = parseHtmlAsFormattedText(getHtml());
     return !('webPage' in editedMessage.content)
       && editedMessage.content.text?.entities?.some((entity) => URL_ENTITIES.has(entity.type))
       && !(edited.entities?.some((entity) => URL_ENTITIES.has(entity.type)));
@@ -144,7 +145,7 @@ const useEditing = (
   });
 
   const handleEditComplete = useLastCallback(() => {
-    const { text, entities } = parseMessageInput(getHtml());
+    const { text, entities } = parseHtmlAsFormattedText(getHtml());
 
     if (!editedMessage) {
       return;
@@ -167,7 +168,7 @@ const useEditing = (
 
   const handleBlur = useLastCallback(() => {
     if (!editedMessage) return;
-    const edited = parseMessageInput(getHtml());
+    const edited = parseHtmlAsFormattedText(getHtml());
     const update = edited.text.length ? edited : undefined;
 
     setEditingDraft({

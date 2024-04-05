@@ -6,6 +6,7 @@ import { IS_MOCKED_CLIENT } from '../config';
 import { isCacheApiSupported } from '../util/cacheApi';
 import { getCurrentTabId, reestablishMasterToSelf } from '../util/establishMultitabRole';
 import { cloneDeep } from '../util/iteratees';
+import { isLocalMessageId } from '../util/messageKey';
 import { Bundles, loadBundle } from '../util/moduleLoader';
 import { parseLocationHash } from '../util/routing';
 import { clearStoredSession } from '../util/sessions';
@@ -13,7 +14,6 @@ import { updatePeerColors } from '../util/theme';
 import { IS_MULTITAB_SUPPORTED } from '../util/windowEnvironment';
 import { updateTabState } from './reducers/tabs';
 import { initCache, loadCache } from './cache';
-import { isLocalMessageId } from './helpers';
 import {
   addActionHandler, getGlobal, setGlobal,
 } from './index';
@@ -42,10 +42,6 @@ addActionHandler('initShared', (prevGlobal, actions, payload): ActionReturnType 
 
   if (force) {
     global.byTabId = prevGlobal.byTabId;
-  }
-
-  if (global.appConfig?.peerColors) {
-    updatePeerColors(global.appConfig.peerColors, global.appConfig.darkPeerColors);
   }
 
   return global;
@@ -121,7 +117,7 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     };
   });
 
-  const parsedMessageList = parseLocationHash();
+  const parsedMessageList = parseLocationHash(global.currentUserId);
 
   if (global.authState !== 'authorizationStateReady'
     && !global.passcode.hasPasscode && !global.passcode.isScreenLocked) {
@@ -142,6 +138,10 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     global.isCacheApiSupported = isSupported;
     setGlobal(global);
   });
+
+  if (global.peerColors) {
+    updatePeerColors(global.peerColors.general);
+  }
 
   return updateTabState(global, {
     messageLists: parsedMessageList ? [parsedMessageList] : initialTabState.messageLists,

@@ -3,10 +3,7 @@
   flex-direction: column;
   padding-bottom: 0 !important;
 
-  height: 35rem;
-  @supports (height: min(80vh, 35rem)) {
-    height: min(80vh, 35rem);
-  }
+  height: min(35rem, 80vh);
 }
 
 .views-list-loading {
@@ -96,6 +93,7 @@
 
 .footer {
   border-top: 0.0625rem solid var(--color-borders);
+  padding-block: 0.25rem;
 }
 
 .closeButton {
@@ -116,6 +114,10 @@
 
 .menuBubble {
   max-width: min(25rem, 80vw);
+}
+
+.with-colored-status :global(.status-icon) {
+  color: var(--color-text-green);
 }
 
 @keyframes fadeIn {

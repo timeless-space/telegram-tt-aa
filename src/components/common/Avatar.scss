@@ -214,6 +214,21 @@
       }
     }
 
+    &.size-small-mobile {
+      width: 2.25rem;
+      height: 2.25rem;
+
+      &::before {
+        width: 2.75rem;
+        height: 2.75rem;
+      }
+
+      &::after {
+        width: 2.5rem;
+        height: 2.5rem;
+      }
+    }
+
     &.online::after {
       bottom: -0.125rem;
       right: -0.125rem;
@@ -222,6 +237,10 @@
 
   &.has-unread-story::before {
     background-image: linear-gradient(215.87deg, var(--color-avatar-story-unread-from) -1.61%, var(--color-avatar-story-unread-to) 97.44%);
+  }
+
+  &.has-unread-story.close-friend::before {
+    background-image: linear-gradient(215.87deg, var(--color-avatar-story-friend-unread-from) -1.61%, var(--color-avatar-story-friend-unread-to) 97.44%);
   }
 
   .poster {
@@ -233,5 +252,9 @@
 
   &.forum {
     --radius: var(--border-radius-forum-avatar);
+  }
+
+  &.hidden-user {
+    --color-user: var(--color-deleted-account);
   }
 }

@@ -1,4 +1,4 @@
-import type { ApiLimitType, CallbackAction } from '../../global/types';
+import type { ApiLimitType, ApiPremiumSection, CallbackAction } from '../../global/types';
 import type { ApiDocument, ApiPhoto, ApiReaction } from './messages';
 import type { ApiUser } from './users';
 
@@ -15,6 +15,7 @@ export interface ApiInitialArgs {
   shouldAllowHttpTransport?: boolean;
   shouldForceHttpTransport?: boolean;
   shouldDebugExportedSenders?: boolean;
+  langCode: string;
 }
 
 export interface ApiOnProgress {
@@ -52,6 +53,7 @@ export interface ApiAttachment {
   shouldSendAsSpoiler?: true;
 
   uniqueId?: string;
+  ttlSeconds?: number;
 }
 
 export interface ApiWallpaper {
@@ -177,12 +179,13 @@ export interface ApiAppConfig {
   emojiSounds: Record<string, string>;
   seenByMaxChatMembers: number;
   seenByExpiresAt: number;
+  readDateExpiresAt: number;
   autologinDomains: string[];
   urlAuthDomains: string[];
   premiumInvoiceSlug: string;
   premiumBotUsername: string;
   isPremiumPurchaseBlocked: boolean;
-  premiumPromoOrder: string[];
+  premiumPromoOrder: ApiPremiumSection[];
   defaultEmojiStatusesStickerSetId: string;
   maxUniqueReactions: number;
   topicsPinnedLimit: number;
@@ -195,8 +198,7 @@ export interface ApiAppConfig {
   storyExpirePeriod: number;
   storyViewersExpirePeriod: number;
   storyChangelogUserId: string;
-  peerColors: Record<string, string[]>;
-  darkPeerColors: Record<string, string[]>;
+  groupTranscribeLevelMin?: number;
 }
 
 export interface ApiConfig {
@@ -205,6 +207,19 @@ export interface ApiConfig {
   gifSearchUsername?: string;
   maxGroupSize: number;
   autologinToken?: string;
+}
+
+export type ApiPeerColorSet = string[];
+
+export interface ApiPeerColors {
+  general: {
+    [key: number]: {
+      isHidden?: true;
+      colors?: ApiPeerColorSet;
+      darkColors?: ApiPeerColorSet;
+    };
+  };
+  generalHash?: number;
 }
 
 export interface GramJsEmojiInteraction {

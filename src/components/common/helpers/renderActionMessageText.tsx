@@ -9,8 +9,10 @@ import type { TextPart } from '../../../types';
 
 import {
   getChatTitle,
+  getExpiredMessageDescription,
   getMessageSummaryText,
   getUserFullName,
+  isExpiredMessage,
 } from '../../../global/helpers';
 import { formatCurrency } from '../../../util/formatCurrency';
 import trimText from '../../../util/trimText';
@@ -45,12 +47,16 @@ export function renderActionMessageText(
   observeIntersectionForLoading?: ObserveFn,
   observeIntersectionForPlaying?: ObserveFn,
 ) {
+  if (isExpiredMessage(message)) {
+    return getExpiredMessageDescription(lang, message);
+  }
+
   if (!message.content.action) {
     return [];
   }
 
   const {
-    text, translationValues, amount, currency, call, score, topicEmojiIconId, giftCryptoInfo,
+    text, translationValues, amount, currency, call, score, topicEmojiIconId, giftCryptoInfo, pluralValue,
   } = message.content.action;
   const content: TextPart[] = [];
   const noLinks = options.asPlainText || options.isEmbedded;
@@ -58,7 +64,9 @@ export function renderActionMessageText(
     ? 'Message.PinnedGenericMessage'
     : text;
 
-  let unprocessed = lang(translationKey, translationValues?.length ? translationValues : undefined);
+  let unprocessed = lang(
+    translationKey, translationValues?.length ? translationValues : undefined, undefined, pluralValue,
+  );
   if (translationKey.includes('ScoredInGame')) { // Translation hack for games
     unprocessed = unprocessed.replace('un1', '%action_origin%').replace('un2', '%message%');
   }
@@ -137,6 +145,16 @@ export function renderActionMessageText(
       unprocessed,
       '%gift_payment_amount%',
       priceText,
+    );
+    unprocessed = processed.pop() as string;
+    content.push(...processed);
+  }
+
+  if (unprocessed.includes('%amount%')) {
+    processed = processPlaceholder(
+      unprocessed,
+      '%amount%',
+      amount,
     );
     unprocessed = processed.pop() as string;
     content.push(...processed);

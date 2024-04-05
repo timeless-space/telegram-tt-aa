@@ -1,4 +1,3 @@
-import type { ApiStoryView } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
 
 import { copyTextToClipboard } from '../../../util/clipboard';
@@ -15,6 +14,7 @@ import {
   selectPeerFirstStoryId,
   selectPeerFirstUnreadStoryId,
   selectPeerStories,
+  selectStoryListForViewer,
   selectTabState,
 } from '../../selectors';
 import { fetchChatByUsername } from '../api/chats';
@@ -44,6 +44,9 @@ addActionHandler('openStoryViewer', async (global, actions, payload): Promise<vo
     global = addStoriesForPeer(global, peerId, result.stories);
   }
 
+  const storyList = tabState.storyViewer.storyList
+    || selectStoryListForViewer(global, peerId, storyId, isSingleStory, isSinglePeer, isPrivate, isArchive);
+
   global = updateTabState(global, {
     storyViewer: {
       ...tabState.storyViewer,
@@ -55,6 +58,7 @@ addActionHandler('openStoryViewer', async (global, actions, payload): Promise<vo
       isSingleStory,
       viewModal: undefined,
       origin,
+      storyList,
     },
   }, tabId);
   setGlobal(global);
@@ -95,6 +99,7 @@ addActionHandler('closeStoryViewer', (global, actions, payload): ActionReturnTyp
       isRibbonShown,
       isArchivedRibbonShown,
       lastViewedByPeerIds: undefined,
+      storyList: undefined,
     },
   }, tabId);
 
@@ -135,15 +140,14 @@ addActionHandler('openPreviousStory', (global, actions, payload): ActionReturnTy
   const { tabId = getCurrentTabId() } = payload || {};
   const tabState = selectTabState(global, tabId);
   const {
-    peerId, storyId, isSinglePeer, isSingleStory, isPrivate, isArchive,
+    peerId, storyId, isSinglePeer, isSingleStory, storyList,
   } = tabState.storyViewer;
 
-  if (isSingleStory) {
+  if (isSingleStory || !storyList) {
     actions.closeStoryViewer({ tabId });
     return undefined;
   }
 
-  const { orderedPeerIds: { active, archived } } = global.stories;
   if (!peerId || !storyId) {
     return undefined;
   }
@@ -154,9 +158,8 @@ addActionHandler('openPreviousStory', (global, actions, payload): ActionReturnTy
     return undefined;
   }
 
-  const orderedPeerIds = (peer.areStoriesHidden ? archived : active) ?? [];
-  const storySourceProp = isArchive ? 'archiveIds' : isPrivate ? 'pinnedIds' : 'orderedIds';
-  const peerStoryIds = peerStories[storySourceProp] ?? [];
+  const { peerIds: orderedPeerIds, storyIdsByPeerId } = storyList;
+  const peerStoryIds = storyIdsByPeerId[peerId] ?? [];
   const currentStoryIndex = peerStoryIds.indexOf(storyId);
   let previousStoryIndex: number;
   let previousPeerId: string;
@@ -171,10 +174,10 @@ addActionHandler('openPreviousStory', (global, actions, payload): ActionReturnTy
     }
 
     previousPeerId = orderedPeerIds[previousPeerIdIndex];
-    previousStoryIndex = (selectPeerStories(global, previousPeerId)?.orderedIds.length || 1) - 1;
+    previousStoryIndex = (storyIdsByPeerId?.[previousPeerId]?.length || 1) - 1;
   }
 
-  const previousStoryId = selectPeerStories(global, previousPeerId)?.[storySourceProp]?.[previousStoryIndex];
+  const previousStoryId = storyIdsByPeerId?.[previousPeerId]?.[previousStoryIndex];
   if (!previousStoryId) {
     return undefined;
   }
@@ -192,14 +195,13 @@ addActionHandler('openNextStory', (global, actions, payload): ActionReturnType =
   const { tabId = getCurrentTabId() } = payload || {};
   const tabState = selectTabState(global, tabId);
   const {
-    peerId, storyId, isSinglePeer, isSingleStory, isPrivate, isArchive,
+    peerId, storyId, isSinglePeer, isSingleStory, storyList,
   } = tabState.storyViewer;
-  if (isSingleStory) {
+  if (isSingleStory || !storyList) {
     actions.closeStoryViewer({ tabId });
     return undefined;
   }
 
-  const { orderedPeerIds: { active, archived } } = global.stories;
   if (!peerId || !storyId) {
     return undefined;
   }
@@ -210,9 +212,8 @@ addActionHandler('openNextStory', (global, actions, payload): ActionReturnType =
     return undefined;
   }
 
-  const orderedPeerIds = (peer.areStoriesHidden ? archived : active) ?? [];
-  const storySourceProp = isArchive ? 'archiveIds' : isPrivate ? 'pinnedIds' : 'orderedIds';
-  const peerStoryIds = peerStories[storySourceProp] ?? [];
+  const { peerIds: orderedPeerIds, storyIdsByPeerId } = storyList;
+  const peerStoryIds = storyIdsByPeerId[peerId] ?? [];
   const currentStoryIndex = peerStoryIds.indexOf(storyId);
   let nextStoryIndex: number;
   let nextPeerId: string;
@@ -231,7 +232,7 @@ addActionHandler('openNextStory', (global, actions, payload): ActionReturnType =
     nextStoryIndex = 0;
   }
 
-  const nextStoryId = selectPeerStories(global, nextPeerId)?.[storySourceProp]?.[nextStoryIndex];
+  const nextStoryId = storyIdsByPeerId?.[nextPeerId]?.[nextStoryIndex];
   if (!nextStoryId) {
     return undefined;
   }
@@ -374,7 +375,7 @@ addActionHandler('clearStoryViews', (global, actions, payload): ActionReturnType
       ...tabState.storyViewer,
       viewModal: {
         ...tabState.storyViewer.viewModal,
-        viewsById: {},
+        views: undefined,
         isLoading,
         nextOffset: '',
       },
@@ -389,24 +390,26 @@ addActionHandler('updateStoryView', (global, actions, payload): ActionReturnType
 
   const tabState = selectTabState(global, tabId);
   const { viewModal } = tabState.storyViewer;
+  if (!viewModal?.storyId) return undefined;
 
-  if (!viewModal?.viewsById?.[userId]) return global;
+  const updatedViews = viewModal?.views?.map((view) => {
+    if (view.peerId === userId) {
+      return {
+        ...view,
+        isUserBlocked: isUserBlocked || undefined,
+        areStoriesBlocked: areStoriesBlocked || undefined,
+      };
+    }
 
-  const updatedViewsById: Record<string, ApiStoryView> = {
-    ...viewModal.viewsById,
-    [userId]: {
-      ...viewModal.viewsById[userId],
-      isUserBlocked: isUserBlocked || undefined,
-      areStoriesBlocked: areStoriesBlocked || undefined,
-    },
-  };
+    return view;
+  });
 
   return updateTabState(global, {
     storyViewer: {
       ...tabState.storyViewer,
       viewModal: {
         ...viewModal,
-        viewsById: updatedViewsById,
+        views: updatedViews,
       },
     },
   }, tabId);

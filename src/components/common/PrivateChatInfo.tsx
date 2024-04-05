@@ -21,6 +21,7 @@ import RippleEffect from '../ui/RippleEffect';
 import Avatar from './Avatar';
 import DotAnimation from './DotAnimation';
 import FullNameTitle from './FullNameTitle';
+import Icon from './Icon';
 import TypingStatus from './TypingStatus';
 
 type OwnProps = {
@@ -43,6 +44,7 @@ type OwnProps = {
   noStatusOrTyping?: boolean;
   noRtl?: boolean;
   adminMember?: ApiChatMember;
+  isSavedDialog?: boolean;
   className?: string;
   onEmojiStatusClick?: NoneToVoidFunction;
 };
@@ -51,6 +53,7 @@ type StateProps =
   {
     user?: ApiUser;
     userStatus?: ApiUserStatus;
+    self?: ApiUser;
     isSavedMessages?: boolean;
     areMessagesLoaded: boolean;
   };
@@ -72,7 +75,9 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
   noRtl,
   user,
   userStatus,
+  self,
   isSavedMessages,
+  isSavedDialog,
   areMessagesLoaded,
   adminMember,
   ripple,
@@ -122,7 +127,7 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
         <DotAnimation className="status" content={status} />
       ) : (
         <span className="status" dir="auto">
-          {statusIcon && <i className={`icon icon-${statusIcon} status-icon`} />}
+          {statusIcon && <Icon className="status-icon" name={statusIcon} />}
           {renderText(status)}
         </span>
       );
@@ -142,10 +147,12 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
       return <TypingStatus typingStatus={typingStatus} />;
     }
 
+    const translatedStatus = getUserStatus(lang, user, userStatus);
+    const mainUserNameClassName = buildClassName('handle', translatedStatus && 'withStatus');
     return (
-      <span className={buildClassName('status', isUserOnline(user, userStatus) && 'online')}>
-        {mainUsername && <span className="handle">{mainUsername}</span>}
-        <span className="user-status" dir="auto">{getUserStatus(lang, user, userStatus)}</span>
+      <span className={buildClassName('status', isUserOnline(user, userStatus, true) && 'online')}>
+        {mainUsername && <span className={mainUserNameClassName}>{mainUsername}</span>}
+        {translatedStatus && <span className="user-status" dir="auto">{translatedStatus}</span>}
       </span>
     );
   }
@@ -163,6 +170,7 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
             withEmojiStatus={!noEmojiStatus}
             emojiStatusSize={emojiStatusSize}
             isSavedMessages={isSavedMessages}
+            isSavedDialog={isSavedDialog}
             onEmojiStatusClick={onEmojiStatusClick}
           />
           {customTitle && <span className="custom-title">{customTitle}</span>}
@@ -176,6 +184,7 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
         withEmojiStatus={!noEmojiStatus}
         emojiStatusSize={emojiStatusSize}
         isSavedMessages={isSavedMessages}
+        isSavedDialog={isSavedDialog}
         onEmojiStatusClick={onEmojiStatusClick}
       />
     );
@@ -183,11 +192,22 @@ const PrivateChatInfo: FC<OwnProps & StateProps> = ({
 
   return (
     <div className={buildClassName('ChatInfo', className)} dir={!noRtl && lang.isRtl ? 'rtl' : undefined}>
+      {isSavedDialog && self && (
+        <Avatar
+          key="saved-messages"
+          size={avatarSize}
+          peer={self}
+          isSavedMessages
+          className="saved-dialog-avatar"
+        />
+      )}
       <Avatar
         key={user.id}
         size={avatarSize}
         peer={user}
+        className={buildClassName(isSavedDialog && 'overlay-avatar')}
         isSavedMessages={isSavedMessages}
+        isSavedDialog={isSavedDialog}
         withStory={withStory}
         storyViewerOrigin={storyViewerOrigin}
         storyViewerMode="single-peer"
@@ -207,6 +227,7 @@ export default memo(withGlobal<OwnProps>(
     const user = selectUser(global, userId);
     const userStatus = selectUserStatus(global, userId);
     const isSavedMessages = !forceShowSelf && user && user.isSelf;
+    const self = isSavedMessages ? user : selectUser(global, global.currentUserId!);
     const areMessagesLoaded = Boolean(selectChatMessages(global, userId));
 
     return {
@@ -214,6 +235,7 @@ export default memo(withGlobal<OwnProps>(
       userStatus,
       isSavedMessages,
       areMessagesLoaded,
+      self,
     };
   },
 )(PrivateChatInfo));

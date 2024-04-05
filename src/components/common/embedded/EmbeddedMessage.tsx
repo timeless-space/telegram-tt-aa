@@ -20,6 +20,7 @@ import {
   isMessageTranslatable,
 } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
+import freezeWhenClosed from '../../../util/hoc/freezeWhenClosed';
 import { getPictogramDimensions } from '../helpers/mediaDimensions';
 import { getPeerColorClass } from '../helpers/peerColor';
 import renderText from '../helpers/renderText';
@@ -51,14 +52,17 @@ type OwnProps = {
   customText?: string;
   noUserColors?: boolean;
   isProtected?: boolean;
+  isInComposer?: boolean;
   chatTranslations?: ChatTranslatedMessages;
   requestedChatTranslationLanguage?: string;
+  isOpen?: boolean;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
   onClick: NoneToVoidFunction;
 };
 
 const NBSP = '\u00A0';
+const EMOJI_SIZE = 17;
 
 const EmbeddedMessage: FC<OwnProps> = ({
   className,
@@ -70,6 +74,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
   title,
   customText,
   isProtected,
+  isInComposer,
   noUserColors,
   chatTranslations,
   requestedChatTranslationLanguage,
@@ -105,10 +110,10 @@ const EmbeddedMessage: FC<OwnProps> = ({
 
   const senderTitle = sender ? getSenderTitle(lang, sender)
     : (replyForwardInfo?.hiddenUserName || message?.forwardInfo?.hiddenUserName);
-  const senderChatTitle = senderChat ? getSenderTitle(lang, senderChat) : message?.forwardInfo?.hiddenUserName;
+  const senderChatTitle = senderChat ? getSenderTitle(lang, senderChat) : undefined;
   const forwardSenderTitle = forwardSender ? getSenderTitle(lang, forwardSender)
     : message?.forwardInfo?.hiddenUserName;
-  const areSendersSame = sender?.id === forwardSender?.id;
+  const areSendersSame = sender && sender.id === forwardSender?.id;
 
   const { handleClick, handleMouseDown } = useFastClick(onClick);
 
@@ -117,6 +122,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
       return renderTextWithEntities({
         text: replyInfo.quoteText.text,
         entities: replyInfo.quoteText.entities,
+        noLineBreaks: isInComposer,
       });
     }
 
@@ -143,6 +149,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
         translatedText={translatedText}
         observeIntersectionForLoading={observeIntersectionForLoading}
         observeIntersectionForPlaying={observeIntersectionForPlaying}
+        emojiSize={EMOJI_SIZE}
       />
     );
   }
@@ -167,11 +174,16 @@ const EmbeddedMessage: FC<OwnProps> = ({
       }
     }
 
-    const isChatSender = senderChat?.id === sender?.id;
+    const isChatSender = senderChat && senderChat.id === sender?.id;
+    const isReplyToQuote = isInComposer && Boolean(replyInfo && 'quoteText' in replyInfo && replyInfo?.quoteText);
 
     return (
       <>
-        {!isChatSender && <span className="embedded-sender">{renderText(senderTitle)}</span>}
+        {!isChatSender && (
+          <span className="embedded-sender">
+            {renderText(isReplyToQuote ? lang('ReplyToQuote', senderTitle) : senderTitle)}
+          </span>
+        )}
         {icon && <Icon name={icon} className="embedded-chat-icon" />}
         {icon && senderChatTitle && renderText(senderChatTitle)}
       </>
@@ -193,11 +205,14 @@ const EmbeddedMessage: FC<OwnProps> = ({
       onMouseDown={handleMouseDown}
     >
       {mediaThumbnail && renderPictogram(mediaThumbnail, mediaBlobUrl, isRoundVideo, isProtected, isSpoiler)}
-      {sender?.backgroundEmojiId && (
-        <EmojiIconBackground emojiDocumentId={sender.backgroundEmojiId} className="EmbeddedMessage--background-icons" />
+      {sender?.color?.backgroundEmojiId && (
+        <EmojiIconBackground
+          emojiDocumentId={sender.color.backgroundEmojiId}
+          className="EmbeddedMessage--background-icons"
+        />
       )}
       <div className="message-text">
-        <p className="embedded-text-wrapper">
+        <p className={buildClassName('embedded-text-wrapper', isQuote && 'multiline')}>
           {renderTextContent()}
         </p>
         <div className="message-title">
@@ -242,5 +257,7 @@ function renderPictogram(
     </div>
   );
 }
+
+export const ClosableEmbeddedMessage = freezeWhenClosed(EmbeddedMessage);
 
 export default EmbeddedMessage;

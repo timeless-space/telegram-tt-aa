@@ -16,11 +16,14 @@ import { copyHtmlToClipboard } from '../../../util/clipboard';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { compact, findLast } from '../../../util/iteratees';
 import * as langProvider from '../../../util/langProvider';
-import parseMessageInput from '../../../util/parseMessageInput';
+import { translate } from '../../../util/langProvider';
+import parseHtmlAsFormattedText from '../../../util/parseHtmlAsFormattedText';
 import { getServerTime } from '../../../util/serverTime';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 import versionNotification from '../../../versionNotification.txt';
-import { getMessageSummaryText, getSenderTitle, isChatChannel } from '../../helpers';
+import {
+  getIsSavedDialog, getMessageSummaryText, getSenderTitle, isChatChannel, isJoinedChannelMessage,
+} from '../../helpers';
 import { renderMessageSummaryHtml } from '../../helpers/renderMessageSummaryHtml';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
@@ -38,6 +41,7 @@ import { updateTabState } from '../../reducers/tabs';
 import {
   selectAllowedMessageActions,
   selectChat,
+  selectChatLastMessageId,
   selectChatMessages,
   selectChatScheduledMessages,
   selectCurrentChat,
@@ -144,9 +148,7 @@ addActionHandler('replyToNextMessage', (global, actions, payload): ActionReturnT
 
   if (!isLatest || !replyInfo?.replyToMsgId) {
     if (threadId === MAIN_THREAD_ID) {
-      const chat = selectChat(global, chatId);
-
-      messageId = chat?.lastMessage?.id;
+      messageId = selectChatLastMessageId(global, chatId);
     } else {
       const threadInfo = selectThreadInfo(global, chatId, threadId);
 
@@ -316,6 +318,8 @@ addActionHandler('focusLastMessage', (global, actions, payload): ActionReturnTyp
 
   const { chatId, threadId, type } = currentMessageList;
 
+  const isSavedDialog = getIsSavedDialog(chatId, threadId, global.currentUserId);
+
   let lastMessageId: number | undefined;
   if (threadId === MAIN_THREAD_ID) {
     if (type === 'pinned') {
@@ -326,10 +330,17 @@ addActionHandler('focusLastMessage', (global, actions, payload): ActionReturnTyp
 
       lastMessageId = pinnedMessageIds[pinnedMessageIds.length - 1];
     } else {
-      const chat = selectChat(global, chatId);
+      lastMessageId = selectChatLastMessageId(global, chatId);
 
-      lastMessageId = chat?.lastMessage?.id;
+      const chatMessages = selectChatMessages(global, chatId);
+      // Workaround for scroll to local message 'you joined this channel'
+      const lastChatMessage = Object.values(chatMessages).reverse()[0];
+      if (lastMessageId && isJoinedChannelMessage(lastChatMessage) && lastChatMessage.id > lastMessageId) {
+        lastMessageId = lastChatMessage.id;
+      }
     }
+  } else if (isSavedDialog) {
+    lastMessageId = selectChatLastMessageId(global, String(threadId), 'saved');
   } else {
     const threadInfo = selectThreadInfo(global, chatId, threadId);
 
@@ -386,11 +397,17 @@ addActionHandler('focusNextReply', (global, actions, payload): ActionReturnType 
 addActionHandler('focusMessage', (global, actions, payload): ActionReturnType => {
   const {
     chatId, threadId = MAIN_THREAD_ID, messageListType = 'thread', noHighlight, groupedId, groupedChatId,
-    replyMessageId, isResizingContainer, shouldReplaceHistory, noForumTopicPanel,
+    replyMessageId, isResizingContainer, shouldReplaceHistory, noForumTopicPanel, quote,
     tabId = getCurrentTabId(),
   } = payload;
 
   let { messageId } = payload;
+
+  const chat = selectChat(global, chatId);
+  if (!chat) {
+    actions.showNotification({ message: translate('Conversation.ErrorInaccessibleMessage'), tabId });
+    return undefined;
+  }
 
   if (groupedId !== undefined) {
     const ids = selectForwardedMessageIdsByGroupId(global, groupedChatId!, groupedId);
@@ -412,12 +429,20 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
   }
   blurTimeout = window.setTimeout(() => {
     global = getGlobal();
-    global = updateFocusedMessage(global, undefined, undefined, undefined, undefined, undefined, tabId);
+    global = updateFocusedMessage({ global }, tabId);
     global = updateFocusDirection(global, undefined, tabId);
     setGlobal(global);
   }, noHighlight ? FOCUS_NO_HIGHLIGHT_DURATION : FOCUS_DURATION);
 
-  global = updateFocusedMessage(global, chatId, messageId, threadId, noHighlight, isResizingContainer, tabId);
+  global = updateFocusedMessage({
+    global,
+    chatId,
+    messageId,
+    threadId,
+    noHighlight,
+    isResizingContainer,
+    quote,
+  }, tabId);
   global = updateFocusDirection(global, undefined, tabId);
 
   if (replyMessageId) {
@@ -432,8 +457,8 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
   const viewportIds = selectViewportIds(global, chatId, threadId, tabId);
   if (viewportIds && viewportIds.includes(messageId)) {
     setGlobal(global, { forceOnHeavyAnimation: true });
-    actions.openChat({
-      id: chatId,
+    actions.openThread({
+      chatId,
       threadId,
       type: messageListType,
       shouldReplaceHistory,
@@ -454,8 +479,8 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
 
   setGlobal(global, { forceOnHeavyAnimation: true });
 
-  actions.openChat({
-    id: chatId,
+  actions.openThread({
+    chatId,
     threadId,
     type: messageListType,
     shouldReplaceHistory,
@@ -463,6 +488,8 @@ addActionHandler('focusMessage', (global, actions, payload): ActionReturnType =>
     tabId,
   });
   actions.loadViewportMessages({
+    chatId,
+    threadId,
     tabId,
     shouldForceRender: true,
   });
@@ -679,7 +706,7 @@ addActionHandler('checkVersionNotification', (global, actions): ActionReturnType
     chatId: SERVICE_NOTIFICATIONS_USER_ID,
     date: getServerTime(),
     content: {
-      text: parseMessageInput(versionNotification, true),
+      text: parseHtmlAsFormattedText(versionNotification, true),
     },
     isOutgoing: false,
   };
@@ -693,10 +720,9 @@ addActionHandler('checkVersionNotification', (global, actions): ActionReturnType
 addActionHandler('createServiceNotification', (global, actions, payload): ActionReturnType => {
   const { message, version } = payload;
   const { serviceNotifications } = global;
-  const serviceChat = selectChat(global, SERVICE_NOTIFICATIONS_USER_ID)!;
 
   const maxId = Math.max(
-    serviceChat.lastMessage?.id || 0,
+    selectChatLastMessageId(global, SERVICE_NOTIFICATIONS_USER_ID) || 0,
     ...serviceNotifications.map(({ id }) => id),
   );
   const fractionalPart = (serviceNotifications.length + 1) / SERVICE_NOTIFICATIONS_MAX_AMOUNT;
@@ -762,6 +788,22 @@ addActionHandler('closeSeenByModal', (global, actions, payload): ActionReturnTyp
   }, tabId);
 });
 
+addActionHandler('openPrivacySettingsNoticeModal', (global, actions, payload): ActionReturnType => {
+  const { chatId, isReadDate, tabId = getCurrentTabId() } = payload;
+
+  return updateTabState(global, {
+    privacySettingsNoticeModal: { chatId, isReadDate },
+  }, tabId);
+});
+
+addActionHandler('closePrivacySettingsNoticeModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    privacySettingsNoticeModal: undefined,
+  }, tabId);
+});
+
 addActionHandler('openChatLanguageModal', (global, actions, payload): ActionReturnType => {
   const { chatId, messageId, tabId = getCurrentTabId() } = payload;
 
@@ -801,6 +843,24 @@ addActionHandler('copyMessagesByIds', (global, actions, payload): ActionReturnTy
   }
 
   copyTextForMessages(global, chat.id, messageIds);
+});
+
+addActionHandler('openOneTimeMediaModal', (global, actions, payload): ActionReturnType => {
+  const { message, tabId = getCurrentTabId() } = payload;
+  global = updateTabState(global, {
+    oneTimeMediaModal: {
+      message,
+    },
+  }, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('closeOneTimeMediaModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  global = updateTabState(global, {
+    oneTimeMediaModal: undefined,
+  }, tabId);
+  setGlobal(global);
 });
 
 function copyTextForMessages(global: GlobalState, chatId: string, messageIds: number[]) {

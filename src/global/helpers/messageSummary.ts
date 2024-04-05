@@ -7,7 +7,9 @@ import { ApiMessageEntityTypes } from '../../api/types';
 import { CONTENT_NOT_SUPPORTED } from '../../config';
 import trimText from '../../util/trimText';
 import { getGlobal } from '../index';
-import { getMessageText, getMessageTranscription } from './messages';
+import {
+  getExpiredMessageDescription, getMessageText, getMessageTranscription, isExpiredMessage,
+} from './messages';
 import { getUserFirstOrLastName } from './users';
 
 const SPOILER_CHARS = ['⠺', '⠵', '⠞', '⠟'];
@@ -121,6 +123,7 @@ export function getMessageSummaryDescription(
     game,
     storyData,
     giveaway,
+    giveawayResults,
   } = message.content;
 
   let hasUsedTruncatedText = false;
@@ -195,6 +198,10 @@ export function getMessageSummaryDescription(
     summary = lang('BoostingGiveawayChannelStarted');
   }
 
+  if (giveawayResults) {
+    summary = lang('Message.GiveawayEndedWinners', giveawayResults.winnersCount);
+  }
+
   if (storyData) {
     if (storyData.isMention) {
       // eslint-disable-next-line eslint-multitab-tt/no-immediate-global
@@ -205,6 +212,13 @@ export function getMessageSummaryDescription(
         : lang('Chat.Service.StoryMentioned', firstName);
     } else {
       summary = lang('ForwardedStory');
+    }
+  }
+
+  if (isExpiredMessage(message)) {
+    const expiredMessageText = getExpiredMessageDescription(lang, message);
+    if (expiredMessageText) {
+      summary = expiredMessageText;
     }
   }
 

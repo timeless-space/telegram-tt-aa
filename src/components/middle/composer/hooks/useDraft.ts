@@ -3,24 +3,23 @@ import { getActions } from '../../../../global';
 
 import type { ApiMessage } from '../../../../api/types';
 import type { ApiDraft } from '../../../../global/types';
+import type { ThreadId } from '../../../../types';
 import type { Signal } from '../../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../../api/types';
 
-import { DRAFT_DEBOUNCE, EDITABLE_INPUT_CSS_SELECTOR } from '../../../../config';
+import { DRAFT_DEBOUNCE } from '../../../../config';
 import {
-  requestMeasure, requestNextMutation,
+  requestMeasure,
 } from '../../../../lib/fasterdom/fasterdom';
-import focusEditableElement from '../../../../util/focusEditableElement';
-import parseMessageInput from '../../../../util/parseMessageInput';
-import { IS_TOUCH_ENV } from '../../../../util/windowEnvironment';
+import parseHtmlAsFormattedText from '../../../../util/parseHtmlAsFormattedText';
 import { getTextWithEntitiesAsHtml } from '../../../common/helpers/renderTextWithEntities';
 
-import useBackgroundMode from '../../../../hooks/useBackgroundMode';
-import useBeforeUnload from '../../../../hooks/useBeforeUnload';
 import useLastCallback from '../../../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../../../hooks/useLayoutEffectWithPrevDeps';
 import useRunDebounced from '../../../../hooks/useRunDebounced';
 import { useStateRef } from '../../../../hooks/useStateRef';
+import useBackgroundMode from '../../../../hooks/window/useBackgroundMode';
+import useBeforeUnload from '../../../../hooks/window/useBeforeUnload';
 
 let isFrozen = false;
 
@@ -43,7 +42,7 @@ const useDraft = ({
 } : {
   draft?: ApiDraft;
   chatId: string;
-  threadId: number;
+  threadId: ThreadId;
   getHtml: Signal<string>;
   setHtml: (html: string) => void;
   editedMessage?: ApiMessage;
@@ -68,7 +67,7 @@ const useDraft = ({
 
   const isEditing = Boolean(editedMessage);
 
-  const updateDraft = useLastCallback((prevState: { chatId?: string; threadId?: number } = {}) => {
+  const updateDraft = useLastCallback((prevState: { chatId?: string; threadId?: ThreadId } = {}) => {
     if (isDisabled || isEditing || !isTouchedRef.current) return;
 
     const html = getHtml();
@@ -77,7 +76,7 @@ const useDraft = ({
       saveDraft({
         chatId: prevState.chatId ?? chatId,
         threadId: prevState.threadId ?? threadId,
-        text: parseMessageInput(html),
+        text: parseHtmlAsFormattedText(html),
       });
     } else {
       clearDraft({
@@ -116,15 +115,6 @@ const useDraft = ({
       ?.map((entity) => entity.type === ApiMessageEntityTypes.CustomEmoji && entity.documentId)
       .filter(Boolean) || [];
     if (customEmojiIds.length) loadCustomEmojis({ ids: customEmojiIds });
-
-    if (!IS_TOUCH_ENV) {
-      requestNextMutation(() => {
-        const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
-        if (messageInput) {
-          focusEditableElement(messageInput, true);
-        }
-      });
-    }
   }, [chatId, threadId, draft, getHtml, setHtml, editedMessage, isDisabled]);
 
   // Save draft on chat change

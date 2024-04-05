@@ -9,10 +9,12 @@ import type {
 } from '../../api/types';
 import type { MessageListType } from '../../global/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
-import type { FocusDirection } from '../../types';
+import type { FocusDirection, ThreadId } from '../../types';
 import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
 
-import { getChatTitle, getMessageHtmlId, isChatChannel } from '../../global/helpers';
+import {
+  getChatTitle, getMessageHtmlId, isChatChannel, isJoinedChannelMessage,
+} from '../../global/helpers';
 import { getMessageReplyInfo } from '../../global/helpers/replies';
 import {
   selectCanPlayAnimatedEmojis,
@@ -40,10 +42,11 @@ import useFocusMessage from './message/hooks/useFocusMessage';
 import AnimatedIconFromSticker from '../common/AnimatedIconFromSticker';
 import ActionMessageSuggestedAvatar from './ActionMessageSuggestedAvatar';
 import ContextMenuContainer from './message/ContextMenuContainer.async';
+import SimilarChannels from './message/SimilarChannels';
 
 type OwnProps = {
   message: ApiMessage;
-  threadId?: number;
+  threadId?: ThreadId;
   messageListType?: MessageListType;
   observeIntersectionForReading?: ObserveFn;
   observeIntersectionForLoading?: ObserveFn;
@@ -127,6 +130,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   const isGift = Boolean(message.content.action?.text.startsWith('ActionGift'));
   const isGiftCode = Boolean(message.content.action?.text.startsWith('BoostingReceivedGift'));
   const isSuggestedAvatar = message.content.action?.type === 'suggestProfilePhoto' && message.content.action!.photo;
+  const isJoinedMessage = isJoinedChannelMessage(message);
 
   useEffect(() => {
     if (noAppearanceAnimation) {
@@ -203,7 +207,7 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
   const handleGiftCodeClick = () => {
     const slug = message.content.action?.slug;
     if (!slug) return;
-    checkGiftCode({ slug });
+    checkGiftCode({ slug, message: { chatId: message.chatId, messageId: message.id } });
   };
 
   // TODO Refactoring for action rendering
@@ -276,7 +280,6 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
     (isGift || isSuggestedAvatar) && 'centered-action',
     isContextMenuShown && 'has-menu-open',
     isLastInList && 'last-in-list',
-    !isGift && !isSuggestedAvatar && !isGiftCode && 'in-one-row',
     transitionClassNames,
   );
 
@@ -290,15 +293,15 @@ const ActionMessage: FC<OwnProps & StateProps> = ({
       onMouseDown={handleMouseDown}
       onContextMenu={handleContextMenu}
     >
-      {!isSuggestedAvatar && !isGiftCode && <span className="action-message-content">{renderContent()}</span>}
+      {!isSuggestedAvatar && !isGiftCode && !isJoinedMessage && (
+        <span className="action-message-content">{renderContent()}</span>
+      )}
       {isGift && renderGift()}
       {isGiftCode && renderGiftCode()}
       {isSuggestedAvatar && (
-        <ActionMessageSuggestedAvatar
-          message={message}
-          renderContent={renderContent}
-        />
+        <ActionMessageSuggestedAvatar message={message} renderContent={renderContent} />
       )}
+      {isJoinedMessage && <SimilarChannels chatId={targetChatId!} />}
       {contextMenuPosition && (
         <ContextMenuContainer
           isOpen={isContextMenuOpen}

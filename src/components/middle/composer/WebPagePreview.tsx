@@ -5,14 +5,14 @@ import { getActions, withGlobal } from '../../../global';
 import type {
   ApiFormattedText, ApiMessage, ApiMessageEntityTextUrl, ApiWebPage,
 } from '../../../api/types';
-import type { ISettings } from '../../../types';
+import type { ISettings, ThreadId } from '../../../types';
 import type { Signal } from '../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../api/types';
 
 import { RE_LINK_TEMPLATE } from '../../../config';
 import { selectNoWebPage, selectTabState, selectTheme } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import parseMessageInput from '../../../util/parseMessageInput';
+import parseHtmlAsFormattedText from '../../../util/parseHtmlAsFormattedText';
 
 import { useDebouncedResolver } from '../../../hooks/useAsyncResolvers';
 import useCurrentOrPrev from '../../../hooks/useCurrentOrPrev';
@@ -29,7 +29,7 @@ import './WebPagePreview.scss';
 
 type OwnProps = {
   chatId: string;
-  threadId: number;
+  threadId: ThreadId;
   getHtml: Signal<string>;
   isDisabled?: boolean;
 };
@@ -61,7 +61,7 @@ const WebPagePreview: FC<OwnProps & StateProps> = ({
   const formattedTextWithLinkRef = useRef<ApiFormattedText>();
 
   const detectLinkDebounced = useDebouncedResolver(() => {
-    const formattedText = parseMessageInput(getHtml());
+    const formattedText = parseHtmlAsFormattedText(getHtml());
     const linkEntity = formattedText.entities?.find((entity): entity is ApiMessageEntityTextUrl => (
       entity.type === ApiMessageEntityTypes.TextUrl
     ));

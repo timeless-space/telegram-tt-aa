@@ -4,6 +4,7 @@ import React, { memo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type { MessageListType } from '../../global/types';
+import type { ThreadId } from '../../types';
 import type { Signal } from '../../util/signals';
 import type { MessageDateGroup } from './helpers/groupMessages';
 import type { PinnedIntersectionChangedCallback } from './hooks/usePinnedMessage';
@@ -33,7 +34,7 @@ import MessageListBotInfo from './MessageListBotInfo';
 interface OwnProps {
   isCurrentUserPremium?: boolean;
   chatId: string;
-  threadId: number;
+  threadId: ThreadId;
   messageIds: number[];
   messageGroups: MessageDateGroup[];
   getContainerHeight: Signal<number | undefined>;
@@ -41,6 +42,7 @@ interface OwnProps {
   isUnread: boolean;
   withUsers: boolean;
   isChannelChat: boolean | undefined;
+  isEmptyThread?: boolean;
   isComments?: boolean;
   noAvatars: boolean;
   containerRef: RefObject<HTMLDivElement>;
@@ -49,11 +51,11 @@ interface OwnProps {
   memoFirstUnreadIdRef: { current: number | undefined };
   type: MessageListType;
   isReady: boolean;
-  threadTopMessageId: number | undefined;
   hasLinkedChat: boolean | undefined;
   isSchedule: boolean;
   shouldRenderBotInfo?: boolean;
   noAppearanceAnimation: boolean;
+  isSavedDialog?: boolean;
   onFabToggle: AnyToVoidFunction;
   onNotchToggle: AnyToVoidFunction;
   onPinnedIntersectionChange: PinnedIntersectionChangedCallback;
@@ -71,6 +73,7 @@ const MessageListContent: FC<OwnProps> = ({
   isViewportNewest,
   isUnread,
   isComments,
+  isEmptyThread,
   withUsers,
   isChannelChat,
   noAvatars,
@@ -80,11 +83,11 @@ const MessageListContent: FC<OwnProps> = ({
   memoFirstUnreadIdRef,
   type,
   isReady,
-  threadTopMessageId,
   hasLinkedChat,
   isSchedule,
   shouldRenderBotInfo,
   noAppearanceAnimation,
+  isSavedDialog,
   onFabToggle,
   onNotchToggle,
   onPinnedIntersectionChange,
@@ -92,6 +95,7 @@ const MessageListContent: FC<OwnProps> = ({
   const { openHistoryCalendar } = getActions();
 
   const getIsReady = useDerivedSignal(isReady);
+  const areDatesClickable = !isSavedDialog && !isSchedule;
 
   const {
     observeIntersectionForReading,
@@ -162,7 +166,7 @@ const MessageListContent: FC<OwnProps> = ({
             message={message}
             threadId={threadId}
             messageListType={type}
-            isInsideTopic={Boolean(threadId && threadId !== MAIN_THREAD_ID)}
+            isInsideTopic={Boolean(threadId && threadId !== MAIN_THREAD_ID && !isSavedDialog)}
             observeIntersectionForReading={observeIntersectionForReading}
             observeIntersectionForLoading={observeIntersectionForLoading}
             observeIntersectionForPlaying={observeIntersectionForPlaying}
@@ -193,6 +197,7 @@ const MessageListContent: FC<OwnProps> = ({
 
         const documentGroupId = !isMessageAlbum && message.groupedId ? message.groupedId : undefined;
         const nextDocumentGroupId = nextMessage && !isAlbum(nextMessage) ? nextMessage.groupedId : undefined;
+        const isTopicTopMessage = message.id === threadId;
 
         const position = {
           isFirstInGroup: messageIndex === 0,
@@ -213,8 +218,6 @@ const MessageListContent: FC<OwnProps> = ({
         const key = isServiceNotificationMessage(message) ? `${message.date}_${originalId}` : originalId;
 
         const noComments = hasLinkedChat === false || !isChannelChat;
-
-        const isTopicTopMessage = message.id === threadTopMessageId;
 
         return compact([
           message.id === memoUnreadDividerBeforeIdRef.current && unreadDivider,
@@ -243,9 +246,11 @@ const MessageListContent: FC<OwnProps> = ({
             onPinnedIntersectionChange={onPinnedIntersectionChange}
             getIsMessageListReady={getIsReady}
           />,
-          message.id === threadTopMessageId && (
+          message.id === threadId && (
             <div className="local-action-message" key="discussion-started">
-              <span>{lang('DiscussionStarted')}</span>
+              <span>{lang(isEmptyThread
+                ? (isComments ? 'NoComments' : 'NoReplies') : 'DiscussionStarted')}
+              </span>
             </div>
           ),
         ]);
@@ -260,10 +265,10 @@ const MessageListContent: FC<OwnProps> = ({
         teactFastList
       >
         <div
-          className={buildClassName('sticky-date', !isSchedule && 'interactive')}
+          className={buildClassName('sticky-date', areDatesClickable && 'interactive')}
           key="date-header"
           onMouseDown={preventMessageInputBlur}
-          onClick={!isSchedule ? () => openHistoryCalendar({ selectedAt: dateGroup.datetime }) : undefined}
+          onClick={areDatesClickable ? () => openHistoryCalendar({ selectedAt: dateGroup.datetime }) : undefined}
         >
           <span dir="auto">
             {isSchedule && dateGroup.originalDate === SCHEDULED_WHEN_ONLINE && (

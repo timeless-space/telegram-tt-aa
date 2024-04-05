@@ -12,7 +12,7 @@ export function buildContentClassName(
     asForwarded,
     hasThread,
     forceSenderName,
-    hasComments,
+    hasCommentCounter,
     hasActionButton,
     hasReactions,
     isGeoLiveActive,
@@ -25,7 +25,7 @@ export function buildContentClassName(
     asForwarded?: boolean;
     hasThread?: boolean;
     forceSenderName?: boolean;
-    hasComments?: boolean;
+    hasCommentCounter?: boolean;
     hasActionButton?: boolean;
     hasReactions?: boolean;
     isGeoLiveActive?: boolean;
@@ -34,7 +34,8 @@ export function buildContentClassName(
   } = {},
 ) {
   const {
-    text, photo, video, audio, voice, document, poll, webPage, contact, location, invoice, storyData, giveaway,
+    text, photo, video, audio, voice, document, poll, webPage, contact, location, invoice, storyData,
+    giveaway, giveawayResults,
   } = getMessageContent(message);
 
   const classNames = [MESSAGE_CONTENT_CLASS_NAME];
@@ -68,8 +69,8 @@ export function buildContentClassName(
       classNames.push('round');
     }
 
-    if (hasComments) {
-      classNames.push('has-comments');
+    if (hasCommentCounter) {
+      classNames.push('has-comment-counter');
     }
   }
   if (isMedia) {
@@ -87,13 +88,17 @@ export function buildContentClassName(
     classNames.push('contact');
   } else if (poll) {
     classNames.push('poll');
-  } else if (giveaway) {
+  } else if (giveaway || giveawayResults) {
     classNames.push('giveaway');
   } else if (webPage) {
     classNames.push('web-page');
 
     if (webPage.photo || webPage.video) {
       classNames.push('media');
+    }
+
+    if (webPage.document) {
+      classNames.push('document');
     }
   }
 
@@ -132,7 +137,7 @@ export function buildContentClassName(
   if (!isCustomShape) {
     classNames.push('has-shadow');
 
-    if (isMedia && hasComments) {
+    if (isMedia && hasThread) {
       classNames.push('has-background');
     }
 

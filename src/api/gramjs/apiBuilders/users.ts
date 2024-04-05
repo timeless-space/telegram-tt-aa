@@ -1,7 +1,6 @@
 import { Api as GramJs } from '../../../lib/gramjs';
 
 import type {
-  ApiEmojiStatus,
   ApiPremiumGiftOption,
   ApiUser,
   ApiUserFullInfo,
@@ -11,7 +10,7 @@ import type {
 
 import { buildApiBotInfo } from './bots';
 import { buildApiPhoto, buildApiUsernames } from './common';
-import { buildApiPeerId } from './peers';
+import { buildApiEmojiStatus, buildApiPeerColor, buildApiPeerId } from './peers';
 
 export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUserFullInfo {
   const {
@@ -19,6 +18,7 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
       about, commonChatsCount, pinnedMsgId, botInfo, blocked,
       profilePhoto, voiceMessagesForbidden, premiumGifts,
       fallbackPhoto, personalPhoto, translationsDisabled, storiesPinnedAvailable,
+      contactRequirePremium,
     },
     users,
   } = mtpUserFull;
@@ -38,6 +38,7 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
     personalPhoto: personalPhoto instanceof GramJs.Photo ? buildApiPhoto(personalPhoto) : undefined,
     ...(premiumGifts && { premiumGifts: premiumGifts.map((gift) => buildApiPremiumGiftOption(gift)) }),
     ...(botInfo && { botInfo: buildApiBotInfo(botInfo, userId) }),
+    isContactRequirePremium: contactRequirePremium,
   };
 }
 
@@ -57,7 +58,7 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     : undefined;
   const userType = buildApiUserType(mtpUser);
   const usernames = buildApiUsernames(mtpUser);
-  const emojiStatus = mtpUser.emojiStatus ? buildApiUserEmojiStatus(mtpUser.emojiStatus) : undefined;
+  const emojiStatus = mtpUser.emojiStatus ? buildApiEmojiStatus(mtpUser.emojiStatus) : undefined;
 
   return {
     id: buildApiPeerId(id, 'user'),
@@ -72,6 +73,7 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     type: userType,
     firstName,
     lastName,
+    canEditBot: Boolean(mtpUser.botCanEdit),
     ...(userType === 'userTypeBot' && { canBeInvitedToGroup: !mtpUser.botNochats }),
     ...(usernames && { usernames }),
     phoneNumber: mtpUser.phone || '',
@@ -85,8 +87,7 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     hasStories: Boolean(storiesMaxId) && !storiesUnavailable,
     ...(mtpUser.bot && mtpUser.botInlinePlaceholder && { botPlaceholder: mtpUser.botInlinePlaceholder }),
     ...(mtpUser.bot && mtpUser.botAttachMenu && { isAttachBot: mtpUser.botAttachMenu }),
-    color: mtpUser.color,
-    backgroundEmojiId: mtpUser.backgroundEmojiId?.toString(),
+    color: mtpUser.color && buildApiPeerColor(mtpUser.color),
   };
 }
 
@@ -109,24 +110,12 @@ export function buildApiUserStatus(mtpStatus?: GramJs.TypeUserStatus): ApiUserSt
   } else if (mtpStatus instanceof GramJs.UserStatusOffline) {
     return { type: 'userStatusOffline', wasOnline: mtpStatus.wasOnline };
   } else if (mtpStatus instanceof GramJs.UserStatusRecently) {
-    return { type: 'userStatusRecently' };
+    return { type: 'userStatusRecently', isReadDateRestrictedByMe: mtpStatus.byMe };
   } else if (mtpStatus instanceof GramJs.UserStatusLastWeek) {
-    return { type: 'userStatusLastWeek' };
+    return { type: 'userStatusLastWeek', isReadDateRestrictedByMe: mtpStatus.byMe };
   } else {
-    return { type: 'userStatusLastMonth' };
+    return { type: 'userStatusLastMonth', isReadDateRestrictedByMe: mtpStatus.byMe };
   }
-}
-
-export function buildApiUserEmojiStatus(mtpEmojiStatus: GramJs.TypeEmojiStatus): ApiEmojiStatus | undefined {
-  if (mtpEmojiStatus instanceof GramJs.EmojiStatus) {
-    return { documentId: mtpEmojiStatus.documentId.toString() };
-  }
-
-  if (mtpEmojiStatus instanceof GramJs.EmojiStatusUntil) {
-    return { documentId: mtpEmojiStatus.documentId.toString(), until: mtpEmojiStatus.until };
-  }
-
-  return undefined;
 }
 
 export function buildApiUsersAndStatuses(mtpUsers: GramJs.TypeUser[]) {

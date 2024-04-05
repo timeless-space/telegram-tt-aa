@@ -4,15 +4,22 @@ import React, {
   useMemo,
 } from '../../../lib/teact/teact';
 
-import type { ApiAttachMenuPeerType } from '../../../api/types';
+import type { ApiAttachMenuPeerType, ApiMessage } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
-import type { ISettings } from '../../../types';
+import type { ISettings, ThreadId } from '../../../types';
 
 import {
   CONTENT_TYPES_WITH_PREVIEW, DEBUG_LOG_FILENAME, SUPPORTED_AUDIO_CONTENT_TYPES,
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
+import {
+  getMessageAudio, getMessageDocument,
+  getMessagePhoto,
+  getMessageVideo, getMessageVoice,
+  getMessageWebPagePhoto,
+  getMessageWebPageVideo,
+} from '../../../global/helpers';
 import { getDebugLogs } from '../../../util/debugConsole';
 import { validateFiles } from '../../../util/files';
 import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
@@ -23,6 +30,7 @@ import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMouseInside from '../../../hooks/useMouseInside';
 
+import Icon from '../../common/Icon';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
 import ResponsiveHoverButton from '../../ui/ResponsiveHoverButton';
@@ -32,7 +40,7 @@ import './AttachMenu.scss';
 
 export type OwnProps = {
   chatId: string;
-  threadId?: number;
+  threadId?: ThreadId;
   isButtonVisible: boolean;
   canAttachMedia: boolean;
   canAttachPolls: boolean;
@@ -55,6 +63,8 @@ export type OwnProps = {
   handleSendNFT: NoneToVoidFunction;
   handleCreatePOAP: NoneToVoidFunction;
   onMenuClose: NoneToVoidFunction;
+  hasReplaceableMedia?: boolean;
+  editingMessage?: ApiMessage;
 };
 
 const AttachMenu: FC<OwnProps> = ({
@@ -82,6 +92,8 @@ const AttachMenu: FC<OwnProps> = ({
   onMenuOpen,
   onMenuClose,
   onPollCreate,
+  hasReplaceableMedia,
+  editingMessage,
 }) => {
   const [isAttachMenuOpen, openAttachMenu, closeAttachMenu] = useFlag();
   const [handleMouseEnter, handleMouseLeave, markMouseInside] = useMouseInside(isAttachMenuOpen, closeAttachMenu);
@@ -91,6 +103,12 @@ const AttachMenu: FC<OwnProps> = ({
 
   const [isAttachmentBotMenuOpen, markAttachmentBotMenuOpen, unmarkAttachmentBotMenuOpen] = useFlag();
   const isMenuOpen = isAttachMenuOpen || isAttachmentBotMenuOpen;
+
+  const isPhotoOrVideo = editingMessage && editingMessage?.groupedId
+    && Boolean(getMessagePhoto(editingMessage) || getMessageWebPagePhoto(editingMessage)
+      || Boolean(getMessageVideo(editingMessage) || getMessageWebPageVideo(editingMessage)));
+  const isFile = editingMessage && editingMessage?.groupedId && Boolean(getMessageAudio(editingMessage)
+    || getMessageVoice(editingMessage) || getMessageDocument(editingMessage));
 
   useEffect(() => {
     if (isAttachMenuOpen) {
@@ -164,18 +182,36 @@ const AttachMenu: FC<OwnProps> = ({
 
   return (
     <div className="AttachMenu">
-      <ResponsiveHoverButton
-        id="attach-menu-button"
-        className={isAttachMenuOpen ? 'AttachMenu--button activated' : 'AttachMenu--button'}
-        round
-        color="translucent"
-        onActivate={handleToggleAttachMenu}
-        ariaLabel="Add an attachment"
-        ariaControls="attach-menu-controls"
-        hasPopup
-      >
-        <i className="icon icon-attach" />
-      </ResponsiveHoverButton>
+      {
+        editingMessage && hasReplaceableMedia ? (
+          <ResponsiveHoverButton
+            id="replace-menu-button"
+            className={isAttachMenuOpen ? 'AttachMenu--button activated' : 'AttachMenu--button'}
+            round
+            color="translucent"
+            onActivate={handleToggleAttachMenu}
+            ariaLabel="Replace an attachment"
+            ariaControls="replace-menu-controls"
+            hasPopup
+          >
+            <Icon name="replace" />
+          </ResponsiveHoverButton>
+        ) : (
+          <ResponsiveHoverButton
+            id="attach-menu-button"
+            disabled={Boolean(editingMessage)}
+            className={isAttachMenuOpen ? 'AttachMenu--button activated' : 'AttachMenu--button'}
+            round
+            color="translucent"
+            onActivate={handleToggleAttachMenu}
+            ariaLabel="Add an attachment"
+            ariaControls="attach-menu-controls"
+            hasPopup
+          >
+            <Icon name="attach" />
+          </ResponsiveHoverButton>
+        )
+      }
       <Menu
         id="attach-menu-controls"
         isOpen={isMenuOpen}
@@ -199,13 +235,14 @@ const AttachMenu: FC<OwnProps> = ({
         )}
         {canAttachMedia && (
           <>
-            {canSendVideoOrPhoto && (
+            {canSendVideoOrPhoto && !isFile && (
               <MenuItem icon="photo" onClick={handleQuickSelect}>
                 {lang(canSendVideoAndPhoto ? 'AttachmentMenu.PhotoOrVideo'
                   : (canSendPhotos ? 'InputAttach.Popover.Photo' : 'InputAttach.Popover.Video'))}
               </MenuItem>
             )}
-            {/* {(canSendDocuments || canSendAudios)
+            {/*
+            {((canSendDocuments || canSendAudios) && !isPhotoOrVideo)
               && (
                 <MenuItem icon="document" onClick={handleDocumentSelect}>
                   {lang(!canSendDocuments && canSendAudios ? 'InputAttach.Popover.Music' : 'AttachDocument')}
@@ -234,7 +271,7 @@ const AttachMenu: FC<OwnProps> = ({
             {lang('Send Crypto')}
           </MenuItem>
         )}
-        {canAttachPolls && (
+        {canAttachPolls && !editingMessage && (
           <MenuItem icon="poll" onClick={onPollCreate}>{lang('Poll')}</MenuItem>
         )}
         {
@@ -285,7 +322,7 @@ const AttachMenu: FC<OwnProps> = ({
           {lang('Test Send Message')}
         </MenuItem> */}
 
-        {canAttachMedia && !isScheduled && bots?.map((bot) => (
+        {!editingMessage && !hasReplaceableMedia && !isScheduled && bots?.map((bot) => (
           <AttachBotItem
             bot={bot}
             chatId={chatId}

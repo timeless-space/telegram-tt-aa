@@ -5,8 +5,9 @@ import type {
   ApiStory,
   ApiStoryDeleted,
   ApiStorySkipped,
-  ApiStoryView,
+  ApiStoryViews,
   ApiTypeStory,
+  ApiTypeStoryView,
 } from '../../api/types';
 import type { GlobalState, TabArgs } from '../types';
 
@@ -15,6 +16,7 @@ import { compareFields, unique } from '../../util/iteratees';
 import { getServerTime } from '../../util/serverTime';
 import { isUserId, updateReactionCount } from '../helpers';
 import {
+  selectIsChatWithSelf,
   selectPeer, selectPeerStories, selectPeerStory, selectTabState, selectUser,
 } from '../selectors';
 import { updatePeer } from './general';
@@ -77,7 +79,7 @@ export function addStoriesForPeer<T extends GlobalState>(
     return acc;
   }, updatedOrderedIds)).filter((storyId) => !deletedIds.includes(storyId));
 
-  if (addToArchive && peerId === global.currentUserId) {
+  if (addToArchive && selectIsChatWithSelf(global, peerId)) {
     updatedArchiveIds = unique(updatedArchiveIds.concat(Object.keys(newStories).map(Number)))
       .sort((a, b) => b - a)
       .filter((storyId) => !deletedIds.includes(storyId));
@@ -100,7 +102,7 @@ export function addStoriesForPeer<T extends GlobalState>(
     },
   };
 
-  if (peerId === global.currentUserId
+  if (selectIsChatWithSelf(global, peerId)
     || selectUser(global, peerId)?.isContact
     || peerId === global.appConfig?.storyChangelogUserId) {
     global = updatePeerLastUpdatedAt(global, peerId);
@@ -203,16 +205,16 @@ export function updatePeersWithStories<T extends GlobalState>(
 export function updateStoryViews<T extends GlobalState>(
   global: T,
   storyId: number,
-  viewsById: Record<string, ApiStoryView>,
+  views: ApiTypeStoryView[],
   nextOffset?: string,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
   const tabState = selectTabState(global, tabId);
   const { viewModal } = tabState.storyViewer;
-  const newViewsById = viewModal?.storyId === storyId ? {
-    ...viewModal.viewsById,
-    ...viewsById,
-  } : viewsById;
+  const newViews = viewModal?.storyId === storyId && viewModal.views ? [
+    ...viewModal.views,
+    ...views,
+  ] : views;
 
   global = updateStoryViewsLoading(global, false, tabId);
 
@@ -222,7 +224,7 @@ export function updateStoryViews<T extends GlobalState>(
       viewModal: {
         ...viewModal,
         storyId,
-        viewsById: newViewsById,
+        views: newViews,
         nextOffset,
         isLoading: false,
       },
@@ -317,17 +319,21 @@ export function updateSentStoryReaction<T extends GlobalState>(
   const story = selectPeerStory(global, peerId, storyId);
   if (!story || !('content' in story)) return global;
 
-  const reactionsCount = story.reactionsCount || 0;
-  const hasReaction = story.reactions?.some((r) => r.chosenOrder !== undefined);
-  const reactions = updateReactionCount(story.reactions || [], [reaction].filter(Boolean));
+  const { views } = story;
+  const reactionsCount = views?.reactionsCount || 0;
+  const hasReaction = views?.reactions?.some((r) => r.chosenOrder !== undefined);
+  const reactions = updateReactionCount(views?.reactions || [], [reaction].filter(Boolean));
 
   const countDiff = !reaction ? -1 : hasReaction ? 0 : 1;
   const newReactionsCount = reactionsCount + countDiff;
 
   global = updatePeerStory(global, peerId, storyId, {
     sentReaction: reaction,
-    reactionsCount: newReactionsCount,
-    reactions,
+    views: {
+      ...views,
+      reactionsCount: newReactionsCount,
+      reactions,
+    },
   });
 
   return global;
@@ -362,6 +368,25 @@ export function updatePeerStory<T extends GlobalState>(
       },
     },
   };
+}
+
+export function updatePeerStoryViews<T extends GlobalState>(
+  global: T,
+  peerId: string,
+  storyId: number,
+  viewsUpdate: Partial<ApiStoryViews>,
+): T {
+  const story = selectPeerStory(global, peerId, storyId);
+  if (!story || !('content' in story)) return global;
+
+  const { views } = story;
+
+  return updatePeerStory(global, peerId, storyId, {
+    views: {
+      ...views,
+      ...viewsUpdate,
+    },
+  });
 }
 
 export function updatePeerPinnedStory<T extends GlobalState>(

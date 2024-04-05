@@ -3,7 +3,7 @@ import React, {
   memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
 
-import { requestMutation } from '../../lib/fasterdom/fasterdom';
+import { requestMeasure } from '../../lib/fasterdom/fasterdom';
 import { isUserId } from '../../global/helpers';
 import buildClassName from '../../util/buildClassName';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
@@ -24,6 +24,7 @@ import PrivateChatInfo from './PrivateChatInfo';
 import './Picker.scss';
 
 type OwnProps = {
+  className?: string;
   itemIds: string[];
   selectedIds: string[];
   filterValue?: string;
@@ -36,6 +37,7 @@ type OwnProps = {
   isRoundCheckbox?: boolean;
   lockedIds?: string[];
   forceShowSelf?: boolean;
+  isViewOnly?: boolean;
   onSelectedIdsChange?: (ids: string[]) => void;
   onFilterChange?: (value: string) => void;
   onDisabledClick?: (id: string) => void;
@@ -49,6 +51,7 @@ const MAX_FULL_ITEMS = 10;
 const ALWAYS_FULL_ITEMS_COUNT = 5;
 
 const Picker: FC<OwnProps> = ({
+  className,
   itemIds,
   selectedIds,
   filterValue,
@@ -61,6 +64,7 @@ const Picker: FC<OwnProps> = ({
   isRoundCheckbox,
   lockedIds,
   forceShowSelf,
+  isViewOnly,
   onSelectedIdsChange,
   onFilterChange,
   onDisabledClick,
@@ -73,7 +77,7 @@ const Picker: FC<OwnProps> = ({
   useEffect(() => {
     if (!isSearchable) return;
     setTimeout(() => {
-      requestMutation(() => {
+      requestMeasure(() => {
         inputRef.current!.focus();
       });
     }, FOCUS_DELAY_MS);
@@ -127,7 +131,7 @@ const Picker: FC<OwnProps> = ({
   const lang = useLang();
 
   return (
-    <div className="Picker">
+    <div className={buildClassName('Picker', className)}>
       {isSearchable && (
         <div className="picker-header custom-scroll" dir={lang.isRtl ? 'rtl' : undefined}>
           {lockedSelectedIds.map((id, i) => (
@@ -162,14 +166,14 @@ const Picker: FC<OwnProps> = ({
 
       {viewportIds?.length ? (
         <InfiniteScroll
-          className="picker-list custom-scroll"
+          className={buildClassName('picker-list', 'custom-scroll', isRoundCheckbox && 'withRoundedCheckbox')}
           items={viewportIds}
           onLoadMore={getMore}
           noScrollRestore={noScrollRestore}
         >
           {viewportIds.map((id) => {
             const renderCheckbox = () => {
-              return (
+              return isViewOnly ? undefined : (
                 <Checkbox
                   label=""
                   disabled={lockedIdsSet.has(id)}
@@ -183,6 +187,7 @@ const Picker: FC<OwnProps> = ({
                 key={id}
                 className={buildClassName('chat-item-clickable picker-list-item', isRoundCheckbox && 'chat-item')}
                 disabled={lockedIdsSet.has(id)}
+                inactive={isViewOnly}
                 allowDisabledClick={Boolean(onDisabledClick)}
                 // eslint-disable-next-line react/jsx-no-bind
                 onClick={() => handleItemClick(id)}

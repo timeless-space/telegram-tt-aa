@@ -7,6 +7,7 @@ import type {
   ApiFormattedText,
   ApiGame,
   ApiGiveaway,
+  ApiGiveawayResults,
   ApiInvoice,
   ApiLocation,
   ApiMessageExtendedMediaPreview,
@@ -71,7 +72,27 @@ export function buildMessageTextContent(
 }
 
 export function buildMessageMediaContent(media: GramJs.TypeMessageMedia): MediaContent | undefined {
-  if ('ttlSeconds' in media && media.ttlSeconds) {
+  const ttlSeconds = 'ttlSeconds' in media ? media.ttlSeconds : undefined;
+
+  const isExpiredVoice = isExpiredVoiceMessage(media);
+  if (isExpiredVoice) {
+    return { isExpiredVoice };
+  }
+  const isExpiredRoundVideo = isExpiredRoundVideoMessage(media);
+  if (isExpiredRoundVideo) {
+    return { isExpiredRoundVideo };
+  }
+
+  const voice = buildVoice(media);
+  if (voice) return { voice, ttlSeconds };
+
+  if ('round' in media && media.round) {
+    const video = buildVideo(media);
+    if (video) return { video, ttlSeconds };
+  }
+
+  // Other disappearing media types are not supported
+  if (ttlSeconds !== undefined) {
     return undefined;
   }
 
@@ -91,9 +112,6 @@ export function buildMessageMediaContent(media: GramJs.TypeMessageMedia): MediaC
 
   const audio = buildAudio(media);
   if (audio) return { audio };
-
-  const voice = buildVoice(media);
-  if (voice) return { voice };
 
   const document = buildDocumentFromMedia(media);
   if (document) return { document };
@@ -121,6 +139,9 @@ export function buildMessageMediaContent(media: GramJs.TypeMessageMedia): MediaC
 
   const giveaway = buildGiweawayFromMedia(media);
   if (giveaway) return { giveaway };
+
+  const giveawayResults = buildGiweawayResultsFromMedia(media);
+  if (giveawayResults) return { giveawayResults };
 
   return undefined;
 }
@@ -195,6 +216,39 @@ export function buildVideoFromDocument(document: GramJs.Document, isSpoiler?: bo
   };
 }
 
+export function buildAudioFromDocument(document: GramJs.Document): ApiAudio | undefined {
+  if (document instanceof GramJs.DocumentEmpty) {
+    return undefined;
+  }
+
+  const {
+    id, mimeType, size, attributes,
+  } = document;
+
+  const audioAttributes = attributes
+    .find((a: any): a is GramJs.DocumentAttributeAudio => a instanceof GramJs.DocumentAttributeAudio);
+
+  if (!audioAttributes) {
+    return undefined;
+  }
+
+  const {
+    duration,
+    title,
+    performer,
+  } = audioAttributes;
+
+  return {
+    id: String(id),
+    mimeType,
+    duration,
+    fileName: getFilenameFromDocument(document, 'audio'),
+    title,
+    performer,
+    size: size.toJSNumber(),
+  };
+}
+
 function buildVideo(media: GramJs.TypeMessageMedia): ApiVideo | undefined {
   if (
     !(media instanceof GramJs.MessageMediaDocument)
@@ -249,6 +303,20 @@ function buildAudio(media: GramJs.TypeMessageMedia): ApiAudio | undefined {
     ...pick(media.document, ['mimeType']),
     ...pick(audioAttribute, ['duration', 'performer', 'title']),
   };
+}
+
+function isExpiredVoiceMessage(media: GramJs.TypeMessageMedia): MediaContent['isExpiredVoice'] {
+  if (!(media instanceof GramJs.MessageMediaDocument)) {
+    return false;
+  }
+  return !media.document && media.voice;
+}
+
+function isExpiredRoundVideoMessage(media: GramJs.TypeMessageMedia): MediaContent['isExpiredRoundVideo'] {
+  if (!(media instanceof GramJs.MessageMediaDocument)) {
+    return false;
+  }
+  return !media.document && media.round;
 }
 
 function buildVoice(media: GramJs.TypeMessageMedia): ApiVoice | undefined {
@@ -480,7 +548,7 @@ function buildGiweawayFromMedia(media: GramJs.TypeMessageMedia): ApiGiveaway | u
 
 function buildGiveaway(media: GramJs.MessageMediaGiveaway): ApiGiveaway | undefined {
   const {
-    channels, months, quantity, untilDate, countriesIso2, onlyNewSubscribers,
+    channels, months, quantity, untilDate, countriesIso2, onlyNewSubscribers, prizeDescription,
   } = media;
 
   const channelIds = channels.map((channel) => buildApiPeerId(channel, 'channel'));
@@ -492,6 +560,38 @@ function buildGiveaway(media: GramJs.MessageMediaGiveaway): ApiGiveaway | undefi
     untilDate,
     countries: countriesIso2,
     isOnlyForNewSubscribers: onlyNewSubscribers,
+    prizeDescription,
+  };
+}
+
+function buildGiweawayResultsFromMedia(media: GramJs.TypeMessageMedia): ApiGiveawayResults | undefined {
+  if (!(media instanceof GramJs.MessageMediaGiveawayResults)) {
+    return undefined;
+  }
+
+  return buildGiveawayResults(media);
+}
+
+function buildGiveawayResults(media: GramJs.MessageMediaGiveawayResults): ApiGiveawayResults | undefined {
+  const {
+    months, untilDate, onlyNewSubscribers, launchMsgId, unclaimedCount, winners, winnersCount,
+    additionalPeersCount, prizeDescription, refunded, channelId,
+  } = media;
+
+  const winnerIds = winners.map((winner) => buildApiPeerId(winner, 'user'));
+
+  return {
+    months,
+    untilDate,
+    isOnlyForNewSubscribers: onlyNewSubscribers,
+    launchMessageId: launchMsgId,
+    channelId: buildApiPeerId(channelId, 'channel'),
+    unclaimedCount,
+    additionalPeersCount,
+    isRefunded: refunded,
+    prizeDescription,
+    winnerIds,
+    winnersCount,
   };
 }
 
@@ -586,8 +686,12 @@ export function buildWebPage(media: GramJs.TypeMessageMedia): ApiWebPage | undef
   } = media.webpage;
 
   let video;
+  let audio;
   if (document instanceof GramJs.Document && document.mimeType.startsWith('video/')) {
     video = buildVideoFromDocument(document);
+  }
+  if (document instanceof GramJs.Document && document.mimeType.startsWith('audio/')) {
+    audio = buildAudioFromDocument(document);
   }
   let story: ApiWebPageStoryData | undefined;
   const attributeStory = attributes
@@ -616,8 +720,9 @@ export function buildWebPage(media: GramJs.TypeMessageMedia): ApiWebPage | undef
       'duration',
     ]),
     photo: photo instanceof GramJs.Photo ? buildApiPhoto(photo) : undefined,
-    document: !video && document ? buildApiDocument(document) : undefined,
+    document: !video && !audio && document ? buildApiDocument(document) : undefined,
     video,
+    audio,
     story,
   };
 }

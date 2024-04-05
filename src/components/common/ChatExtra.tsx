@@ -43,7 +43,8 @@ import Switcher from '../ui/Switcher';
 
 type OwnProps = {
   chatOrUserId: string;
-  forceShowSelf?: boolean;
+  isSavedDialog?: boolean;
+  isInSettings?: boolean;
 };
 
 type StateProps =
@@ -57,14 +58,16 @@ type StateProps =
     description?: string;
     chatInviteLink?: string;
     topicLink?: string;
+    hasSavedMessages?: boolean;
   };
 
 const runDebounced = debounce((cb) => cb(), 500, false);
 
 const ChatExtra: FC<OwnProps & StateProps> = ({
+  chatOrUserId,
   user,
   chat,
-  forceShowSelf,
+  isInSettings,
   canInviteUsers,
   isMuted,
   phoneCodeList,
@@ -72,6 +75,7 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
   description,
   chatInviteLink,
   topicLink,
+  hasSavedMessages,
 }) => {
   const {
     loadFullUser,
@@ -79,6 +83,7 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
     updateChatMutedState,
     updateTopicMutedState,
     loadPeerStories,
+    openSavedDialog,
   } = getActions();
 
   const {
@@ -110,6 +115,7 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
   }, [peerId, chat, user]);
 
   const isTopicInfo = Boolean(topicId && topicId !== MAIN_THREAD_ID);
+  const shouldRenderAllLinks = (chat && isChatChannel(chat)) || user?.isPremium;
 
   const activeUsernames = useMemo(() => {
     const result = usernames?.filter((u) => u.isActive);
@@ -151,7 +157,11 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
     });
   });
 
-  if (!chat || chat.isRestricted || (isSelf && !forceShowSelf)) {
+  const handleOpenSavedDialog = useLastCallback(() => {
+    openSavedDialog({ chatId: chatOrUserId });
+  });
+
+  if (!chat || chat.isRestricted || (isSelf && !isInSettings)) {
     return undefined;
   }
 
@@ -234,7 +244,13 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
           isStatic
         >
           <span className="title word-break allow-selection" dir="auto">
-            {renderText(description, ['br', 'links', 'emoji'])}
+            {
+              renderText(description, [
+                'br',
+                shouldRenderAllLinks ? 'links' : 'tg_links',
+                'emoji',
+              ])
+            }
           </span>
           <span className="subtitle">{lang(userId ? 'UserBio' : 'Info')}</span>
         </ListItem>
@@ -253,7 +269,7 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
           <span className="subtitle">{lang('SetUrlPlaceholder')}</span>
         </ListItem>
       )}
-      {!forceShowSelf && (
+      {!isInSettings && (
         <ListItem icon="unmute" ripple onClick={handleNotificationChange}>
           <span>{lang('Notifications')}</span>
           <Switcher
@@ -264,12 +280,17 @@ const ChatExtra: FC<OwnProps & StateProps> = ({
           />
         </ListItem>
       )}
+      {hasSavedMessages && !isInSettings && (
+        <ListItem icon="saved-messages" ripple onClick={handleOpenSavedDialog}>
+          <span>{lang('SavedMessagesTab')}</span>
+        </ListItem>
+      )}
     </div>
   );
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatOrUserId }): StateProps => {
+  (global, { chatOrUserId, isSavedDialog }): StateProps => {
     const { countryList: { phoneCodes: phoneCodeList } } = global;
 
     const chat = chatOrUserId ? selectChat(global, chatOrUserId) : undefined;
@@ -277,7 +298,7 @@ export default memo(withGlobal<OwnProps>(
     const isForum = chat?.isForum;
     const isMuted = chat && selectIsChatMuted(chat, selectNotifySettings(global), selectNotifyExceptions(global));
     const { threadId } = selectCurrentMessageList(global) || {};
-    const topicId = isForum ? threadId : undefined;
+    const topicId = isForum ? Number(threadId) : undefined;
     const chatInviteLink = chat ? selectChatFullInfo(global, chat.id)?.inviteLink : undefined;
     let description = user ? selectUserFullInfo(global, user.id)?.bio : undefined;
     if (!description && chat) {
@@ -291,6 +312,8 @@ export default memo(withGlobal<OwnProps>(
 
     const topicLink = topicId ? selectTopicLink(global, chatOrUserId, topicId) : undefined;
 
+    const hasSavedMessages = !isSavedDialog && global.chats.listIds.saved?.includes(chatOrUserId);
+
     return {
       phoneCodeList,
       chat,
@@ -301,6 +324,7 @@ export default memo(withGlobal<OwnProps>(
       chatInviteLink,
       description,
       topicLink,
+      hasSavedMessages,
     };
   },
 )(ChatExtra));

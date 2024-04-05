@@ -187,6 +187,10 @@
     margin-top: 2rem;
     margin-bottom: 0.75rem;
 
+    &.premium-info {
+      margin-top: 1rem;
+    }
+
     &[dir="rtl"] {
       text-align: right;
     }
@@ -396,4 +400,8 @@
 
 .settings-item-chatlist .ListItem {
   margin: inherit;
+}
+
+.block-user-button {
+  z-index: var(--z-chat-float-button);
 }

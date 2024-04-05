@@ -1,6 +1,6 @@
 import type { ApiPrivacySettings } from '../../types';
 import type {
-  ApiGeoPoint, ApiReaction, ApiReactionCount, MediaContent,
+  ApiGeoPoint, ApiMessage, ApiReaction, ApiReactionCount, ApiStoryForwardInfo, MediaContent,
 } from './messages';
 
 export interface ApiStory {
@@ -18,13 +18,21 @@ export interface ApiStory {
   isPublic?: boolean;
   isOut?: true;
   noForwards?: boolean;
-  viewsCount?: number;
-  reactionsCount?: number;
-  reactions?: ApiReactionCount[];
-  recentViewerIds?: string[];
+  views?: ApiStoryViews;
   visibility?: ApiPrivacySettings;
   sentReaction?: ApiReaction;
   mediaAreas?: ApiMediaArea[];
+  forwardInfo?: ApiStoryForwardInfo;
+  fromId?: string;
+}
+
+export interface ApiStoryViews {
+  hasViewers?: true;
+  viewsCount?: number;
+  forwardsCount?: number;
+  reactionsCount?: number;
+  reactions?: ApiReactionCount[];
+  recentViewerIds?: string[];
 }
 
 export interface ApiStorySkipped {
@@ -65,13 +73,36 @@ export type ApiWebPageStoryData = {
   peerId: string;
 };
 
+export type ApiStoryViewPublicForward = {
+  type: 'forward';
+  peerId: string;
+  messageId: number;
+  message: ApiMessage;
+  date: number;
+  isUserBlocked?: true;
+  areStoriesBlocked?: true;
+};
+
+export type ApiStoryViewPublicRepost = {
+  type: 'repost';
+  isUserBlocked?: true;
+  areStoriesBlocked?: true;
+  date: number;
+  peerId: string;
+  storyId: number;
+  story: ApiStory;
+};
+
 export type ApiStoryView = {
-  userId: string;
+  type: 'user';
+  peerId: string;
   date: number;
   reaction?: ApiReaction;
   isUserBlocked?: true;
   areStoriesBlocked?: true;
 };
+
+export type ApiTypeStoryView = ApiStoryView | ApiStoryViewPublicForward | ApiStoryViewPublicRepost;
 
 export type ApiStealthMode = {
   activeUntil?: number;
@@ -107,4 +138,12 @@ export type ApiMediaAreaSuggestedReaction = {
   isFlipped?: boolean;
 };
 
-export type ApiMediaArea = ApiMediaAreaVenue | ApiMediaAreaGeoPoint | ApiMediaAreaSuggestedReaction;
+export type ApiMediaAreaChannelPost = {
+  type: 'channelPost';
+  coordinates: ApiMediaAreaCoordinates;
+  channelId: string;
+  messageId: number;
+};
+
+export type ApiMediaArea = ApiMediaAreaVenue | ApiMediaAreaGeoPoint | ApiMediaAreaSuggestedReaction
+| ApiMediaAreaChannelPost;

@@ -24,15 +24,15 @@
     }
   }
 
+  &--background-icons {
+    margin: -0.1875rem -0.375rem -0.1875rem -0.1875rem;
+  }
+
   .custom-shape & {
     max-width: 15rem;
     margin: 0;
     background-color: var(--color-reply-active);
     box-shadow: 0 1px 2px var(--color-default-shadow);
-
-    .embedded-thumb {
-      margin-inline-start: 0.5rem;
-    }
 
     &:dir(rtl) {
       padding: 0.5rem;
@@ -127,12 +127,15 @@
       text-overflow: ellipsis;
       height: 1.125rem;
       margin-bottom: 0;
-      flex: 1;
 
       &::after {
         content: none;
         display: none;
       }
+    }
+
+    .multiline {
+      flex: 1;
     }
 
     .emoji {
@@ -184,12 +187,10 @@
     object-fit: cover;
   }
 
-  &--background-icons {
-    color: var(--accent-color);
-  }
-
   &.inside-input {
     flex-grow: 1;
+    margin: 0;
+    border-radius: 0.25rem;
 
     .embedded-thumb {
       margin-left: 0.125rem;

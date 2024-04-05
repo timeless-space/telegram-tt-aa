@@ -12,7 +12,7 @@ import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { captureControlledSwipe } from '../../util/swipeController';
 import { sendScreenName } from '../../util/tlCustomFunction';
 import {
-  IS_APP, IS_MAC_OS, IS_TOUCH_ENV,
+  IS_APP, IS_FIREFOX, IS_IOS, IS_MAC_OS, IS_TOUCH_ENV, LAYERS_ANIMATION_NAME,
 } from '../../util/windowEnvironment';
 
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
@@ -201,6 +201,7 @@ function LeftColumn({
         case SettingsScreens.PrivacyForwarding:
         case SettingsScreens.PrivacyGroupChats:
         case SettingsScreens.PrivacyVoiceMessages:
+        case SettingsScreens.PrivacyMessages:
         case SettingsScreens.PrivacyBlockedUsers:
         case SettingsScreens.ActiveWebsites:
         case SettingsScreens.TwoFaDisabled:
@@ -422,7 +423,10 @@ function LeftColumn({
 
   useHotkeys({
     'Mod+Shift+F': handleHotkeySearch,
-    'Mod+Shift+S': handleHotkeySavedMessages,
+    // https://support.mozilla.org/en-US/kb/take-screenshots-firefox
+    ...(!IS_FIREFOX && {
+      'Mod+Shift+S': handleHotkeySavedMessages,
+    }),
     ...(IS_APP && {
       'Mod+0': handleHotkeySavedMessages,
       'Mod+9': handleArchivedChats,
@@ -556,7 +560,7 @@ function LeftColumn({
       shouldWrap
       wrapExceptionKey={ContentType.Main}
       id="LeftColumn"
-      className="tl-custom-padding"
+      className={`tl-custom-padding ${!IS_IOS ? 'custom-height' : ''}`}
       withSwipeControl
     >
       {renderContent}

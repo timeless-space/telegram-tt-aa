@@ -1,6 +1,8 @@
 /* eslint-disable eslint-multitab-tt/no-immediate-global */
 import { addCallback, removeCallback } from '../lib/teact/teactn';
 
+import type { ApiAvailableReaction, ApiMessage } from '../api/types';
+import type { ThreadId } from '../types';
 import type { ActionReturnType, GlobalState, MessageList } from './types';
 import { MAIN_THREAD_ID } from '../api/types';
 
@@ -11,12 +13,13 @@ import {
   ARCHIVED_FOLDER_ID,
   DEBUG,
   DEFAULT_LIMITS,
+  GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT,
   GLOBAL_STATE_CACHE_CHAT_LIST_LIMIT,
-  GLOBAL_STATE_CACHE_CHATS_WITH_MESSAGES_LIMIT,
   GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT,
   GLOBAL_STATE_CACHE_DISABLED,
   GLOBAL_STATE_CACHE_KEY,
   GLOBAL_STATE_CACHE_USER_LIST_LIMIT,
+  SAVED_FOLDER_ID,
 } from '../config';
 import { getOrderedIds } from '../util/folderManager';
 import {
@@ -31,9 +34,9 @@ import { INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MID, INITIAL_PERFORMANC
 import { clearGlobalForLockScreen } from './reducers';
 import {
   selectChat,
+  selectChatLastMessageId,
   selectChatMessages,
   selectCurrentMessageList,
-  selectThreadOriginChat,
   selectViewportIds,
   selectVisibleUsers,
 } from './selectors';
@@ -43,7 +46,8 @@ import { isHeavyAnimating } from '../hooks/useHeavyAnimationCheck';
 
 const UPDATE_THROTTLE = 5000;
 
-const updateCacheThrottled = throttle(() => onIdle(updateCache), UPDATE_THROTTLE, false);
+const updateCacheThrottled = throttle(() => onIdle(() => updateCache()), UPDATE_THROTTLE, false);
+const updateCacheForced = () => updateCache(true);
 
 let isCaching = false;
 let unsubscribeFromBeforeUnload: NoneToVoidFunction | undefined;
@@ -69,6 +73,7 @@ export function initCache() {
     }
 
     setupCaching();
+    updateCacheForced();
   });
 
   addActionHandler('reset', resetCache);
@@ -81,7 +86,7 @@ export function loadCache(initialState: GlobalState): GlobalState | undefined {
 
   const cache = readCache(initialState);
 
-  if (cache.passcode.hasPasscode || hasStoredSession(true)) {
+  if (cache.passcode.hasPasscode || hasStoredSession()) {
     setupCaching();
 
     return cache;
@@ -94,15 +99,15 @@ export function loadCache(initialState: GlobalState): GlobalState | undefined {
 
 export function setupCaching() {
   isCaching = true;
-  unsubscribeFromBeforeUnload = onBeforeUnload(updateCache, true);
-  window.addEventListener('blur', updateCache);
+  unsubscribeFromBeforeUnload = onBeforeUnload(updateCacheForced, true);
+  window.addEventListener('blur', updateCacheForced);
   addCallback(updateCacheThrottled);
 }
 
 export function clearCaching() {
   isCaching = false;
   removeCallback(updateCacheThrottled);
-  window.removeEventListener('blur', updateCache);
+  window.removeEventListener('blur', updateCacheForced);
   if (unsubscribeFromBeforeUnload) {
     unsubscribeFromBeforeUnload();
   }
@@ -144,6 +149,7 @@ export function migrateCache(cached: GlobalState, initialState: GlobalState) {
 }
 
 function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
+  const untypedCached = cached as any;
   // Pre-fill settings with defaults
   cached.settings.byKey = {
     ...initialState.settings.byKey,
@@ -179,15 +185,6 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     cached.appConfig.limits = DEFAULT_LIMITS;
   }
 
-  if (typeof cached.config?.defaultReaction === 'string') {
-    cached.config.defaultReaction = { emoticon: cached.config.defaultReaction };
-  }
-
-  if (typeof cached.availableReactions?.[0].reaction === 'string') {
-    cached.availableReactions = cached.availableReactions
-      .map((r) => ({ ...r, reaction: { emoticon: r.reaction as unknown as string } }));
-  }
-
   if (!cached.archiveSettings) {
     cached.archiveSettings = initialState.archiveSettings;
   }
@@ -204,11 +201,33 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     cached.stories.byPeerId = initialState.stories.byPeerId;
     cached.stories.orderedPeerIds = initialState.stories.orderedPeerIds;
   }
+
+  if (!cached.chats.similarChannelsById) {
+    cached.chats.similarChannelsById = initialState.chats.similarChannelsById;
+  }
+
+  if (!cached.chats.lastMessageIds) {
+    cached.chats.lastMessageIds = initialState.chats.lastMessageIds;
+  }
+
+  // Clear old color storage to optimize cache size
+  if (untypedCached?.appConfig?.peerColors) {
+    untypedCached.appConfig.peerColors = undefined;
+    untypedCached.appConfig.darkPeerColors = undefined;
+  }
+
+  if (!cached.fileUploads.byMessageKey) {
+    cached.fileUploads.byMessageKey = {};
+  }
+
+  if (!cached.reactions) {
+    cached.reactions = initialState.reactions;
+  }
 }
 
-function updateCache() {
+function updateCache(force?: boolean) {
   const global = getGlobal();
-  if (!isCaching || global.isLoggingOut || isHeavyAnimating()) {
+  if (!isCaching || global.isLoggingOut || (!force && isHeavyAnimating())) {
     return;
   }
 
@@ -249,8 +268,6 @@ export function serializeGlobal<T extends GlobalState>(global: T) {
       'topInlineBots',
       'recentEmojis',
       'recentCustomEmojis',
-      'topReactions',
-      'recentReactions',
       'push',
       'serviceNotifications',
       'attachmentSettings',
@@ -261,6 +278,8 @@ export function serializeGlobal<T extends GlobalState>(global: T) {
       'shouldShowContextMenuHint',
       'trustedBotIds',
       'recentlyFoundChatIds',
+      'peerColors',
+      'savedReactionTags',
     ]),
     lastIsChatInfoShown: !getIsMobile() ? global.lastIsChatInfoShown : undefined,
     customEmojis: reduceCustomEmojis(global),
@@ -270,7 +289,15 @@ export function serializeGlobal<T extends GlobalState>(global: T) {
     settings: reduceSettings(global),
     chatFolders: reduceChatFolders(global),
     groupCalls: reduceGroupCalls(global),
-    availableReactions: reduceAvailableReactions(global),
+    reactions: {
+      ...pick(global.reactions, [
+        'defaultTags',
+        'recentReactions',
+        'topReactions',
+        'hash',
+      ]),
+      availableReactions: reduceAvailableReactions(global.reactions.availableReactions),
+    },
     passcode: pick(global.passcode, [
       'isScreenLocked',
       'hasPasscode',
@@ -317,8 +344,8 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
     ...chatStoriesUserIds,
     ...visibleUserIds || [],
     ...global.topPeers.userIds || [],
+    ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT).filter(isUserId) || [],
     ...getOrderedIds(ALL_FOLDER_ID)?.filter(isUserId) || [],
-    ...getOrderedIds(ARCHIVED_FOLDER_ID)?.filter(isUserId) || [],
     ...global.contactList?.userIds || [],
     ...global.recentlyFoundChatIds?.filter(isUserId) || [],
     ...Object.keys(byId),
@@ -335,17 +362,8 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
   const { chats: { byId }, currentUserId } = global;
   const currentChatIds = compact(
     Object.values(global.byTabId)
-      .flatMap(({ id: tabId }): MessageList[] | undefined => {
-        const messageList = selectCurrentMessageList(global, tabId);
-        if (!messageList) return undefined;
-
-        const { chatId, threadId } = messageList;
-        const origin = selectThreadOriginChat(global, chatId, threadId);
-        return origin ? [{
-          chatId: origin.id,
-          threadId: MAIN_THREAD_ID,
-          type: 'thread',
-        }, messageList] : [messageList];
+      .map(({ id: tabId }): MessageList | undefined => {
+        return selectCurrentMessageList(global, tabId);
       }),
   ).map(({ chatId }) => chatId);
 
@@ -357,7 +375,8 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
     const viewportIds = selectViewportIds(global, messageList.chatId, messageList.threadId, tabId);
     return viewportIds?.map((id) => {
       const message = messages[id];
-      const content = message?.content;
+      if (!message) return undefined;
+      const content = message.content;
       const replyPeer = message.replyInfo?.type === 'message' && message.replyInfo.replyToPeerId;
       return content.storyData?.peerId || content.webPage?.story?.peerId || replyPeer;
     });
@@ -367,17 +386,23 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
     ...currentUserId ? [currentUserId] : [],
     ...currentChatIds,
     ...messagesChatIds,
+    ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT) || [],
     ...getOrderedIds(ALL_FOLDER_ID) || [],
-    ...getOrderedIds(ARCHIVED_FOLDER_ID) || [],
+    ...getOrderedIds(SAVED_FOLDER_ID) || [],
     ...global.recentlyFoundChatIds || [],
     ...Object.keys(byId),
   ]).slice(0, GLOBAL_STATE_CACHE_CHAT_LIST_LIMIT);
 
   return {
     ...global.chats,
+    similarChannelsById: {},
     isFullyLoaded: {},
     byId: pick(global.chats.byId, idsToSave),
     fullInfoById: pick(global.chats.fullInfoById, idsToSave),
+    lastMessageIds: {
+      all: pick(global.chats.lastMessageIds.all || {}, idsToSave),
+      saved: global.chats.lastMessageIds.saved,
+    },
   };
 }
 
@@ -396,8 +421,21 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
     ...currentChatIds,
     ...currentUserId ? [currentUserId] : [],
     ...forumPanelChatIds,
-    ...getOrderedIds(ALL_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_CHATS_WITH_MESSAGES_LIMIT) || [],
+    ...getOrderedIds(ALL_FOLDER_ID) || [],
+    ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT) || [],
   ]);
+
+  const openedChatThreadIds = Object.values(global.byTabId).reduce((acc, { id: tabId }) => {
+    const { chatId: tabChatId, threadId } = selectCurrentMessageList(global, tabId) || {};
+    if (!tabChatId || !threadId || threadId === MAIN_THREAD_ID) {
+      return acc;
+    }
+    const current = acc[tabChatId] || new Set();
+    current.add(threadId);
+    acc[tabChatId] = current;
+
+    return acc;
+  }, {} as Record<string, Set<ThreadId>>);
 
   chatIdsToSave.forEach((chatId) => {
     const current = global.messages.byChatId[chatId];
@@ -406,25 +444,23 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
     }
 
     const chat = selectChat(global, chatId);
+    const chatLastMessageId = selectChatLastMessageId(global, chatId);
 
-    const threadIds = compact(Object.values(global.byTabId).map(({ id: tabId }) => {
-      const { chatId: tabChatId, threadId } = selectCurrentMessageList(global, tabId) || {};
-      if (!tabChatId || tabChatId !== chatId || !threadId || threadId === MAIN_THREAD_ID) {
-        return undefined;
-      }
+    const openedThreadIds = Array.from(openedChatThreadIds[chatId] || []);
+    const commentThreadIds = Object.values(global.messages.byChatId[chatId].threadsById || {})
+      .map(({ threadInfo }) => (threadInfo?.isCommentsInfo ? threadInfo?.originMessageId : undefined))
+      .filter(Boolean);
+    const threadIds = unique(openedThreadIds.concat(commentThreadIds));
 
-      return threadId;
-    }));
-
-    const threadIdsToSave = threadIds.length ? [MAIN_THREAD_ID, ...threadIds] : [MAIN_THREAD_ID];
-    const threadsToSave = pickTruthy(current.threadsById, threadIdsToSave);
-    if (!Object.keys(threadsToSave).length) {
-      return;
-    }
+    const threadsToSave = pickTruthy(current.threadsById, [MAIN_THREAD_ID, ...threadIds]);
 
     const viewportIdsToSave = unique(Object.values(threadsToSave).flatMap((thread) => thread.lastViewportIds || []));
-    const lastMessageIdsToSave = chat?.topics
-      ? Object.values(chat.topics).map(({ lastMessageId }) => lastMessageId) : [];
+    const topicLastMessageIds = chat?.topics ? Object.values(chat.topics).map(({ lastMessageId }) => lastMessageId)
+      : [];
+    const savedLastMessageIds = chatId === currentUserId && global.chats.lastMessageIds.saved
+      ? Object.values(global.chats.lastMessageIds.saved) : [];
+    const lastMessageIdsToSave = [chatLastMessageId].concat(topicLastMessageIds).concat(savedLastMessageIds)
+      .filter(Boolean);
     const byId = pick(current.byId, viewportIdsToSave.concat(lastMessageIdsToSave));
     const threadsById = Object.keys(threadsToSave).reduce((acc, key) => {
       const thread = threadsToSave[Number(key)];
@@ -437,8 +473,16 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
       return acc;
     }, {} as GlobalState['messages']['byChatId'][string]['threadsById']);
 
+    const cleanedById = Object.values(byId).reduce((acc, message) => {
+      if (!message) return acc;
+
+      const cleanedMessage = omitLocalMedia(message);
+      acc[message.id] = cleanedMessage;
+      return acc;
+    }, {} as Record<number, ApiMessage>);
+
     byChatId[chatId] = {
-      byId,
+      byId: cleanedById,
       threadsById,
     };
   });
@@ -446,6 +490,37 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
   return {
     byChatId,
     sponsoredByChatId: {},
+  };
+}
+
+function omitLocalMedia(message: ApiMessage): ApiMessage {
+  const {
+    photo, video, document, sticker,
+  } = message.content;
+
+  return {
+    ...message,
+    content: {
+      ...message.content,
+      photo: photo && {
+        ...photo,
+        blobUrl: undefined,
+      },
+      video: video && {
+        ...video,
+        blobUrl: undefined,
+        previewBlobUrl: undefined,
+      },
+      document: document && {
+        ...document,
+        previewBlobUrl: undefined,
+      },
+      sticker: sticker && {
+        ...sticker,
+        isPreloadedGlobally: undefined,
+      },
+    },
+    previousLocalId: undefined,
   };
 }
 
@@ -475,7 +550,7 @@ function reduceGroupCalls<T extends GlobalState>(global: T): GlobalState['groupC
   };
 }
 
-function reduceAvailableReactions(global: GlobalState): GlobalState['availableReactions'] {
-  return global.availableReactions
+function reduceAvailableReactions(availableReactions?: ApiAvailableReaction[]): ApiAvailableReaction[] | undefined {
+  return availableReactions
     ?.map((r) => pick(r, ['reaction', 'staticIcon', 'title', 'isInactive']));
 }

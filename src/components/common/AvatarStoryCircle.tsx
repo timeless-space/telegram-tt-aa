@@ -3,13 +3,15 @@ import React, {
 } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
+import type { ApiTypeStory } from '../../api/types';
 import type { ThemeKey } from '../../types';
 import type { AvatarSize } from './Avatar';
 
-import { selectPeerStories, selectTheme, selectUser } from '../../global/selectors';
+import { selectPeerStories, selectTheme } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
-import { DPR } from '../../util/windowEnvironment';
 import { REM } from './helpers/mediaDimensions';
+
+import useDevicePixelRatio from '../../hooks/window/useDevicePixelRatio';
 
 interface OwnProps {
   // eslint-disable-next-line react/no-unused-prop-types
@@ -20,22 +22,22 @@ interface OwnProps {
 }
 
 interface StateProps {
-  isCloseFriend?: boolean;
+  peerStories?: Record<number, ApiTypeStory>;
   storyIds?: number[];
   lastReadId?: number;
   appTheme: ThemeKey;
 }
 
 const SIZES: Record<AvatarSize, number> = {
-  micro: 1.125 * DPR * REM,
-  tiny: 2.125 * DPR * REM,
-  mini: 1.625 * DPR * REM,
-  small: 2.25 * DPR * REM,
-  'small-mobile': 2.625 * DPR * REM,
-  medium: 2.875 * DPR * REM,
-  large: 3.5 * DPR * REM,
-  giant: 5.125 * DPR * REM,
-  jumbo: 7.625 * DPR * REM,
+  micro: 1.125 * REM,
+  tiny: 2.125 * REM,
+  mini: 1.625 * REM,
+  small: 2.25 * REM,
+  'small-mobile': 2.625 * REM,
+  medium: 2.875 * REM,
+  large: 3.5 * REM,
+  giant: 5.125 * REM,
+  jumbo: 7.625 * REM,
 };
 
 const BLUE = ['#34C578', '#3CA3F3'];
@@ -43,8 +45,8 @@ const GREEN = ['#C9EB38', '#09C167'];
 const PURPLE = ['#A667FF', '#55A5FF'];
 const GRAY = '#C4C9CC';
 const DARK_GRAY = '#737373';
-const STROKE_WIDTH = 0.125 * DPR * REM;
-const STROKE_WIDTH_READ = 0.0625 * DPR * REM;
+const STROKE_WIDTH = 0.125 * REM;
+const STROKE_WIDTH_READ = 0.0625 * REM;
 const GAP_PERCENT = 2;
 const SEGMENTS_MAX = 45; // More than this breaks rendering in Safari and Chrome
 
@@ -57,7 +59,7 @@ const EXTRA_GAP_END = EXTRA_GAP_ANGLE + EXTRA_GAP_SIZE / 2;
 function AvatarStoryCircle({
   size = 'large',
   className,
-  isCloseFriend,
+  peerStories,
   storyIds,
   lastReadId,
   withExtraGap,
@@ -65,6 +67,8 @@ function AvatarStoryCircle({
 }: OwnProps & StateProps) {
   // eslint-disable-next-line no-null/no-null
   const ref = useRef<HTMLCanvasElement>(null);
+
+  const dpr = useDevicePixelRatio();
 
   const values = useMemo(() => {
     return (storyIds || []).reduce((acc, id) => {
@@ -77,6 +81,21 @@ function AvatarStoryCircle({
     }, { total: 0, read: 0 });
   }, [lastReadId, storyIds]);
 
+  const isCloseFriend = useMemo(() => {
+    if (!peerStories || !storyIds?.length) {
+      return false;
+    }
+
+    return storyIds.some((id) => {
+      const story = peerStories[id];
+      if (!story || !('isForCloseFriends' in story)) {
+        return false;
+      }
+      const isRead = lastReadId && story.id <= lastReadId;
+      return story.isForCloseFriends && !isRead;
+    });
+  }, [lastReadId, peerStories, storyIds]);
+
   useLayoutEffect(() => {
     if (!ref.current) {
       return;
@@ -84,20 +103,21 @@ function AvatarStoryCircle({
 
     drawGradientCircle({
       canvas: ref.current,
-      size: SIZES[size],
+      size: SIZES[size] * dpr,
       segmentsCount: values.total,
       color: isCloseFriend ? 'green' : 'blue',
       readSegmentsCount: values.read,
       withExtraGap,
       readSegmentColor: appTheme === 'dark' ? DARK_GRAY : GRAY,
+      dpr,
     });
-  }, [appTheme, isCloseFriend, size, values.read, values.total, withExtraGap]);
+  }, [appTheme, isCloseFriend, size, values.read, values.total, withExtraGap, dpr]);
 
   if (!values.total) {
     return undefined;
   }
 
-  const maxSize = SIZES[size] / DPR;
+  const maxSize = SIZES[size];
 
   return (
     <canvas
@@ -109,12 +129,11 @@ function AvatarStoryCircle({
 }
 
 export default memo(withGlobal<OwnProps>((global, { peerId }): StateProps => {
-  const user = selectUser(global, peerId);
   const peerStories = selectPeerStories(global, peerId);
   const appTheme = selectTheme(global);
 
   return {
-    isCloseFriend: user?.isCloseFriend,
+    peerStories: peerStories?.byId,
     storyIds: peerStories?.orderedIds,
     lastReadId: peerStories?.lastReadId,
     appTheme,
@@ -129,6 +148,7 @@ export function drawGradientCircle({
   readSegmentsCount = 0,
   withExtraGap = false,
   readSegmentColor,
+  dpr,
 }: {
   canvas: HTMLCanvasElement;
   size: number;
@@ -137,6 +157,7 @@ export function drawGradientCircle({
   readSegmentsCount?: number;
   withExtraGap?: boolean;
   readSegmentColor: string;
+  dpr: number;
 }) {
   if (segmentsCount > SEGMENTS_MAX) {
     readSegmentsCount = Math.round(readSegmentsCount * (SEGMENTS_MAX / segmentsCount));
@@ -144,7 +165,7 @@ export function drawGradientCircle({
     segmentsCount = SEGMENTS_MAX;
   }
 
-  const strokeModifier = Math.max(Math.max(size - SIZES.large, 0) / DPR / REM / 1.5, 1);
+  const strokeModifier = Math.max(Math.max(size - SIZES.large * dpr, 0) / dpr / REM / 1.5, 1) * dpr;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) {

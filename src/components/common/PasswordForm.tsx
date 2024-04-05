@@ -10,9 +10,9 @@ import buildClassName from '../../util/buildClassName';
 import stopEvent from '../../util/stopEvent';
 import { IS_TOUCH_ENV } from '../../util/windowEnvironment';
 
+import useTimeout from '../../hooks/schedulers/useTimeout';
 import useAppLayout from '../../hooks/useAppLayout';
 import useLang from '../../hooks/useLang';
-import useTimeout from '../../hooks/useTimeout';
 
 import Button from '../ui/Button';
 
@@ -147,6 +147,7 @@ const PasswordForm: FC<OwnProps> = ({
           role="button"
           tabIndex={0}
           title="Toggle password visibility"
+          aria-label="Toggle password visibility"
         >
           <i className={buildClassName('icon', isPasswordVisible ? 'icon-eye' : 'icon-eye-closed')} />
         </div>

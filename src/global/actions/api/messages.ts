@@ -1,6 +1,7 @@
 import type {
   ApiAttachment,
   ApiChat,
+  ApiError,
   ApiInputMessageReplyInfo,
   ApiInputReplyInfo,
   ApiInputStoryReplyInfo,
@@ -14,38 +15,48 @@ import type {
   ApiStorySkipped,
   ApiVideo,
 } from '../../../api/types';
+import type { MessageKey } from '../../../util/messageKey';
 import type { RequiredGlobalActions } from '../../index';
 import type {
   ActionReturnType, ApiDraft, GlobalState, TabArgs,
 } from '../../types';
 import { MAIN_THREAD_ID, MESSAGE_DELETED } from '../../../api/types';
-import { LoadMoreDirection } from '../../../types';
+import { LoadMoreDirection, type ThreadId } from '../../../types';
 
 import {
   GIF_MIME_TYPE,
   MAX_MEDIA_FILES_FOR_ALBUM,
   MESSAGE_LIST_SLICE,
   RE_TELEGRAM_LINK,
-  RE_TG_LINK,
-  RE_TME_LINK,
   SERVICE_NOTIFICATIONS_USER_ID,
   SUPPORTED_AUDIO_CONTENT_TYPES,
   SUPPORTED_IMAGE_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../config';
+import { copyTextToClipboard } from '../../../util/clipboard';
+import { isDeepLink } from '../../../util/deepLinkParser';
 import { ensureProtocol } from '../../../util/ensureProtocol';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import {
-  areSortedArraysIntersecting, buildCollectionByKey, omit, split, unique,
+  areSortedArraysIntersecting,
+  buildCollectionByKey,
+  omit,
+  partition,
+  split,
+  unique,
 } from '../../../util/iteratees';
 import { translate } from '../../../util/langProvider';
+import { getMessageKey, isLocalMessageId } from '../../../util/messageKey';
 import { debounce, onTickEnd, rafPromise } from '../../../util/schedulers';
 import { IS_IOS } from '../../../util/windowEnvironment';
 import { callApi, cancelApiProgress } from '../../../api/gramjs';
 import {
-  getMessageOriginalId,
-  getUserFullName, isChatChannel,
-  isDeletedUser, isMessageLocal,
+  getIsSavedDialog,
+  getUserFullName,
+  isChatChannel,
+  isChatSuperGroup,
+  isDeletedUser,
+  isMessageLocal,
   isServiceNotificationMessage,
   isUserBot,
 } from '../../helpers';
@@ -61,6 +72,7 @@ import {
   replaceScheduledMessages,
   replaceSettings,
   replaceThreadParam,
+  replaceUserStatuses,
   safeReplacePinnedIds,
   safeReplaceViewportIds,
   updateChat,
@@ -72,13 +84,15 @@ import {
   updateRequestedMessageTranslation,
   updateSponsoredMessage,
   updateThreadInfo,
-  updateThreadInfos,
   updateThreadUnreadFromForwardedMessage,
   updateTopic,
+  updateUploadByMessageKey,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
 import {
   selectChat,
+  selectChatFullInfo,
+  selectChatLastMessageId,
   selectChatMessage,
   selectCurrentChat,
   selectCurrentMessageList,
@@ -92,6 +106,7 @@ import {
   selectFocusedMessageId,
   selectForwardsCanBeSentToChat,
   selectForwardsContainVoiceMessages,
+  selectIsChatWithSelf,
   selectIsCurrentUserPremium,
   selectLanguageCode,
   selectListedIds,
@@ -106,18 +121,17 @@ import {
   selectSponsoredMessage,
   selectTabState,
   selectThreadIdFromMessage,
-  selectThreadOriginChat,
-  selectThreadTopMessageId,
   selectTranslationLanguage,
   selectUser,
   selectUserFullInfo,
+  selectUserStatus,
   selectViewportIds,
 } from '../../selectors';
 import { deleteMessages } from '../apiUpdaters/messages';
 
 const AUTOLOGIN_TOKEN_KEY = 'autologin_token';
 
-const uploadProgressCallbacks = new Map<number, ApiOnProgress>();
+const uploadProgressCallbacks = new Map<MessageKey, ApiOnProgress>();
 
 const runDebouncedForMarkRead = debounce((cb) => cb(), 500, false);
 
@@ -126,6 +140,8 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
     direction = LoadMoreDirection.Around,
     isBudgetPreload = false,
     shouldForceRender = false,
+    onLoaded,
+    onError,
     tabId = getCurrentTabId(),
   } = payload || {};
 
@@ -134,6 +150,7 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
   if (!chatId || !threadId) {
     const currentMessageList = selectCurrentMessageList(global, tabId);
     if (!currentMessageList) {
+      onError?.();
       return;
     }
 
@@ -144,6 +161,7 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
   const chat = selectChat(global, chatId);
   // TODO Revise if `chat.isRestricted` check is needed
   if (!chat || chat.isRestricted) {
+    onError?.();
     return;
   }
 
@@ -167,12 +185,21 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
     if (!areAllLocal) {
       onTickEnd(() => {
         void loadViewportMessages(
-          global, chat, threadId!, offsetId, LoadMoreDirection.Around, isOutlying, isBudgetPreload, tabId,
+          global, chat, threadId!, offsetId, LoadMoreDirection.Around, isOutlying, isBudgetPreload, onLoaded, tabId,
         );
       });
+    } else {
+      onLoaded?.();
     }
   } else {
     const offsetId = direction === LoadMoreDirection.Backwards ? viewportIds[0] : viewportIds[viewportIds.length - 1];
+
+    // Prevent requests with local offsets
+    if (isLocalMessageId(offsetId)) return;
+
+    // Prevent unnecessary requests in threads
+    if (offsetId === threadId && direction === LoadMoreDirection.Backwards) return;
+
     const isOutlying = Boolean(listedIds && !listedIds.includes(offsetId));
     const historyIds = (isOutlying
       ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId) : listedIds)!;
@@ -186,7 +213,17 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
 
     onTickEnd(() => {
       void loadWithBudget(
-        global, actions, areAllLocal, isOutlying, isBudgetPreload, chat, threadId!, direction, offsetId, tabId,
+        global,
+        actions,
+        areAllLocal,
+        isOutlying,
+        isBudgetPreload,
+        chat,
+        threadId!,
+        direction,
+        offsetId,
+        onLoaded,
+        tabId,
       );
     });
 
@@ -202,18 +239,19 @@ async function loadWithBudget<T extends GlobalState>(
   global: T,
   actions: RequiredGlobalActions,
   areAllLocal: boolean, isOutlying: boolean, isBudgetPreload: boolean,
-  chat: ApiChat, threadId: number, direction: LoadMoreDirection, offsetId?: number,
+  chat: ApiChat, threadId: ThreadId, direction: LoadMoreDirection, offsetId?: number,
+  onLoaded?: NoneToVoidFunction,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
   if (!areAllLocal) {
     await loadViewportMessages(
-      global, chat, threadId, offsetId, direction, isOutlying, isBudgetPreload, tabId,
+      global, chat, threadId, offsetId, direction, isOutlying, isBudgetPreload, onLoaded, tabId,
     );
   }
 
   if (!isBudgetPreload) {
     actions.loadViewportMessages({
-      chatId: chat.id, threadId, direction, isBudgetPreload: true, tabId,
+      chatId: chat.id, threadId, direction, isBudgetPreload: true, onLoaded, tabId,
     });
   }
 }
@@ -270,17 +308,19 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
   }
 
   const chat = selectChat(global, chatId!)!;
-  const draftReplyInfo = !isStoryReply ? selectDraft(global, chatId!, threadId!)?.replyInfo : undefined;
+  const draft = selectDraft(global, chatId!, threadId!);
+  const draftReplyInfo = !isStoryReply ? draft?.replyInfo : undefined;
 
   const storyReplyInfo = isStoryReply ? {
     type: 'story',
-    userId: storyPeerId!,
+    peerId: storyPeerId!,
     storyId: storyId!,
   } satisfies ApiInputStoryReplyInfo : undefined;
 
   const messageReplyInfo = selectMessageReplyInfo(global, chatId!, threadId!, draftReplyInfo);
 
   const replyInfo = storyReplyInfo || messageReplyInfo;
+  const lastMessageId = selectChatLastMessageId(global, chatId!);
 
   const params = {
     ...payload,
@@ -288,10 +328,10 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
     replyInfo,
     noWebPage: selectNoWebPage(global, chatId!, threadId!),
     sendAs: selectSendAs(global, chatId!),
+    lastMessageId,
   };
 
   if (!isStoryReply) {
-    actions.resetDraftReplyInfo({ tabId });
     actions.clearWebPagePreview({ tabId });
   }
 
@@ -303,6 +343,7 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
     sendMessage(global, {
       ...restParams,
       attachment: attachments ? attachments[0] : undefined,
+      wasDrafted: Boolean(draft),
     });
   } else if (isGrouped) {
     const {
@@ -324,6 +365,7 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
           entities: isFirst ? entities : undefined,
           attachment: firstAttachment,
           groupedId: restAttachments.length > 0 ? groupedId : undefined,
+          wasDrafted: Boolean(draft),
         });
 
         restAttachments.forEach((attachment: ApiAttachment) => {
@@ -346,6 +388,7 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
         text,
         entities,
         replyInfo: replyToForFirstMessage,
+        wasDrafted: Boolean(draft),
       });
     }
 
@@ -360,14 +403,53 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
   return undefined;
 });
 
+addActionHandler('sendInviteMessages', async (global, actions, payload): Promise<void> => {
+  const { chatId, userIds, tabId = getCurrentTabId() } = payload;
+  const chatFullInfo = selectChatFullInfo(global, chatId);
+  if (!chatFullInfo?.inviteLink) {
+    return undefined;
+  }
+  const userFullNames: string[] = [];
+  await Promise.all(userIds.map((userId) => {
+    const chat = selectChat(global, userId);
+    if (!chat) {
+      return undefined;
+    }
+    const userFullName = getUserFullName(selectUser(global, userId));
+    if (userFullName) {
+      userFullNames.push(userFullName);
+    }
+    return sendMessage(global, {
+      chat,
+      text: chatFullInfo.inviteLink,
+    });
+  }));
+  return actions.showNotification({
+    message: translate('Conversation.ShareLinkTooltip.Chat.One', userFullNames.join(', ')),
+    tabId,
+  });
+});
+
 addActionHandler('editMessage', (global, actions, payload): ActionReturnType => {
   const {
-    messageList, text, entities, tabId = getCurrentTabId(),
+    messageList, text, entities, attachments, tabId = getCurrentTabId(),
   } = payload;
 
   if (!messageList) {
     return;
   }
+
+  let currentMessageKey: MessageKey | undefined;
+  const progressCallback = attachments ? (progress: number, messageKey: MessageKey) => {
+    if (!uploadProgressCallbacks.has(messageKey)) {
+      currentMessageKey = messageKey;
+      uploadProgressCallbacks.set(messageKey, progressCallback!);
+    }
+
+    global = getGlobal();
+    global = updateUploadByMessageKey(global, messageKey, progress);
+    setGlobal(global);
+  } : undefined;
 
   const { chatId, threadId, type: messageListType } = messageList;
   const chat = selectChat(global, chatId);
@@ -376,26 +458,46 @@ addActionHandler('editMessage', (global, actions, payload): ActionReturnType => 
     return;
   }
 
-  void callApi('editMessage', {
-    chat, message, text, entities, noWebPage: selectNoWebPage(global, chatId, threadId),
-  });
-
   actions.setEditingId({ messageId: undefined, tabId });
+
+  (async () => {
+    await callApi('editMessage', {
+      chat,
+      message,
+      attachment: attachments ? attachments[0] : undefined,
+      text,
+      entities,
+      noWebPage: selectNoWebPage(global, chatId, threadId),
+    }, progressCallback);
+
+    if (progressCallback && currentMessageKey) {
+      global = getGlobal();
+      global = updateUploadByMessageKey(global, currentMessageKey, undefined);
+      setGlobal(global);
+
+      uploadProgressCallbacks.delete(currentMessageKey);
+    }
+  })();
 });
 
-addActionHandler('cancelSendingMessage', (global, actions, payload): ActionReturnType => {
+addActionHandler('cancelUploadMedia', (global, actions, payload): ActionReturnType => {
   const { chatId, messageId } = payload!;
+
   const message = selectChatMessage(global, chatId, messageId);
-  const progressCallback = message && uploadProgressCallbacks.get(getMessageOriginalId(message));
+  if (!message) return;
+
+  const progressCallback = message && uploadProgressCallbacks.get(getMessageKey(message));
   if (progressCallback) {
     cancelApiProgress(progressCallback);
   }
 
-  actions.apiUpdate({
-    '@type': 'deleteMessages',
-    ids: [messageId],
-    chatId,
-  });
+  if (isMessageLocal(message)) {
+    actions.apiUpdate({
+      '@type': 'deleteMessages',
+      ids: [messageId],
+      chatId,
+    });
+  }
 });
 
 addActionHandler('saveDraft', (global, actions, payload): ActionReturnType => {
@@ -413,7 +515,9 @@ addActionHandler('saveDraft', (global, actions, payload): ActionReturnType => {
     replyInfo: currentDraft?.replyInfo,
   };
 
-  saveDraft(global, chatId, threadId, newDraft);
+  saveDraft({
+    global, chatId, threadId, draft: newDraft,
+  });
 });
 
 addActionHandler('clearDraft', (global, actions, payload): ActionReturnType => {
@@ -431,9 +535,9 @@ addActionHandler('clearDraft', (global, actions, payload): ActionReturnType => {
     replyInfo: currentReplyInfo,
   } : undefined;
 
-  if (!isLocalOnly) {
-    saveDraft(global, chatId, threadId, newDraft);
-  }
+  saveDraft({
+    global, chatId, threadId, draft: newDraft, isLocalOnly,
+  });
 });
 
 addActionHandler('updateDraftReplyInfo', (global, actions, payload): ActionReturnType => {
@@ -460,7 +564,9 @@ addActionHandler('updateDraftReplyInfo', (global, actions, payload): ActionRetur
     replyInfo: updatedReplyInfo,
   };
 
-  saveDraft(global, chatId, threadId, newDraft);
+  saveDraft({
+    global, chatId, threadId, draft: newDraft, isLocalOnly: true, noLocalTimeUpdate: true,
+  });
 });
 
 addActionHandler('resetDraftReplyInfo', (global, actions, payload): ActionReturnType => {
@@ -477,10 +583,16 @@ addActionHandler('resetDraftReplyInfo', (global, actions, payload): ActionReturn
     replyInfo: undefined,
   };
 
-  saveDraft(global, chatId, threadId, newDraft);
+  saveDraft({
+    global, chatId, threadId, draft: newDraft, isLocalOnly: Boolean(newDraft),
+  });
 });
 
-async function saveDraft<T extends GlobalState>(global: T, chatId: string, threadId: number, draft?: ApiDraft) {
+async function saveDraft<T extends GlobalState>({
+  global, chatId, threadId, draft, isLocalOnly, noLocalTimeUpdate,
+} : {
+  global: T; chatId: string; threadId: ThreadId; draft?: ApiDraft; isLocalOnly?: boolean; noLocalTimeUpdate?: boolean;
+}) {
   const chat = selectChat(global, chatId);
   const user = selectUser(global, chatId);
   if (!chat || (user && isDeletedUser(user))) return;
@@ -495,9 +607,13 @@ async function saveDraft<T extends GlobalState>(global: T, chatId: string, threa
   } : undefined;
 
   global = replaceThreadParam(global, chatId, threadId, 'draft', newDraft);
-  global = updateChat(global, chatId, { draftDate: newDraft?.date });
+  if (!noLocalTimeUpdate) {
+    global = updateChat(global, chatId, { draftDate: newDraft?.date });
+  }
 
   setGlobal(global);
+
+  if (isLocalOnly) return;
 
   const result = await callApi('saveDraft', {
     chat,
@@ -543,8 +659,7 @@ addActionHandler('unpinAllMessages', async (global, actions, payload): Promise<v
     return;
   }
 
-  const topId = selectThreadTopMessageId(global, chatId, threadId);
-  await callApi('unpinAllMessages', { chat, threadId: topId });
+  await callApi('unpinAllMessages', { chat, threadId });
 
   global = getGlobal();
   const pinnedIds = selectPinnedIds(global, chatId, threadId);
@@ -636,6 +751,22 @@ addActionHandler('deleteHistory', async (global, actions, payload): Promise<void
   });
 });
 
+addActionHandler('deleteSavedHistory', async (global, actions, payload): Promise<void> => {
+  const { chatId, tabId = getCurrentTabId() } = payload!;
+  const chat = selectChat(global, chatId);
+  if (!chat) {
+    return;
+  }
+
+  await callApi('deleteSavedHistory', { chat });
+
+  global = getGlobal();
+  const activeChat = selectCurrentMessageList(global, tabId);
+  if (activeChat && activeChat.threadId === chatId) {
+    actions.openChat({ id: undefined, tabId });
+  }
+});
+
 addActionHandler('reportMessages', async (global, actions, payload): Promise<void> => {
   const {
     messageIds, reason, description, tabId = getCurrentTabId(),
@@ -663,7 +794,7 @@ addActionHandler('reportMessages', async (global, actions, payload): Promise<voi
 addActionHandler('sendMessageAction', async (global, actions, payload): Promise<void> => {
   const { action, chatId, threadId } = payload!;
   if (global.connectionState !== 'connectionStateReady') return;
-  if (chatId === global.currentUserId) return; // Message actions are disabled in Saved Messages
+  if (selectIsChatWithSelf(global, chatId)) return;
 
   const chat = selectChat(global, chatId)!;
   if (!chat) return;
@@ -685,7 +816,7 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
 
   const { chatId, threadId } = currentMessageList;
   const chat = selectChat(global, chatId);
-  if (!chat) {
+  if (!chat || getIsSavedDialog(chatId, threadId, global.currentUserId)) {
     return undefined;
   }
 
@@ -706,6 +837,14 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
 
   const viewportIds = selectViewportIds(global, chatId, threadId, tabId);
   const minId = selectFirstUnreadId(global, chatId, threadId);
+
+  if (threadId !== MAIN_THREAD_ID && !chat.isForum) {
+    global = updateThreadInfo(global, chatId, threadId, {
+      lastReadInboxMessageId: maxId,
+    });
+    return global;
+  }
+
   if (!viewportIds || !minId || !chat.unreadCount) {
     return global;
   }
@@ -726,14 +865,9 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
         unreadCount: Math.max(0, chat.unreadCount - 1),
       });
     }
-    return updateTopic(global, chatId, threadId, {
+    return updateTopic(global, chatId, Number(threadId), {
       unreadCount: newTopicUnreadCount,
     });
-  }
-
-  // TODO Support local marking read for comments
-  if (threadId !== MAIN_THREAD_ID) {
-    return undefined;
   }
 
   return updateChat(global, chatId, {
@@ -858,24 +992,30 @@ addActionHandler('forwardMessages', (global, actions, payload): ActionReturnType
   } = payload;
 
   const {
-    fromChatId, messageIds, toChatId, withMyScore, noAuthors, noCaptions, toThreadId,
+    fromChatId, messageIds, toChatId, withMyScore, noAuthors, noCaptions, toThreadId = MAIN_THREAD_ID,
   } = selectTabState(global, tabId).forwardMessages;
+
   const isCurrentUserPremium = selectIsCurrentUserPremium(global);
+  const isToMainThread = toThreadId === MAIN_THREAD_ID;
+
   const fromChat = fromChatId ? selectChat(global, fromChatId) : undefined;
   const toChat = toChatId ? selectChat(global, toChatId) : undefined;
+
   const messages = fromChatId && messageIds
     ? messageIds
       .sort((a, b) => a - b)
       .map((id) => selectChatMessage(global, fromChatId, id)).filter(Boolean)
     : undefined;
 
-  if (!fromChat || !toChat || !messages || (toThreadId && !toChat.isForum)) {
+  if (!fromChat || !toChat || !messages || (toThreadId && !isToMainThread && !toChat.isForum)) {
     return;
   }
 
   const sendAs = selectSendAs(global, toChatId!);
+  const draft = selectDraft(global, toChatId!, toThreadId || MAIN_THREAD_ID);
+  const lastMessageId = selectChatLastMessageId(global, toChat.id);
 
-  const realMessages = messages.filter((m) => !isServiceNotificationMessage(m));
+  const [realMessages, serviceMessages] = partition(messages, (m) => !isServiceNotificationMessage(m));
   if (realMessages.length) {
     (async () => {
       await rafPromise(); // Wait one frame for any previous `sendMessage` to be processed
@@ -891,12 +1031,13 @@ addActionHandler('forwardMessages', (global, actions, payload): ActionReturnType
         noAuthors,
         noCaptions,
         isCurrentUserPremium,
+        wasDrafted: Boolean(draft),
+        lastMessageId,
       });
     })();
   }
 
-  messages
-    .filter((m) => isServiceNotificationMessage(m))
+  serviceMessages
     .forEach((message) => {
       const { text, entities } = message.content.text || {};
       const { sticker, poll } = message.content;
@@ -913,6 +1054,7 @@ addActionHandler('forwardMessages', (global, actions, payload): ActionReturnType
         isSilent,
         scheduledAt,
         sendAs,
+        lastMessageId,
       });
     });
 
@@ -944,7 +1086,7 @@ addActionHandler('loadScheduledHistory', async (global, actions, payload): Promi
   global = replaceScheduledMessages(global, chat.id, byId);
   global = replaceThreadParam(global, chat.id, MAIN_THREAD_ID, 'scheduledIds', ids);
   if (chat?.isForum) {
-    const scheduledPerThread: Record<number, number[]> = {};
+    const scheduledPerThread: Record<ThreadId, number[]> = {};
     messages.forEach((message) => {
       const threadId = selectThreadIdFromMessage(global, message);
       const scheduledInThread = scheduledPerThread[threadId] || [];
@@ -992,22 +1134,6 @@ addActionHandler('rescheduleMessage', (global, actions, payload): ActionReturnTy
     message,
     scheduledAt,
   });
-});
-
-addActionHandler('requestThreadInfoUpdate', async (global, actions, payload): Promise<void> => {
-  const { chatId, threadId } = payload;
-  const chat = selectChat(global, chatId);
-  if (!chat) {
-    return;
-  }
-
-  const originChannelId = selectThreadOriginChat(global, chatId, threadId)?.id;
-
-  const result = await callApi('requestThreadInfoUpdate', { chat, threadId, originChannelId });
-  if (!result) return;
-  global = getGlobal();
-  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
-  setGlobal(global);
 });
 
 addActionHandler('transcribeAudio', async (global, actions, payload): Promise<void> => {
@@ -1060,11 +1186,12 @@ addActionHandler('loadCustomEmojis', async (global, actions, payload): Promise<v
 async function loadViewportMessages<T extends GlobalState>(
   global: T,
   chat: ApiChat,
-  threadId: number,
+  threadId: ThreadId,
   offsetId: number | undefined,
   direction: LoadMoreDirection,
   isOutlying = false,
   isBudgetPreload = false,
+  onLoaded?: NoneToVoidFunction,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
   const chatId = chat.id;
@@ -1092,12 +1219,18 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   global = getGlobal();
+
+  const currentUserId = global.currentUserId!;
+  const isSavedDialog = getIsSavedDialog(chatId, threadId, currentUserId);
+  const realChatId = isSavedDialog ? String(threadId) : chatId;
+
   const result = await callApi('fetchMessages', {
-    chat: selectChat(global, chatId)!,
+    chat: selectChat(global, realChatId)!,
     offsetId,
     addOffset,
     limit: sliceSize,
     threadId,
+    isSavedDialog,
   });
 
   if (!result) {
@@ -1105,7 +1238,7 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   const {
-    messages, users, chats, repliesThreadInfos,
+    messages, users, chats, count,
   } = result;
 
   global = getGlobal();
@@ -1117,10 +1250,10 @@ async function loadViewportMessages<T extends GlobalState>(
   const byId = buildCollectionByKey(allMessages, 'id');
   const ids = Object.keys(byId).map(Number);
 
-  if (threadId !== MAIN_THREAD_ID) {
-    const threadFirstMessageId = selectFirstMessageId(global, chatId, threadId) || {};
+  if (threadId !== MAIN_THREAD_ID && !getIsSavedDialog(chatId, threadId, global.currentUserId)) {
+    const threadFirstMessageId = selectFirstMessageId(global, chatId, threadId);
     if ((!ids[0] || threadFirstMessageId === ids[0]) && threadFirstMessageId !== threadId) {
-      ids.unshift(threadId);
+      ids.unshift(Number(threadId));
     }
   }
 
@@ -1131,7 +1264,6 @@ async function loadViewportMessages<T extends GlobalState>(
 
   global = addUsers(global, buildCollectionByKey(users, 'id'));
   global = addChats(global, buildCollectionByKey(chats, 'id'));
-  global = updateThreadInfos(global, repliesThreadInfos);
 
   let listedIds = selectListedIds(global, chatId, threadId);
   const outlyingList = offsetId ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId) : undefined;
@@ -1146,12 +1278,21 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   if (!isBudgetPreload) {
-    const historyIds = isOutlying ? outlyingList! : listedIds!;
-    const { newViewportIds } = getViewportSlice(historyIds, offsetId, direction);
-    global = safeReplaceViewportIds(global, chatId, threadId, newViewportIds!, tabId);
+    const historyIds = isOutlying && outlyingList ? outlyingList : listedIds;
+    if (historyIds) {
+      const { newViewportIds } = getViewportSlice(historyIds, offsetId, direction);
+      global = safeReplaceViewportIds(global, chatId, threadId, newViewportIds!, tabId);
+    }
+  }
+
+  if (count) {
+    global = updateThreadInfo(global, chat.id, threadId, {
+      messagesCount: count,
+    });
   }
 
   setGlobal(global);
+  onLoaded?.();
 }
 
 async function loadMessage<T extends GlobalState>(
@@ -1249,25 +1390,18 @@ async function sendMessage<T extends GlobalState>(global: T, params: {
   scheduledAt?: number;
   sendAs?: ApiPeer;
   groupedId?: string;
+  wasDrafted?: boolean;
+  lastMessageId?: number;
 }) {
-  let localId: number | undefined;
-  const progressCallback = params.attachment ? (progress: number, messageLocalId: number) => {
-    if (!uploadProgressCallbacks.has(messageLocalId)) {
-      localId = messageLocalId;
-      uploadProgressCallbacks.set(messageLocalId, progressCallback!);
+  let currentMessageKey: MessageKey | undefined;
+  const progressCallback = params.attachment ? (progress: number, messageKey: MessageKey) => {
+    if (!uploadProgressCallbacks.has(messageKey)) {
+      currentMessageKey = messageKey;
+      uploadProgressCallbacks.set(messageKey, progressCallback!);
     }
 
     global = getGlobal();
-
-    global = {
-      ...global,
-      fileUploads: {
-        byMessageLocalId: {
-          ...global.fileUploads.byMessageLocalId,
-          [messageLocalId]: { progress },
-        },
-      },
-    };
+    global = updateUploadByMessageKey(global, messageKey, progress);
     setGlobal(global);
   } : undefined;
 
@@ -1278,15 +1412,19 @@ async function sendMessage<T extends GlobalState>(global: T, params: {
 
   await callApi('sendMessage', params, progressCallback);
 
-  if (progressCallback && localId) {
-    uploadProgressCallbacks.delete(localId);
+  if (progressCallback && currentMessageKey) {
+    global = getGlobal();
+    global = updateUploadByMessageKey(global, currentMessageKey, undefined);
+    setGlobal(global);
+
+    uploadProgressCallbacks.delete(currentMessageKey);
   }
 }
 
 addActionHandler('loadPinnedMessages', async (global, actions, payload): Promise<void> => {
   const { chatId, threadId } = payload;
   const chat = selectChat(global, chatId);
-  if (!chat) {
+  if (!chat || getIsSavedDialog(chatId, threadId, global.currentUserId)) {
     return;
   }
 
@@ -1395,6 +1533,17 @@ addActionHandler('viewSponsoredMessage', (global, actions, payload): ActionRetur
   void callApi('viewSponsoredMessage', { chat, random: message.randomId });
 });
 
+addActionHandler('clickSponsoredMessage', (global, actions, payload): ActionReturnType => {
+  const { chatId } = payload;
+  const chat = selectChat(global, chatId);
+  const message = selectSponsoredMessage(global, chatId);
+  if (!chat || !message) {
+    return;
+  }
+
+  void callApi('clickSponsoredMessage', { chat, random: message.randomId });
+});
+
 addActionHandler('fetchUnreadMentions', async (global, actions, payload): Promise<void> => {
   const { chatId, offsetId } = payload;
   const chat = selectChat(global, chatId);
@@ -1465,7 +1614,7 @@ addActionHandler('openUrl', (global, actions, payload): ActionReturnType => {
   const urlWithProtocol = ensureProtocol(url)!;
   const isStoriesViewerOpen = Boolean(selectTabState(global, tabId).storyViewer.peerId);
 
-  if (urlWithProtocol.match(RE_TME_LINK) || urlWithProtocol.match(RE_TG_LINK)) {
+  if (isDeepLink(urlWithProtocol)) {
     if (isStoriesViewerOpen) {
       actions.closeStoryViewer({ tabId });
     }
@@ -1542,7 +1691,7 @@ addActionHandler('setForwardChatOrTopic', async (global, actions, payload): Prom
   }, tabId);
   setGlobal(global);
 
-  actions.openChat({ id: chatId, threadId: topicId, tabId });
+  actions.openThread({ chatId, threadId: topicId || MAIN_THREAD_ID, tabId });
   actions.closeMediaViewer({ tabId });
   actions.exitMessageSelectMode({ tabId });
 });
@@ -1575,12 +1724,15 @@ addActionHandler('forwardStory', (global, actions, payload): ActionReturnType =>
     return;
   }
 
+  const lastMessageId = selectChatLastMessageId(global, toChatId);
+
   const { text, entities } = (story as ApiStory).content.text || {};
   void sendMessage(global, {
     chat: toChat,
     text,
     entities,
     story,
+    lastMessageId,
   });
 
   global = getGlobal();
@@ -1696,28 +1848,101 @@ addActionHandler('loadMessageViews', async (global, actions, payload): Promise<v
   if (!result) return;
 
   global = getGlobal();
-  result.forEach((update) => {
+  global = addUsers(global, buildCollectionByKey(result.users, 'id'));
+  global = addChats(global, buildCollectionByKey(result.chats, 'id'));
+  result.viewsInfo.forEach((update) => {
     global = updateChatMessage(global, chatId, update.id, {
-      views: update.views,
-      forwards: update.forwards,
+      viewsCount: update.views,
+      forwardsCount: update.forwards,
     });
 
-    const message = selectChatMessage(global, chatId, update.id);
-    if (!message) return;
-
-    const repliesChatId = message.repliesThreadInfo?.chatId;
-    const threadId = message.repliesThreadInfo?.threadId;
-    if (!repliesChatId || !threadId) return;
-
-    global = updateThreadInfo(global, repliesChatId, threadId, {
-      messagesCount: update.messagesCount,
-      recentReplierIds: update.recentReplierIds,
-      lastMessageId: update.maxId,
-      lastReadInboxMessageId: update.readMaxId,
-    });
+    if (update.threadInfo) {
+      global = updateThreadInfo(global, chatId, update.id, update.threadInfo);
+    }
   });
 
   setGlobal(global);
+});
+
+addActionHandler('loadOutboxReadDate', async (global, actions, payload): Promise<void> => {
+  const { chatId, messageId } = payload;
+
+  const chat = selectChat(global, chatId);
+  if (!chat) return;
+
+  try {
+    const result = await callApi('fetchOutboxReadDate', { chat, messageId });
+    if (result?.date) {
+      global = getGlobal();
+      global = updateChatMessage(global, chatId, messageId, { readDate: result.date });
+      setGlobal(global);
+    }
+  } catch (error) {
+    const { message } = error as ApiError;
+
+    if (message === 'USER_PRIVACY_RESTRICTED' || message === 'YOUR_PRIVACY_RESTRICTED') {
+      global = getGlobal();
+
+      const user = selectUser(global, chatId);
+      if (!user) return;
+      const userStatus = selectUserStatus(global, chatId);
+      if (!userStatus) return;
+
+      const updateStatus = message === 'USER_PRIVACY_RESTRICTED'
+        ? { isReadDateRestricted: true }
+        : { isReadDateRestrictedByMe: true };
+
+      global = replaceUserStatuses(global, {
+        [chatId]: { ...userStatus, ...updateStatus },
+      });
+      // Need to reset `readDate` to `undefined` after click on "Show my Read Time" button
+      global = updateChatMessage(global, chatId, messageId, { readDate: undefined });
+      setGlobal(global);
+    }
+  }
+});
+
+addActionHandler('copyMessageLink', async (global, actions, payload): Promise<void> => {
+  const {
+    chatId, messageId, shouldIncludeThread, shouldIncludeGrouped, tabId = getCurrentTabId(),
+  } = payload;
+  const chat = selectChat(global, chatId);
+  if (!chat) {
+    actions.showNotification({
+      message: translate('ErrorOccurred'),
+      tabId,
+    });
+    return;
+  }
+
+  if (!isChatChannel(chat) && !isChatSuperGroup(chat)) {
+    actions.showNotification({
+      message: translate('lng_filters_link_private_error'),
+      tabId,
+    });
+    return;
+  }
+
+  const link = await callApi('exportMessageLink', {
+    chat,
+    id: messageId,
+    shouldIncludeThread,
+    shouldIncludeGrouped,
+  });
+
+  if (!link) {
+    actions.showNotification({
+      message: translate('ErrorOccurred'),
+      tabId,
+    });
+    return;
+  }
+
+  copyTextToClipboard(link);
+  actions.showNotification({
+    message: translate('LinkCopied'),
+    tabId,
+  });
 });
 
 function countSortedIds(ids: number[], from: number, to: number) {
