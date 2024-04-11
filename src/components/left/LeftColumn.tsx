@@ -560,7 +560,7 @@ function LeftColumn({
       shouldWrap
       wrapExceptionKey={ContentType.Main}
       id="LeftColumn"
-      className={`tl-custom-padding ${!IS_IOS ? 'custom-height' : ''}`}
+      className="tl-custom-padding"
       withSwipeControl
     >
       {renderContent}

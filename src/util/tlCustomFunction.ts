@@ -35,7 +35,7 @@ export function handleSendMessage({ chatId, text }: { chatId: string; text: stri
     messageList: {
       chatId,
       type: 'thread',
-      threadId: 0,
+      threadId: -1,
     },
   });
 }
