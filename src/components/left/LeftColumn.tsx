@@ -349,8 +349,8 @@ function LeftColumn({
   });
 
   useEffect(() => {
-    if (settingsScreen === SettingsScreens.Main && contentType === ContentType.Main
-      && !isChatOpen && !isForumPanelOpen) {
+    if ((settingsScreen === SettingsScreens.Main && contentType === ContentType.Main
+      && !isChatOpen && !isForumPanelOpen) || isForumPanelOpen) {
       sendScreenName('tl_navigation_mainScreen');
     } else {
       sendScreenName('tl_navigation_otherScreen');

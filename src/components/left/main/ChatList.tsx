@@ -1,3 +1,4 @@
+/* eslint-disable no-lonely-if */
 import type { FC } from '../../../lib/teact/teact';
 import React, {
   memo, useEffect, useMemo, useRef, useState,
@@ -23,7 +24,7 @@ import buildClassName from '../../../util/buildClassName';
 import { getOrderKey, getPinnedChatsCount } from '../../../util/folderManager';
 import { getServerTime } from '../../../util/serverTime';
 import { handleScrollUnactiveTab } from '../../../util/tlCustomFunction';
-import { IS_APP, IS_MAC_OS } from '../../../util/windowEnvironment';
+import { IS_APP, IS_IOS, IS_MAC_OS } from '../../../util/windowEnvironment';
 
 import usePeerStoriesPolling from '../../../hooks/polling/usePeerStoriesPolling';
 import useTopOverscroll from '../../../hooks/scroll/useTopOverscroll';
@@ -121,6 +122,44 @@ const ChatList: FC<OwnProps> = ({
       }, 500);
     }
   }, [containerRef, isExpandHeader, folderType]);
+
+  useEffect(() => {
+    const doc = document.documentElement;
+    if (isForumPanelOpen) {
+      const element = document.querySelector('#custom-id-chat-list-inf-scroll.chat-list.custom-scroll');
+      if (element) {
+        let lastElement;
+        if (IS_IOS) {
+          lastElement = element.getElementsByTagName('div').item(0);
+        } else {
+          lastElement = element.getElementsByTagName('div').item(1);
+        }
+        if (lastElement) {
+          lastElement.style.transform = 'translateY(-56px)';
+        }
+        element.scrollTo({ top: 0 });
+      }
+      doc.style.setProperty('--header-translate', '-100%');
+      doc.style.setProperty('--tab-folder-translate', '0px');
+      doc.style.setProperty('--show-header-opacity', '0');
+    } else {
+      // eslint-disable-next-line max-len
+      const element = document.querySelector('#custom-id-chat-list-inf-scroll.chat-list.custom-scroll');
+      if (element) {
+        element.scrollTo({ top: HEIGHT_HEADER_FIXED });
+        let lastElement;
+        if (IS_IOS) {
+          lastElement = element.getElementsByTagName('div').item(0);
+        } else {
+          lastElement = element.getElementsByTagName('div').item(1);
+        }
+        if (lastElement) {
+          lastElement.style.transform = 'translateY(0px)';
+        }
+        element.scrollTo({ top: -HEIGHT_HEADER_FIXED });
+      }
+    }
+  }, [isForumPanelOpen, containerRef]);
 
   const shouldShowUnconfirmedSessions = useMemo(() => {
     const sessionsArray = Object.values(sessions || {});
@@ -300,6 +339,12 @@ const ChatList: FC<OwnProps> = ({
     clearTimeout(isScrolling);
     const doc = document.documentElement;
     const scrollTop = event.currentTarget.scrollTop;
+    if (isForumPanelOpen) {
+      if (scrollTop > HEIGHT_HEADER_FIXED) {
+        event.preventDefault();
+      }
+      return;
+    }
     const scrollPercentRounded = Math.min(
       100,
       Math.round((scrollTop / HEIGHT_HEADER_FIXED) * 100),

@@ -9,6 +9,7 @@
   border-left: 1px solid var(--color-borders);
   display: flex;
   flex-direction: column;
+  padding-top: 3rem;
 
   @media (max-width: 600px) {
     left: 4.3125rem;
