@@ -166,7 +166,7 @@ const ChatList: FC<OwnProps> = ({
     const current = sessionsArray.find((session) => session.isCurrent);
     if (!current || getServerTime() - current.dateCreated < FRESH_AUTH_PERIOD) return false;
 
-    return isAllFolder && sessionsArray.some((session) => session.isUnconfirmed);
+    return (isAllFolder && sessionsArray.some((session) => session.isUnconfirmed)) || false;
   }, [isAllFolder, sessions]);
 
   useEffect(() => {
@@ -388,13 +388,13 @@ const ChatList: FC<OwnProps> = ({
       // eslint-disable-next-line react/jsx-no-bind
       onScroll={handleScroll}
     >
-      {/* {shouldShowUnconfirmedSessions && (
+      {shouldShowUnconfirmedSessions && (
         <UnconfirmedSession
           key="unconfirmed"
           sessions={sessions!}
           onHeightChange={setUnconfirmedSessionHeight}
         />
-      )} */}
+      )}
       {shouldDisplayArchive && (
         <Archive
           key="archive"

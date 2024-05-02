@@ -114,6 +114,9 @@ const Tab: FC<OwnProps> = ({
     const infScroll: any = document.querySelector('#custom-id-chat-list-inf-scroll.Transition_slide-active');
     if (infScroll) {
       infScroll.style.overflow = 'hidden';
+      setTimeout(() => {
+        infScroll.style.overflow = 'auto';
+      }, 300);
     }
     if (contextActions && (e.button === MouseButton.Secondary || !onClick)) {
       handleBeforeContextMenu(e);

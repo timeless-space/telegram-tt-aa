@@ -53,6 +53,7 @@ function StoryRibbon({
       id="StoryRibbon"
       className={fullClassName}
       dir={lang.isRtl ? 'rtl' : undefined}
+      style={(window as any).tlPaddingTop ? 'top: 101px;' : 'top: 56px;'}
     >
       {orderedPeerIds.map((peerId) => {
         const peer = usersById[peerId] || chatsById[peerId];

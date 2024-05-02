@@ -8,6 +8,7 @@ import type { LeftColumnContent, SettingsScreens } from '../../types';
 
 import { ANIMATION_END_DELAY } from '../../config';
 import buildClassName from '../../util/buildClassName';
+import { sendScreenName } from '../../util/tlCustomFunction';
 import { ANIMATION_DURATION } from '../story/helpers/ribbonAnimation';
 
 import useForumPanelRender from '../../hooks/useForumPanelRender';
@@ -26,7 +27,6 @@ import ChatList from './main/ChatList';
 import ForumPanel from './main/ForumPanel';
 
 import './ArchivedChats.scss';
-import { sendScreenName } from '../../util/tlCustomFunction';
 
 export type OwnProps = {
   isActive: boolean;

@@ -16,6 +16,7 @@ import {
 import buildClassName from '../../util/buildClassName';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { disableDirectTextInput, enableDirectTextInput } from '../../util/directInputManager';
+import { sendScreenName } from '../../util/tlCustomFunction';
 import { animateClosing, animateOpening } from './helpers/ghostAnimation';
 
 import useFlag from '../../hooks/useFlag';
@@ -74,6 +75,16 @@ function StoryViewer({
   const prevPeerId = usePrevious(peerId);
   const prevOrigin = usePrevious(origin);
   const isGhostAnimation = Boolean(withAnimation && !shouldSkipHistoryAnimations);
+
+  useEffect(() => {
+    if (isOpen) {
+      sendScreenName('tl_navigation_otherScreen');
+    }
+
+    return () => {
+      sendScreenName('tl_navigation_mainScreen');
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {

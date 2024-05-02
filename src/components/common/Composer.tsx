@@ -418,17 +418,6 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
   }, [chatId, threadId]);
 
-  useEffect(() => {
-    const clearIntervalFn = () => {
-      clearInterval(interval);
-    };
-    window.addEventListener('cleanup-interval', clearIntervalFn);
-
-    return () => {
-      window.removeEventListener('cleanup-interval', clearIntervalFn);
-    };
-  }, []);
-
   useEffect(processMessageInputForCustomEmoji, [getHtml]);
 
   const customEmojiNotificationNumber = useRef(0);
@@ -1295,7 +1284,6 @@ const Composer: FC<OwnProps & StateProps> = ({
         const messageId = handleGetLastMessageId();
         if (currentMessageId !== messageId && messageId) {
           sendDefaultReaction({ chatId, messageId });
-          window.dispatchEvent(new Event('cleanup-interval'));
         }
       }, 5000);
     }
