@@ -21,6 +21,7 @@ import styles from './Archive.module.scss';
 
 type OwnProps = {
   archiveSettings: GlobalState['archiveSettings'];
+  shouldShowUnconfirmedSessions: boolean;
   onDragEnter?: NoneToVoidFunction;
   onClick?: NoneToVoidFunction;
 };
@@ -29,6 +30,7 @@ const PREVIEW_SLICE = 5;
 
 const Archive: FC<OwnProps> = ({
   archiveSettings,
+  shouldShowUnconfirmedSessions,
   onDragEnter,
   onClick,
 }) => {
@@ -145,8 +147,8 @@ const Archive: FC<OwnProps> = ({
         archiveSettings.isMinimized && styles.minimized,
         'chat-item-clickable',
         'chat-item-archive',
-        'padding-top-56px',
       )}
+      style={shouldShowUnconfirmedSessions ? 'margin-top: 56px;' : 'padding-top: 56px;'}
       buttonClassName={styles.button}
       contextActions={contextActions}
       withPortalForMenu

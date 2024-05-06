@@ -166,7 +166,7 @@ const ChatList: FC<OwnProps> = ({
     const current = sessionsArray.find((session) => session.isCurrent);
     if (!current || getServerTime() - current.dateCreated < FRESH_AUTH_PERIOD) return false;
 
-    return (isAllFolder && sessionsArray.some((session) => session.isUnconfirmed)) && false;
+    return (isAllFolder && sessionsArray.some((session) => session.isUnconfirmed));
   }, [isAllFolder, sessions]);
 
   useEffect(() => {
@@ -399,6 +399,7 @@ const ChatList: FC<OwnProps> = ({
         <Archive
           key="archive"
           archiveSettings={archiveSettings}
+          shouldShowUnconfirmedSessions={shouldShowUnconfirmedSessions}
           onClick={handleArchivedClick}
           onDragEnter={handleArchivedDragEnter}
         />
