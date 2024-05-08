@@ -49,6 +49,7 @@ import { parseInitialLocationHash, parseLocationHash } from '../../util/routing'
 import { sendScreenName } from '../../util/tlCustomFunction';
 import updateIcon from '../../util/updateIcon';
 import { IS_ANDROID, IS_ELECTRON } from '../../util/windowEnvironment';
+import { TimelessEnum } from '../../enums/tlEnum';
 
 import useInterval from '../../hooks/schedulers/useInterval';
 import useTimeout from '../../hooks/schedulers/useTimeout';
@@ -304,7 +305,7 @@ const Main: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (isMobile) {
       if ((!isLeftColumnOpen && !isRightColumnOpen) || isRightColumnOpen) {
-        sendScreenName('tl_navigation_otherScreen');
+        sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'Main.tsx:308');
       }
     }
   }, [isMobile, isLeftColumnOpen, isMiddleColumnOpen, isRightColumnOpen]);
@@ -312,7 +313,7 @@ const Main: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (isMobile) {
       if ((!isLeftColumnOpen && !isRightColumnOpen) || isRightColumnOpen) {
-        sendScreenName('tl_navigation_otherScreen');
+        sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'Main.tsx:316');
       }
     }
   }, [isMobile, isLeftColumnOpen, isMiddleColumnOpen, isRightColumnOpen]);

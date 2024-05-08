@@ -25,6 +25,7 @@ import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { formatDateToString } from '../../../util/dateFormat';
 import { sendScreenName } from '../../../util/tlCustomFunction';
 import { IS_APP, IS_ELECTRON, IS_MAC_OS } from '../../../util/windowEnvironment';
+import { TimelessEnum } from '../../../enums/tlEnum';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useConnectionStatus from '../../../hooks/useConnectionStatus';
@@ -197,7 +198,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
 
   useEffect(() => {
     if (isSearchFocused) {
-      sendScreenName('tl_navigation_mainScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_MAIN_SCREEN, 'LeftMainHeader.tsx:201');
     }
   }, [isSearchFocused]);
 
@@ -267,6 +268,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
           transformOriginX={IS_ELECTRON && IS_MAC_OS && !isFullscreen ? 90 : undefined}
           onTransitionEnd={lang.isRtl ? handleDropdownMenuTransitionEnd : undefined}
         >
+          <div />
           {/* <LeftSideMenuItems
             onSelectArchived={onSelectArchived}
             onSelectContacts={onSelectContacts}

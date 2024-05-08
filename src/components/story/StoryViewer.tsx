@@ -17,6 +17,7 @@ import buildClassName from '../../util/buildClassName';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { disableDirectTextInput, enableDirectTextInput } from '../../util/directInputManager';
 import { sendScreenName } from '../../util/tlCustomFunction';
+import { TimelessEnum } from '../../enums/tlEnum';
 import { animateClosing, animateOpening } from './helpers/ghostAnimation';
 
 import useFlag from '../../hooks/useFlag';
@@ -78,11 +79,11 @@ function StoryViewer({
 
   useEffect(() => {
     if (isOpen) {
-      sendScreenName('tl_navigation_otherScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'StoryView.tsx:82');
     }
 
     return () => {
-      sendScreenName('tl_navigation_mainScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_MAIN_SCREEN, 'StoryView.tsx:86');
     };
   }, [isOpen]);
 

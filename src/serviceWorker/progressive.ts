@@ -65,9 +65,9 @@ export async function respondForProgressive(e: FetchEvent) {
 
   if (DEBUG) {
     // eslint-disable-next-line no-console
-    console.log(
-      `FETCH PROGRESSIVE ${cacheKey} (request: ${start}-${originalEnd}) CACHED: ${Boolean(cachedArrayBuffer)}`,
-    );
+    // console.log(
+    //   `FETCH PROGRESSIVE ${cacheKey} (request: ${start}-${originalEnd}) CACHED: ${Boolean(cachedArrayBuffer)}`,
+    // );
   }
 
   if (cachedArrayBuffer) {

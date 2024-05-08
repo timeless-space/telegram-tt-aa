@@ -14,6 +14,7 @@ import * as mediaLoader from '../../util/mediaLoader';
 import { Bundles, loadModule } from '../../util/moduleLoader';
 import { pause } from '../../util/schedulers';
 import { sendScreenName } from '../../util/tlCustomFunction';
+import { TimelessEnum } from '../../enums/tlEnum';
 
 import useEffectOnce from '../../hooks/useEffectOnce';
 import useFlag from '../../hooks/useFlag';
@@ -114,16 +115,16 @@ const UiLoader: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     switch (page) {
       case 'authPhoneNumber':
-        sendScreenName('tl_navigation_authPhoneNumberScreen');
+        sendScreenName(TimelessEnum.AUTH_PHONE_NUMBER_SCREEN, 'UiLoader.tsx:118');
         break;
       case 'authCode':
-        sendScreenName('tl_navigation_authCodeScreen');
+        sendScreenName(TimelessEnum.AUTH_CODE_SCREEN, 'UiLoader.tsx:121');
         break;
       case 'authPassword':
-        sendScreenName('tl_navigation_authPasswordScreen');
+        sendScreenName(TimelessEnum.AUTH_PASSWORD_SCREEN, 'UiLoader.tsx:124');
         break;
       case 'authQrCode':
-        sendScreenName('tl_navigation_authQrCodeScreen');
+        sendScreenName(TimelessEnum.AUTH_QR_CODE_SCREEN, 'UiLoader.tsx:127');
         break;
       default:
         break;

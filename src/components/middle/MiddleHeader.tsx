@@ -51,6 +51,8 @@ import {
 import buildClassName from '../../util/buildClassName';
 import cycleRestrict from '../../util/cycleRestrict';
 import { getMessageKey } from '../../util/messageKey';
+import { sendScreenName } from '../../util/tlCustomFunction';
+import { TimelessEnum } from '../../enums/tlEnum';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useConnectionStatus from '../../hooks/useConnectionStatus';
@@ -77,7 +79,6 @@ import HeaderActions from './HeaderActions';
 import HeaderPinnedMessage from './HeaderPinnedMessage';
 
 import './MiddleHeader.scss';
-import { sendScreenName } from '../../util/tlCustomFunction';
 
 const ANIMATION_DURATION = 350;
 const BACK_BUTTON_INACTIVE_TIME = 450;
@@ -264,7 +265,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
         e.stopPropagation(); // Stop propagation to prevent chat re-opening on tablets
         openChat({ id: undefined }, { forceOnHeavyAnimation: true });
         if (!getGlobal().isArchivePrevious) {
-          sendScreenName('tl_navigation_mainScreen');
+          sendScreenName(TimelessEnum.NAVIGATION_MAIN_SCREEN, 'MiddleHeader.tsx:268');
         }
       } else {
         toggleLeftColumn();

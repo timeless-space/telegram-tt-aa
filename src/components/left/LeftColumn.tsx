@@ -14,6 +14,7 @@ import { sendScreenName } from '../../util/tlCustomFunction';
 import {
   IS_APP, IS_FIREFOX, IS_IOS, IS_MAC_OS, IS_TOUCH_ENV, LAYERS_ANIMATION_NAME,
 } from '../../util/windowEnvironment';
+import { TimelessEnum } from '../../enums/tlEnum';
 
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -109,7 +110,7 @@ function LeftColumn({
   let contentType: ContentType = ContentType.Main;
   switch (content) {
     case LeftColumnContent.Archived:
-      sendScreenName('tl_navigation_otherScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'LeftColumn.tsx:113');
       contentType = ContentType.Archived;
       break;
     case LeftColumnContent.Settings:
@@ -117,12 +118,12 @@ function LeftColumn({
       break;
     case LeftColumnContent.NewChannelStep1:
     case LeftColumnContent.NewChannelStep2:
-      sendScreenName('tl_navigation_otherScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'LeftColumn.tsx:121');
       contentType = ContentType.NewChannel;
       break;
     case LeftColumnContent.NewGroupStep1:
     case LeftColumnContent.NewGroupStep2:
-      sendScreenName('tl_navigation_otherScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'LeftColumn.tsx:126');
       contentType = ContentType.NewGroup;
       break;
   }
@@ -131,7 +132,7 @@ function LeftColumn({
     function fullReset() {
       setContent(LeftColumnContent.ChatList);
       if (content === LeftColumnContent.NewGroupStep1 || content === LeftColumnContent.NewChannelStep1) {
-        sendScreenName('tl_navigation_mainScreen');
+        sendScreenName(TimelessEnum.NAVIGATION_MAIN_SCREEN, 'LeftColumn.tsx:135');
       }
       setSettingsScreen(SettingsScreens.Main);
       setContactsFilter('');
@@ -349,11 +350,12 @@ function LeftColumn({
   });
 
   useEffect(() => {
-    if ((settingsScreen === SettingsScreens.Main && contentType === ContentType.Main
-      && !isChatOpen && !isForumPanelOpen) || isForumPanelOpen) {
-      sendScreenName('tl_navigation_mainScreen');
+    if ((isForumPanelOpen && !isChatOpen)
+      || (settingsScreen === SettingsScreens.Main && contentType === ContentType.Main
+      && !isChatOpen && !isForumPanelOpen)) {
+      sendScreenName(TimelessEnum.NAVIGATION_MAIN_SCREEN, 'LeftColumn.tsx:355');
     } else {
-      sendScreenName('tl_navigation_otherScreen');
+      sendScreenName(TimelessEnum.NAVIGATION_OTHER_SCREEN, 'LeftColumn.tsx:357');
     }
   }, [settingsScreen, contentType, isChatOpen, isForumPanelOpen]);
 

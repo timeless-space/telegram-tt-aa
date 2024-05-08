@@ -9,6 +9,7 @@ import type { LeftColumnContent, SettingsScreens } from '../../types';
 import { ANIMATION_END_DELAY } from '../../config';
 import buildClassName from '../../util/buildClassName';
 import { sendScreenName } from '../../util/tlCustomFunction';
+import { TimelessEnum } from '../../enums/tlEnum';
 import { ANIMATION_DURATION } from '../story/helpers/ribbonAnimation';
 
 import useForumPanelRender from '../../hooks/useForumPanelRender';
@@ -79,11 +80,11 @@ const ArchivedChats: FC<OwnProps> = ({
   } = useForumPanelRender(isForumPanelOpen);
   const isForumPanelVisible = isForumPanelOpen && isAnimationStarted;
 
-  const backHandler = () => {
-    sendScreenName('tl_navigation_mainScreen');
+  const backHandler = useLastCallback(() => {
+    sendScreenName(TimelessEnum.NAVIGATION_MAIN_SCREEN, 'ArchivedChats.tsx:84');
     getGlobal().isArchivePrevious = false;
     onReset();
-  };
+  });
 
   const {
     shouldRender: shouldRenderStoryRibbon,

@@ -7,6 +7,7 @@ import type { ThemeKey } from '../types';
 import { fetchChatByUsername } from '../global/actions/api/chats';
 import { selectChat, selectTheme } from '../global/selectors';
 import { callApi } from '../api/gramjs';
+import { TimelessEnum } from '../enums/tlEnum';
 
 const HEIGHT_HEADER_FIXED = 56;
 
@@ -99,7 +100,9 @@ export function handleChangeTheme(theme: ThemeKey) {
 /**
  * TL - Set session screen name
  */
-export function sendScreenName(name: string) {
+export function sendScreenName(name: TimelessEnum, location: string) {
+  // eslint-disable-next-line no-console
+  console.warn(`${name} - ${location}`);
   (window as any).onScreenChanged?.postMessage(JSON.stringify({ screenName: name }));
 }
 
